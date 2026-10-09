@@ -37,13 +37,14 @@ namespace KingdomGame.Destruction
 
         [Header("Crumbling")]
         [Tooltip("Pieces cut off from the rest of a wall that are smaller than this many pixels crumble.")]
-        [Min(0)] public int minStandingPixels = 48;
+        [Min(0)] public int minStandingPixels = 200;
         [Tooltip("A wall with less than this share of its pixels left collapses completely.")]
         [Range(0, 1)] public float collapseBelow = 0.3f;
 
-        [Header("Drawing order")]
+        [Header("Drawing order (higher = drawn on top)")]
         public int rubbleSortingOrder = -10;
         public int wallSortingOrder = 0;
-        public int debrisSortingOrder = 20;
+        [Tooltip("Above the ruler and trees (which are sorted by height on screen, around 5000).")]
+        public int debrisSortingOrder = 20000;
     }
 }

@@ -19,6 +19,25 @@ namespace KingdomGame.Destruction
         [Tooltip("Health of every pixel. Each hit subtracts its damage; at 0 the pixel breaks off.")]
         [Range(1, 255)] public int pixelHealth = 100;
 
+        [Header("How much damage gets through, in percent (Rust-style)")]
+        [Tooltip("Bullets. Stone walls should barely notice them.")]
+        [Range(0, 400)] public int bulletPercent = 100;
+        [Tooltip("Hits from tools, melee weapons and zombie claws.")]
+        [Range(0, 400)] public int meleePercent = 100;
+        [Tooltip("Rockets, C4 and other explosives: the way to break into a base.")]
+        [Range(0, 400)] public int explosivePercent = 100;
+
+        /// <summary>The percentage of a hit of this kind that gets through. Whole numbers, so every computer agrees.</summary>
+        public int PercentFor(DamageCategory category)
+        {
+            switch (category)
+            {
+                case DamageCategory.Bullet: return bulletPercent;
+                case DamageCategory.Melee: return meleePercent;
+                default: return explosivePercent;
+            }
+        }
+
         [Header("Look")]
         public WallPattern pattern = WallPattern.Bricks;
         [Tooltip("Mortar (between bricks) or gaps (between planks).")]

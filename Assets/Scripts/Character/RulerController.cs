@@ -1,13 +1,13 @@
 using KingdomGame.Combat;
-using KingdomGame.Destruction;
+using KingdomGame.Economy;
 using UnityEngine;
 
 namespace KingdomGame.Character
 {
     /// <summary>
-    /// The player's ruler: twin-stick controls (WASD to move, mouse to aim),
-    /// left mouse fires the main weapon, right mouse the second weapon, and
-    /// Space smashes the wall in front (a stand-in for a brute zombie's hit).
+    /// The player's ruler: twin-stick controls (WASD to move, mouse to aim).
+    /// Left mouse fires the rifle, right mouse a rocket, G throws C4,
+    /// and holding E gathers from the tree, rock or bush you're standing next to.
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
     public sealed class RulerController : MonoBehaviour
@@ -15,31 +15,43 @@ namespace KingdomGame.Character
         [SerializeField] PlayerConfig config;
         [SerializeField] WeaponConfig primaryWeapon;
         [SerializeField] WeaponConfig secondaryWeapon;
-        [SerializeField] DamageType smash;
+        [SerializeField] ExplosiveConfig explosive;
         [SerializeField] Transform gunPivot;
         [SerializeField] Projectiles projectiles;
+        [SerializeField] Explosives explosives;
 
         Rigidbody2D body;
+        RulerLook look;
         Camera view;
         CameraRig rig;
         Vector2 aim = Vector2.right;
         Vector2 wantedVelocity;
-        float primaryReady, secondaryReady, smashReady;
+        float primaryReady, secondaryReady, explosiveReady, gatherReady;
 
-        public void Setup(PlayerConfig playerConfig, WeaponConfig primary, WeaponConfig secondary, DamageType smashType,
-            Transform gun, Projectiles shots)
+        public Inventory Backpack { get; private set; }
+        /// <summary>The node you'd gather from if you held E now, or null.</summary>
+        public ResourceNode GatherTarget { get; private set; }
+        /// <summary>A short message for the HUD, like "Backpack full".</summary>
+        public string Notice { get; private set; }
+        float noticeUntil;
+
+        public void Setup(PlayerConfig playerConfig, WeaponConfig primary, WeaponConfig secondary, ExplosiveConfig thrown,
+            Transform gun, Projectiles shots, Explosives charges)
         {
             config = playerConfig;
             primaryWeapon = primary;
             secondaryWeapon = secondary;
-            smash = smashType;
+            explosive = thrown;
             gunPivot = gun;
             projectiles = shots;
+            explosives = charges;
+            Backpack = new Inventory(config != null ? config.backpackCapacity : 250);
         }
 
         void Awake()
         {
             body = GetComponent<Rigidbody2D>();
+            look = GetComponent<RulerLook>();
         }
 
         void Start()
@@ -47,6 +59,7 @@ namespace KingdomGame.Character
             view = Camera.main;
             if (view != null) rig = view.GetComponent<CameraRig>();
             if (config == null) Debug.LogError("RulerController has no Player Config.", this);
+            if (Backpack == null) Backpack = new Inventory(config != null ? config.backpackCapacity : 250);
         }
 
         void Update()
@@ -57,16 +70,15 @@ namespace KingdomGame.Character
             if (view != null)
             {
                 Vector2 mouse = view.ScreenToWorldPoint(GameInput.PointerPosition);
-                var toMouse = mouse - (Vector2)transform.position;
+                var toMouse = mouse - (Vector2)(gunPivot != null ? gunPivot.position : transform.position);
                 if (toMouse.sqrMagnitude > 0.0001f) aim = toMouse.normalized;
             }
             if (gunPivot != null)
             {
-                float angle = Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg;
-                gunPivot.rotation = Quaternion.Euler(0, 0, angle);
-                // Hold the gun upright when aiming left.
-                gunPivot.localScale = new Vector3(1, aim.x < 0 ? -1 : 1, 1);
+                gunPivot.rotation = Quaternion.Euler(0, 0, Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg);
+                gunPivot.localScale = new Vector3(1, aim.x < 0 ? -1 : 1, 1); // keep the gun upright when aiming left
             }
+            if (look != null) look.Show(Velocity, aim, config.moveSpeed, config.stepsPerSecond);
 
             float now = Time.time;
             if (primaryWeapon != null && (primaryWeapon.automatic ? GameInput.FireHeld : GameInput.FirePressed) && now >= primaryReady)
@@ -79,18 +91,21 @@ namespace KingdomGame.Character
                 Shoot(secondaryWeapon);
                 secondaryReady = now + 1f / secondaryWeapon.fireRate;
             }
-            if (smash != null && GameInput.Pressed(KeyCode.Space) && now >= smashReady)
+            if (explosive != null && explosives != null && GameInput.Pressed(KeyCode.G) && now >= explosiveReady && view != null)
             {
-                Smash();
-                smashReady = now + config.smashCooldown;
+                Vector2 target = view.ScreenToWorldPoint(GameInput.PointerPosition);
+                explosives.Throw(explosive, Muzzle, target);
+                explosiveReady = now + explosive.cooldown;
             }
+
+            UpdateGathering(now);
+            if (now > noticeUntil) Notice = null;
         }
 
         void FixedUpdate()
         {
             if (config == null) return;
-            var velocity = Vector2.MoveTowards(Velocity, wantedVelocity, config.acceleration * Time.fixedDeltaTime);
-            Velocity = velocity;
+            Velocity = Vector2.MoveTowards(Velocity, wantedVelocity, config.acceleration * Time.fixedDeltaTime);
         }
 
         // Unity 6 renamed Rigidbody2D.velocity to linearVelocity.
@@ -105,7 +120,7 @@ namespace KingdomGame.Character
 #endif
         }
 
-        Vector2 Muzzle => gunPivot != null ? (Vector2)gunPivot.position + aim * 0.4f : (Vector2)transform.position + aim * 0.4f;
+        Vector2 Muzzle => gunPivot != null ? (Vector2)gunPivot.position + aim * 0.35f : (Vector2)transform.position;
 
         void Shoot(WeaponConfig weapon)
         {
@@ -114,12 +129,43 @@ namespace KingdomGame.Character
                 rig.AddShake(weapon.recoilShake);
         }
 
-        void Smash()
+        void UpdateGathering(float now)
         {
-            var world = PixelWorld.Current;
-            var at = (Vector2)transform.position + aim * config.smashReach;
-            if (world != null && world.TryMakeEvent(smash, at, out var hit))
-                world.ApplyDamage(hit);
+            GatherTarget = ClosestNode();
+            if (GatherTarget == null || !GameInput.Held(KeyCode.E) || now < gatherReady) return;
+
+            if (Backpack.SpaceLeft <= 0)
+            {
+                Say("Backpack full");
+                return;
+            }
+            int got = GatherTarget.Gather(Backpack.SpaceLeft);
+            Backpack.Add(GatherTarget.Config.resource, got);
+            gatherReady = now + GatherTarget.Config.secondsPerHit;
+        }
+
+        ResourceNode ClosestNode()
+        {
+            ResourceNode best = null;
+            float bestDistance = float.MaxValue;
+            Vector2 here = transform.position;
+            foreach (var node in ResourceNode.All)
+            {
+                if (node == null || node.Empty || node.Config == null) continue;
+                float d = node.DistanceFrom(here);
+                if (d <= node.Config.reach && d < bestDistance)
+                {
+                    best = node;
+                    bestDistance = d;
+                }
+            }
+            return best;
+        }
+
+        void Say(string text)
+        {
+            Notice = text;
+            noticeUntil = Time.time + 1.5f;
         }
     }
 }

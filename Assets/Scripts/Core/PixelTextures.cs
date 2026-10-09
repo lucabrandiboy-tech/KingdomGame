@@ -33,6 +33,15 @@ namespace KingdomGame
             return sprite;
         }
 
+        /// <summary>Turns a picture drawn in code into a sprite (its own texture, pivot from the picture).</summary>
+        public static Sprite ToSprite(Art.PixelImage image, string name)
+        {
+            var texture = NewTexture(image.Width, image.Height, name);
+            texture.SetPixels32(image.Pixels);
+            texture.Apply(false, true);
+            return NewSprite(texture, image.Pivot);
+        }
+
         /// <summary>A texture and sprite from rows of text, for tiny code-drawn sprites.</summary>
         /// <param name="rows">One string per pixel row, top row first. Each character
         /// is looked up in <paramref name="palette"/>; '.' is transparent.</param>

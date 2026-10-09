@@ -5,10 +5,9 @@ build a huge kingdom, automate production, advance from the Stone Age to World
 War 2, survive zombie sieges, and raid other players. Walls break apart pixel
 by pixel. Made in Unity 6.3 LTS (URP 2D), headed for Steam Early Access.
 
-**Status: Phase 0 (setup) in progress, Phase 1 (destruction prototype) written
-but not yet tested in Unity.** Set up with
-[`docs/PHASE-0-SETUP.md`](docs/PHASE-0-SETUP.md), then test Phase 1 with
-[`docs/PHASE-1-TEST.md`](docs/PHASE-1-TEST.md).
+**Status:** Phases 0 and 1 done. Phase 2 step A (64 px art, Rust-style walls,
+C4, gathering, day/night) is written but not yet tested in Unity: see
+[`docs/PHASE-2A-TEST.md`](docs/PHASE-2A-TEST.md).
 
 ## Docs
 
@@ -17,7 +16,7 @@ but not yet tested in Unity.** Set up with
 | [`docs/BRIEF.md`](docs/BRIEF.md) | The full game design brief |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phases 0–9 and what's done |
 | [`docs/PHASE-0-SETUP.md`](docs/PHASE-0-SETUP.md) | Step-by-step setup for a new computer |
-| [`docs/PHASE-1-TEST.md`](docs/PHASE-1-TEST.md) | How to test the destruction prototype |
+| [`docs/PHASE-2A-TEST.md`](docs/PHASE-2A-TEST.md) | How to test the current step |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Unity version, pixel size, networking, saving, and why |
 | [`CREDITS.md`](CREDITS.md) | Every third-party asset and its license |
 
@@ -31,13 +30,15 @@ Assets/
   Prefabs/
   Scenes/         (from the Unity template)
   Scripts/
-    Core/         shared basics: pixel density, input, camera, code-drawn sprites
+    Art/          code-drawn pixel art: ruler, trees, rocks, ground, walls
+    Core/         shared basics: pixel density, input, camera, drawing order
     Destruction/  pixel-by-pixel walls, damage events, flying pixels, rubble
     Combat/       weapons and projectiles
     Character/    the ruler
-    World/        Phase 1 test scenes (sandbox, stress test)
-    UI/           debug info box
-    Networking/  Building/  Economy/  Units/  Zombies/   (later phases)
+    Economy/      resources, backpack, trees/rocks/bushes you gather from
+    World/        map generation, day and night, game scene setup, stress test
+    UI/           on-screen info
+    Networking/  Building/  Units/  Zombies/   (later phases)
     Editor/       editor-only tools (setup check, art importer, scene builder)
   ThirdParty/     asset packs, each listed in CREDITS.md
 Packages/         Unity package list

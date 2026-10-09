@@ -1,0 +1,23 @@
+<!--
+  Renders the code-drawn art (Assets/Scripts/Art) to PNG files without Unity,
+  so Claude can look at sprites before they go into the game.
+  Usage: see "Checks to run before every commit" in CLAUDE.md.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Main.cs;Shim.cs" />
+    <Compile Include="../../Assets/Scripts/Art/*.cs" />
+    <Compile Include="../../Assets/Scripts/Core/PixelArt.cs" />
+    <Compile Include="../../Assets/Scripts/Destruction/DamageShape.cs" />
+  </ItemGroup>
+</Project>

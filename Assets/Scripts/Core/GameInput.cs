@@ -115,6 +115,10 @@ namespace KingdomGame
                 case KeyCode.T: return k.tKey;
                 case KeyCode.X: return k.xKey;
                 case KeyCode.H: return k.hKey;
+                case KeyCode.E: return k.eKey;
+                case KeyCode.G: return k.gKey;
+                case KeyCode.F3: return k.f3Key;
+                case KeyCode.Escape: return k.escapeKey;
                 default:
                     Debug.LogWarning($"GameInput doesn't know key {key} yet. Add it to GameInput.Find.");
                     return null;

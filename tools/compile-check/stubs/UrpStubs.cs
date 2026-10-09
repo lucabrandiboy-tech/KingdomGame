@@ -28,6 +28,9 @@ namespace UnityEngine.Rendering.Universal
         public enum LightType { Parametric = 0, Freeform = 1, Sprite = 2, Point = 3, Global = 4 }
         public LightType lightType { get; set; }
         public float intensity { get; set; }
+        public Color color { get; set; }
         public int[] targetSortingLayers { get; set; }
+        public float pointLightInnerRadius { get; set; }
+        public float pointLightOuterRadius { get; set; }
     }
 }

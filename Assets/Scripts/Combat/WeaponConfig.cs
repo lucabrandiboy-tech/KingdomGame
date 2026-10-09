@@ -23,8 +23,8 @@ namespace KingdomGame.Combat
         public bool explodeAtEndOfRange;
 
         [Header("Look")]
-        [Min(1)] public int projectileLength = 4;
-        [Min(1)] public int projectileThickness = 1;
+        [Min(1)] public int projectileLength = 8;
+        [Min(1)] public int projectileThickness = 2;
         public Color32 projectileColor = new Color32(255, 214, 102, 255);
         [Tooltip("Camera shake for each shot, in tiles.")]
         [Min(0)] public float recoilShake = 0.01f;

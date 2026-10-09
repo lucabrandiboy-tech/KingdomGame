@@ -16,6 +16,8 @@ namespace KingdomGame.UI
         /// <summary>Extra lines added by other scripts (the stress test uses it).</summary>
         public Func<string> extraLines;
         public bool visible = true;
+        [Tooltip("Key that shows and hides this box.")]
+        public KeyCode toggleKey = KeyCode.H;
 
         const int History = 512;
         readonly float[] frameTimes = new float[History];
@@ -28,7 +30,7 @@ namespace KingdomGame.UI
 
         void Update()
         {
-            if (GameInput.Pressed(KeyCode.H)) visible = !visible;
+            if (GameInput.Pressed(toggleKey)) visible = !visible;
 
             frameTimes[next] = Time.unscaledDeltaTime;
             next = (next + 1) % History;
@@ -64,7 +66,7 @@ namespace KingdomGame.UI
             }
             if (extraLines != null) text.Append(extraLines()).Append('\n');
             if (!string.IsNullOrEmpty(help)) text.Append(help).Append('\n');
-            text.Append("H: hide this box");
+            text.Append($"{toggleKey}: hide this box");
 
             var content = new GUIContent(text.ToString());
             var size = style.CalcSize(content);

@@ -121,3 +121,4 @@ Desktop.ini
 # Our own tool projects, not ones Unity generates
 !/tools/compile-check/CompileCheck.csproj
 !/tools/tests/DestructionTests.csproj
+!/tools/art-preview/ArtPreview.csproj

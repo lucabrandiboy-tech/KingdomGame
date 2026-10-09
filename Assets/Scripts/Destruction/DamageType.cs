@@ -2,6 +2,14 @@ using UnityEngine;
 
 namespace KingdomGame.Destruction
 {
+    /// <summary>What kind of hit it is. Each wall material resists each kind differently.</summary>
+    public enum DamageCategory
+    {
+        Bullet,
+        Melee,
+        Explosive,
+    }
+
     /// <summary>
     /// One kind of hit (bullet, explosion, brute smash): how big a hole it makes,
     /// how hard it hits, how many pixels fly off and how much the screen shakes.
@@ -10,13 +18,16 @@ namespace KingdomGame.Destruction
     [CreateAssetMenu(menuName = "KingdomGame/Destruction/Damage Type", fileName = "DamageType")]
     public sealed class DamageType : ScriptableObject
     {
-        [Header("Hole shape (32 pixels = 1 tile)")]
+        [Tooltip("Bullet, Melee or Explosive. Wall materials let a different share of each through.")]
+        public DamageCategory category = DamageCategory.Bullet;
+
+        [Header("Hole shape (64 pixels = 1 tile)")]
         [Tooltip("Radius of the hole in pixels.")]
-        [Min(0)] public int radiusPixels = 3;
-        [Tooltip("Damage to the pixel in the middle of the hit. A pixel breaks when its health reaches 0.")]
-        [Range(1, 255)] public int centerDamage = 80;
+        [Min(0)] public int radiusPixels = 6;
+        [Tooltip("Damage to the pixel in the middle of the hit, before the wall material's resistance. A pixel breaks when its health reaches 0.")]
+        [Range(1, 2000)] public int centerDamage = 80;
         [Tooltip("Damage to pixels at the edge of the hole.")]
-        [Range(0, 255)] public int edgeDamage = 30;
+        [Range(0, 2000)] public int edgeDamage = 30;
         [Tooltip("0 = perfectly round hole, 255 = very ragged edge.")]
         [Range(0, 255)] public int jaggedness = 100;
         [Tooltip("1 = ragged edge per pixel. 3-4 = big blocky chunks, like a smash.")]

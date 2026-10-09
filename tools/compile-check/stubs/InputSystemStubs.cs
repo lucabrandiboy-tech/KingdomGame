@@ -28,6 +28,10 @@ namespace UnityEngine.InputSystem
         public KeyControl tKey => null;
         public KeyControl xKey => null;
         public KeyControl hKey => null;
+        public KeyControl eKey => null;
+        public KeyControl gKey => null;
+        public KeyControl f3Key => null;
+        public KeyControl escapeKey => null;
     }
 
     public class Pointer

@@ -23,34 +23,32 @@ The "Universal 2D" template sets this up. It gives us 2D lights (torches,
 muzzle flashes, explosions), 2D shadows from walls, day/night lighting,
 post-processing (bloom on fire), and the Pixel Perfect Camera.
 
-## 3. Pixel density: 32 pixels per tile, 640 × 360 view (decided)
+## 3. Pixel density: 64 pixels per tile, 1280 × 720 view (decided, changed in Phase 2)
 
-- **One grid tile = one Unity unit = 32 × 32 pixels.** Every sprite uses this
-  density. It's set in one place: `Assets/Scripts/Core/PixelArt.cs`.
-- **Reference resolution 640 × 360** (20 × 11 tiles on screen). It scales by a
-  whole number on every common 16:9 screen (3× on 1080p, 4× on 1440p, 6× on
-  4K), so pixels stay square and everyone sees the same amount of world. If it
-  feels too zoomed-in in Phase 1, 960 × 540 is the next option; changing it
-  doesn't touch any art.
+- **One grid tile = one Unity unit = 64 × 64 pixels.** It was 32 until Phase 2,
+  when you asked for twice the detail. Every sprite uses this density. It's set
+  in one place: `Assets/Scripts/Core/PixelArt.cs`.
+- **Reference resolution 1280 × 720** (20 × 11 tiles). It scales by a whole
+  number on 1440p (2×) and 4K (3×) screens. A **1080p screen** can't show it at a
+  whole-number size, so the Pixel Perfect Camera shows game pixels 1:1 and you
+  see more of the world (about 30 × 17 tiles). That's a small advantage for
+  1080p players in PvP; we'll revisit it before Phase 6.
 - **Pixel Perfect Camera settings:**
-  - *Grid Snapping: Upscale Render Texture.* The whole scene is drawn at
-    640 × 360 and then scaled up. Rotated guns, particles and flying debris
-    pixels stay real pixels instead of turning into tiny half-pixels. The
-    downside is that the camera moves in whole-pixel steps; if that looks
-    jumpy in Phase 1 we'll smooth it.
-  - *Crop Frame: None.* Ultrawide and 16:10 screens see slightly more world.
-    That's a small advantage in PvP; we'll revisit it before Phase 6
-    (letterboxing would make it equal).
+  - *Grid Snapping: Upscale Render Texture.* The scene is drawn at game
+    resolution and scaled up, so rotated guns, particles and flying pixels
+    stay real pixels. The camera moves in whole-pixel steps.
+  - *Crop Frame: None.*
 - **Import settings** (applied automatically to `Assets/Art` by
-  `PixelArtImporter`): Sprite, 32 PPU, Point filter (no blur), no compression,
+  `PixelArtImporter`): Sprite, 64 PPU, Point filter (no blur), no compression,
   no mipmaps.
-- **Known problem for Phase 2:** the throne view zooms far out, and Pixel
+- **Art is drawn in code for now** (`Assets/Scripts/Art`): the ruler, trees,
+  rocks, bushes, ground and walls. `tools/art-preview` renders them to PNG
+  files so they can be checked without Unity. Real pixel art (made by hand or
+  from licensed packs) can replace them piece by piece.
+- **Known problem for Phase 2B:** the throne view zooms far out, and Pixel
   Perfect Camera only allows whole-number zoom steps. Planned approach: the
-  throne view switches the camera into a separate zoomed-out mode (pixel
-  snapping off, or a simplified map drawing for very large kingdoms). Not
-  solved yet.
-- **Asset packs:** pick packs drawn at 32 × 32. A 16 × 16 pack would look
-  chunkier than everything else.
+  throne view turns pixel snapping off while zoomed out.
+- **Asset packs:** pick packs drawn at 64 × 64 (or redraw at that density).
 
 ## 4. Controls: Input System package (decided)
 
@@ -150,7 +148,7 @@ works with Steam games) gets added in Phase 9.
 
 ## 11. How destruction works (Phase 1, decided; revisit after the stress test)
 
-- **Chunks:** every grid tile of a wall is one 32 × 32-pixel chunk
+- **Chunks:** every grid tile of a wall is one 64 × 64-pixel chunk
   (`PixelChunk`). Walls are placed on whole grid cells, so the world keeps one
   map from cell to chunk (`PixelWorld`).
 - **Undamaged chunks are almost free:** they share one of a few tile pictures
@@ -193,3 +191,21 @@ works with Steam games) gets added in Phase 9.
   check slower. Buildings should be made of several smaller structures.
 - The Unity Editor is slower than a real build; judge performance from a build
   before cutting features.
+
+## 12. Rust-style wall toughness (decided in Phase 2)
+
+Breaking into a base should take explosives, like in Rust.
+
+- Every hit has a **category**: Bullet, Melee (tools, weapons, zombie claws) or
+  Explosive. Every wall **material** says what percentage of each category gets
+  through (`StructureMaterial`).
+- Starting values: **stone** lets through 3% of bullets, 8% of melee and 100%
+  of explosives; **wood** 8%, 35% and 140% (wood is weak to explosives).
+  Pixel health: stone 255 (the maximum), wood 140.
+- Result: a rifle only makes sparks on stone. A rocket dents a stone wall and
+  two or three in the same spot break through. One C4 blows a large hole.
+- Still whole-number math (damage × percent / 100), so multiplayer can keep
+  sending damage events.
+- Later eras need tougher materials (metal, armored walls). Pixel health is
+  stored in one byte (max 255); tougher materials will either resist more or we
+  move to two bytes per pixel. Decide when metal walls arrive (Phase 3).

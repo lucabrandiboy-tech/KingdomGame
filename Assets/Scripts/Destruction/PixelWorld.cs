@@ -189,7 +189,10 @@ namespace KingdomGame.Destruction
             {
                 var cell = new Vector2Int(DamageShape.FloorDiv(pixel.X, PixelChunk.Size), DamageShape.FloorDiv(pixel.Y, PixelChunk.Size));
                 if (!chunks.TryGetValue(cell, out var chunk)) continue;
-                if (!chunk.Damage(pixel.X - cell.x * PixelChunk.Size, pixel.Y - cell.y * PixelChunk.Size, pixel.Damage, out var color))
+                // The wall material decides how much of this kind of hit gets through (whole numbers only).
+                int damage = pixel.Damage * chunk.Owner.Material.PercentFor(type.category) / 100;
+                if (damage <= 0) continue;
+                if (!chunk.Damage(pixel.X - cell.x * PixelChunk.Size, pixel.Y - cell.y * PixelChunk.Size, damage, out var color))
                 {
                     QueueFlush(chunk); // the picture may have cracked
                     continue;
@@ -268,6 +271,21 @@ namespace KingdomGame.Destruction
             if (chunk.Queued) return;
             chunk.Queued = true;
             toFlush.Add(chunk);
+        }
+
+        /// <summary>
+        /// A puff of bright pixels that vanish when they land (no rubble): chips
+        /// when gathering, sparks, dust. Just for looks.
+        /// </summary>
+        public void Burst(Vector2 at, Color32 color, int count, float speed)
+        {
+            var random = new FastRandom(DamageShape.Hash(++seedCounter, 7, 11));
+            for (int i = 0; i < count && newDebrisThisFrame < settings.maxNewDebrisPerFrame; i++)
+            {
+                var velocity = random.Direction() * speed * Mathf.Lerp(0.4f, 1f, random.Value());
+                if (!debris.Launch(at, velocity, Mathf.Lerp(1.5f, 3.5f, random.Value()), color, spark: true)) break;
+                newDebrisThisFrame++;
+            }
         }
 
         /// <summary>Removes all rubble and flying pixels (used by the stress test reset).</summary>

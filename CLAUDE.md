@@ -31,7 +31,14 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
   definitions yet.
 - **Data-driven:** gameplay numbers live in ScriptableObjects under
   `Assets/Data`, never hardcoded. Pixel density is the one exception:
-  `Assets/Scripts/Core/PixelArt.cs` (32 PPU, 640 × 360 reference resolution).
+  `Assets/Scripts/Core/PixelArt.cs` (64 PPU, 1280 × 720 reference resolution).
+  Starting values for new assets are set in `Assets/Scripts/Editor/GameSetup.cs`
+  (menu KingdomGame > Build Game Scenes), which keeps existing assets.
+- Art is drawn in code for now (`Assets/Scripts/Art`, pure C# on `PixelImage`).
+  Preview it with `dotnet run --project tools/art-preview/ArtPreview.csproj -- <folder>`
+  and look at the PNGs before committing art changes.
+- Drawing order: walls 0, rubble -10, ground -30000, standing things y-sorted
+  around 5000 (`YSort.Order`), C4 15000, flying pixels 20000, projectiles 21000.
 - Art in `Assets/Art` gets pixel-art import settings automatically
   (`PixelArtImporter`). Asset packs go in `Assets/ThirdParty` and must be added
   to `CREDITS.md` with a commercial-use license.
@@ -44,10 +51,11 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
 
 ## Phase status
 
-Phase 0 (setup): the user is doing the Unity side now. Phase 1 (destruction
-prototype) was started early at the user's request: the code is written and
-compile-checked, the pure math is unit-tested, but it has **not run in Unity**.
-Test steps for the user: `docs/PHASE-1-TEST.md`. Design: `docs/DECISIONS.md` section 11.
+Phases 0 and 1 are done and tested in Unity. Phase 2 is split into 2A
+(64 px art, Rust-style walls, C4, map with gathering, day/night: written,
+not yet tested), 2B (throne view, grid building, storage, builder villagers) and
+2C (villager needs, zombies, health and respawn). See `docs/ROADMAP.md`.
+The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 
 ## Checks to run before every commit
 
@@ -68,7 +76,7 @@ Test steps for the user: `docs/PHASE-1-TEST.md`. Design: `docs/DECISIONS.md` sec
   old-input code path. Code that needs Unity 6-only APIs (like
   `Rigidbody2D.linearVelocity`) goes behind `#if UNITY_6000_0_OR_NEWER`, with
   the older name in the `#else`, so the 2021.3 reference assemblies still compile it.
-- Scenes and assets are created by editor menu code (`Assets/Scripts/Editor/Phase1Setup.cs`),
+- Scenes and assets are created by editor menu code (`Assets/Scripts/Editor/GameSetup.cs`),
   not hand-written YAML.
 - Unity's own hosts (packages.unity.com, download.unity3d.com) are blocked
   from the cloud container; GitHub raw files and NuGet work.

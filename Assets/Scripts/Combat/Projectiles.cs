@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using KingdomGame.Art;
 using KingdomGame.Destruction;
 using UnityEngine;
 
@@ -22,7 +23,7 @@ namespace KingdomGame.Combat
 
         [Tooltip("Most shots in flight at once; extra shots aren't fired.")]
         [SerializeField] int maxShots = 512;
-        [SerializeField] int sortingOrder = 15;
+        [SerializeField] int sortingOrder = 21000;
 
         readonly List<Shot> shots = new List<Shot>();
         readonly List<SpriteRenderer> renderers = new List<SpriteRenderer>();
@@ -124,7 +125,8 @@ namespace KingdomGame.Combat
         {
             if (!sprites.TryGetValue(weapon, out var sprite))
             {
-                sprite = SpriteFactory.Projectile(weapon.name, weapon.projectileLength, weapon.projectileThickness, weapon.projectileColor);
+                sprite = PixelTextures.ToSprite(
+                    CharacterArt.Projectile(weapon.projectileLength, weapon.projectileThickness, weapon.projectileColor), weapon.name);
                 sprites.Add(weapon, sprite);
             }
             return sprite;

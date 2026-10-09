@@ -118,5 +118,6 @@ Desktop.ini
 .idea/
 .vscode/
 
-# The compile-check project is ours, not one Unity generates
+# Our own tool projects, not ones Unity generates
 !/tools/compile-check/CompileCheck.csproj
+!/tools/tests/DestructionTests.csproj

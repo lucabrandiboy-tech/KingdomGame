@@ -42,8 +42,18 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
 - Binary files (png, wav, ...) go through Git LFS (`.gitattributes`).
   CI runs `git lfs fsck --pointers`.
 
+## Phase status
+
+Phase 0 (setup): the user is doing the Unity side now. Phase 1 (destruction
+prototype) was started early at the user's request: the code is written and
+compile-checked, the pure math is unit-tested, but it has **not run in Unity**.
+Test steps for the user: `docs/PHASE-1-TEST.md`. Design: `docs/DECISIONS.md` section 11.
+
 ## Checks to run before every commit
 
+- `dotnet run --project tools/tests/DestructionTests.csproj`: unit tests for
+  the Unity-free destruction math (`DamageShape.cs`, `PixelAlgorithms.cs`).
+  Keep those two files free of `UnityEngine` so the tests can compile them.
 - `python3 tools/check_meta.py`
 - `dotnet build tools/compile-check/CompileCheck.csproj` compiles every script
   in `Assets/` against Unity 2021.3 reference assemblies (NuGet
@@ -53,6 +63,12 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
   (`raw.githubusercontent.com/Unity-Technologies/UnityCsReference/6000.3/...`,
   `.../Graphics/6000.3/staging/Packages/...`). Passing means "no typos or type
   errors", not "works in Unity". The .NET 8 SDK may need installing first
-  (`apt-get install dotnet-sdk-8.0`).
+  (`apt-get install dotnet-sdk-8.0`). Also build it with
+  `-p:DefineConstants="UNITY_EDITOR%3BENABLE_LEGACY_INPUT_MANAGER"` to check the
+  old-input code path. Code that needs Unity 6-only APIs (like
+  `Rigidbody2D.linearVelocity`) goes behind `#if UNITY_6000_0_OR_NEWER`, with
+  the older name in the `#else`, so the 2021.3 reference assemblies still compile it.
+- Scenes and assets are created by editor menu code (`Assets/Scripts/Editor/Phase1Setup.cs`),
+  not hand-written YAML.
 - Unity's own hosts (packages.unity.com, download.unity3d.com) are blocked
   from the cloud container; GitHub raw files and NuGet work.

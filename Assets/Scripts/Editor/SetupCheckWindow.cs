@@ -379,22 +379,7 @@ namespace KingdomGame.EditorTools
         static void ConfigureCamera(Camera camera)
         {
             if (camera == null) return;
-            Undo.RecordObject(camera, "Set up pixel camera");
-            camera.orthographic = true;
-
-            var pixel = camera.GetComponent<PixelPerfectCamera>();
-            if (pixel == null)
-                pixel = Undo.AddComponent<PixelPerfectCamera>(camera.gameObject);
-            else
-                Undo.RecordObject(pixel, "Set up pixel camera");
-
-            pixel.assetsPPU = PixelArt.PixelsPerUnit;
-            pixel.refResolutionX = PixelArt.ReferenceWidth;
-            pixel.refResolutionY = PixelArt.ReferenceHeight;
-            pixel.gridSnapping = PixelPerfectCamera.GridSnapping.UpscaleRenderTexture;
-            pixel.cropFrame = PixelPerfectCamera.CropFrame.None;
-            EditorUtility.SetDirty(pixel);
-
+            PixelCameraSetup.Configure(camera);
             SaveScene(camera.gameObject.scene);
         }
 

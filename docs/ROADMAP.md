@@ -20,19 +20,27 @@ Status key: ✅ done and confirmed · 🔧 in progress · ⏳ not started
 looks sharp in Play mode, and Repo checks is green on GitHub.
 Steps: `docs/PHASE-0-SETUP.md`.
 
-## ⏳ Phase 1: Destruction prototype
+## 🔧 Phase 1: Destruction prototype
 
-- A top-down ruler with twin-stick controls (WASD + mouse aim) and a gun
-- Walls built from 32 × 32-pixel chunks that chip pixel by pixel where bullets
-  hit, with pooled flying pixel particles, colliders rebuilt only for changed
-  chunks, and collapse of detached pieces
-- Explosions (big craters) and a brute-style smash, to test all three damage shapes
-- A stress test scene: many walls destroyed at once, FPS shown on screen
-- Damage expressed as events (position, radius, type, seed) from day one, so
-  Phase 5 can send them over the network unchanged
+Started early, at your request, while Phase 0 was still being set up. Code
+written; **not yet tested in Unity**. Test steps: `docs/PHASE-1-TEST.md`.
+
+- [x] Top-down ruler with twin-stick controls (WASD + mouse aim): rifle, rocket launcher, smash
+- [x] Walls split into 32 × 32-pixel chunks that break pixel by pixel where hit
+- [x] Three damage shapes: bullets (small holes), explosions (craters), brute smash (blocky chunks)
+- [x] Pooled flying pixels with a hard cap; they settle into rubble tiles
+- [x] Colliders rebuilt only for changed chunks; units and bullets pass through holes
+- [x] Cut-off pieces crumble; badly damaged walls collapse
+- [x] Damage as events (position, radius, type, seed) with whole-number math, so Phase 5 can send them over the network
+- [x] Stress test scene with FPS on screen and in the Console
+- [x] Unit tests for the destruction math (run on every push)
+- [ ] Tested in Unity *(you)*
+- [ ] Stress test numbers recorded below *(you)*
 
 **Done when:** you can shoot holes through walls and walk through them, and the
-stress test numbers are written down in this file.
+stress test numbers are written down here.
+
+**Stress test results:** *(none yet)*
 
 ## ⏳ Phase 2: Single-kingdom offline prototype
 Throne view with grid placement · builder villagers and blueprints · gathering

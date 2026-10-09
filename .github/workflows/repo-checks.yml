@@ -1,6 +1,7 @@
 # Runs on GitHub's computers after every push. A red X next to a commit on
 # github.com means one of these checks failed; click it to see which file.
-# It can't open Unity, so it only checks that the files were committed correctly.
+# It can't open Unity, so it checks that files were committed correctly and
+# runs the unit tests for the destruction math (plain C#, no Unity needed).
 name: Repo checks
 
 on:
@@ -21,3 +22,10 @@ jobs:
 
       - name: Art, audio and other big files are stored with Git LFS
         run: git lfs fsck --pointers
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Destruction math unit tests
+        run: dotnet run --project tools/tests/DestructionTests.csproj

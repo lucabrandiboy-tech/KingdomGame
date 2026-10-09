@@ -147,3 +147,49 @@ itself.
 The server is the authority on everything (damage, resources, positions), which
 blocks most cheats. **Easy Anti-Cheat** (free through Epic Online Services,
 works with Steam games) gets added in Phase 9.
+
+## 11. How destruction works (Phase 1, decided; revisit after the stress test)
+
+- **Chunks:** every grid tile of a wall is one 32 × 32-pixel chunk
+  (`PixelChunk`). Walls are placed on whole grid cells, so the world keeps one
+  map from cell to chunk (`PixelWorld`).
+- **Undamaged chunks are almost free:** they share one of a few tile pictures
+  per material and one collider box. A chunk only gets its own texture and
+  pixel data on its first hit. A huge kingdom with mostly intact walls costs
+  about the same as a small one.
+- **Damage is an event** (`DamageEvent`: pixel position, radius, damage type,
+  seed). `DamageShape` turns it into damaged pixels with whole-number math only,
+  so every computer removes exactly the same pixels. This is the multiplayer
+  rule from the brief, built in from the start.
+- **Pixel health:** each pixel has health (set per material). Hits subtract
+  damage that fades from the center to the edge; pixels at 0 break off,
+  and pixels below half health get darker (cracks).
+- **Bullets don't use physics.** They walk the pixel grid along their path
+  (`PixelAlgorithms.Raycast`), so they fly through holes and hit the exact
+  pixel they touch.
+- **Colliders** for walking: each damaged chunk's collider is rebuilt from
+  rectangles covering its remaining pixels (`CustomCollider2D`), once per
+  frame and only for chunks that changed.
+- **Crumbling:** after damage, a structure finds its separate pieces. Pieces
+  smaller than *Min Standing Pixels* crumble, and a structure below *Collapse
+  Below* of its pixels collapses. That's the "detached chunks break apart" rule
+  for a top-down view, where nothing falls.
+- **Flying pixels** are pooled sprites (all made when the scene starts), capped
+  at *Max Debris* and *Max New Debris Per Frame*. They pop up, fall, bounce and
+  slide, then get painted into flat **rubble tiles**, so settled rubble costs
+  nothing extra. They're only for looks and not part of the shared game state.
+  - *Why sprites and not Unity's Particle System:* URP's 2D renderer only draws
+    sprite-type shaders, and its sprite shaders read a per-sprite color that
+    only sprite renderers set. Particles would need a custom shader, which can't
+    be tested here. Pooled sprites are certain to work and get lit by 2D lights.
+    If the stress test shows they're too slow, that's the first thing to change.
+
+**Known costs to watch in the stress test:**
+
+- Each *damaged* chunk has its own texture, so it's its own draw call. Many
+  damaged chunks on screen at once could get slow. Fix if needed: pack damaged
+  chunks into shared texture pages (atlases).
+- Very large single structures (for example 10 × 10 tiles) make the crumble
+  check slower. Buildings should be made of several smaller structures.
+- The Unity Editor is slower than a real build; judge performance from a build
+  before cutting features.

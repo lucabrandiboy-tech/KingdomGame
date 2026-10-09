@@ -110,6 +110,18 @@ namespace UnityEditor
         public static string GUIDToAssetPath(string guid) => null;
         public static void SaveAssets() { }
         public static string[] FindAssets(string filter, string[] searchInFolders) => null;
+        public static void CreateAsset(Object asset, string path) { }
+    }
+
+    public class EditorBuildSettingsScene
+    {
+        public EditorBuildSettingsScene(string path, bool enabled) { }
+        public string path { get; set; }
+    }
+
+    public sealed class EditorBuildSettings
+    {
+        public static EditorBuildSettingsScene[] scenes { get; set; }
     }
 
     public sealed class Selection
@@ -149,9 +161,16 @@ namespace UnityEditor.SceneManagement
 {
     using UnityEngine.SceneManagement;
 
+    public enum NewSceneSetup { EmptyScene, DefaultGameObjects }
+    public enum NewSceneMode { Single, Additive }
+
     public sealed class EditorSceneManager
     {
         public static bool MarkSceneDirty(Scene scene) => false;
         public static bool SaveScene(Scene scene) => false;
+        public static bool SaveScene(Scene scene, string dstScenePath) => false;
+        public static Scene NewScene(NewSceneSetup setup) => default;
+        public static Scene OpenScene(string scenePath) => default;
+        public static bool SaveCurrentModifiedScenesIfUserWantsTo() => false;
     }
 }

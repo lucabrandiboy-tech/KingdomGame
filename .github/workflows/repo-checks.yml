@@ -1,0 +1,23 @@
+# Runs on GitHub's computers after every push. A red X next to a commit on
+# github.com means one of these checks failed; click it to see which file.
+# It can't open Unity, so it only checks that the files were committed correctly.
+name: Repo checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: false # the real art files aren't needed, only their LFS pointers
+
+      - name: Every Unity asset has its .meta file
+        run: python3 tools/check_meta.py
+
+      - name: Art, audio and other big files are stored with Git LFS
+        run: git lfs fsck --pointers

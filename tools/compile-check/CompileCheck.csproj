@@ -1,0 +1,32 @@
+<!--
+  Compile-checks the game's C# scripts WITHOUT Unity (used by Claude in the cloud,
+  where Unity can't run). Unity never sees this folder: it only compiles Assets/.
+
+  Run:  dotnet build tools/compile-check/CompileCheck.csproj
+
+  - UnityEngine: real reference assemblies from the UnityEngine.Modules NuGet
+    package. They are from Unity 2021.3, so Unity 6-only APIs need a stub.
+  - UnityEditor and URP: hand-written stubs in stubs/, holding only the members
+    our scripts use, with signatures copied from Unity 6.3's source code.
+  Passing this check means "no typos or wrong types", not "works in Unity".
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <DefineConstants>UNITY_EDITOR;ENABLE_INPUT_SYSTEM</DefineConstants>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="stubs/*.cs" />
+    <Compile Include="../../Assets/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
+  </ItemGroup>
+</Project>

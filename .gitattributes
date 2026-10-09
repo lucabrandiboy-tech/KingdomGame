@@ -1,0 +1,165 @@
+# How Git should treat each kind of file.
+#
+# - "lfs" files (pictures, sounds, models, fonts, DLLs...) are stored with
+#   Git LFS (Large File Storage): GitHub keeps the real file on a separate
+#   storage server and the repo only holds a tiny text "pointer" to it.
+# - Unity's own text files (scenes, prefabs, .meta files...) are YAML. They
+#   always use LF line endings so Windows and Mac don't fight over them.
+#
+# Based on https://github.com/alexkaratarakis/gitattributes (Unity.gitattributes),
+# with pixel-art tools (Aseprite, Krita) added.
+#
+# The "Repo checks" GitHub Action runs `git lfs fsck --pointers` on every push
+# and fails if a file below was committed without LFS.
+
+# Macros (only work in this top-level file)
+[attr]lfs               filter=lfs diff=lfs merge=lfs -text
+[attr]unity-json        eol=lf linguist-language=json
+[attr]unity-yaml        merge=unityyamlmerge eol=lf linguist-language=yaml
+
+# Everything else: let Git detect text files and normalize their line endings
+*                       text=auto
+
+# Unity source files
+*.cginc                 text
+*.compute               text linguist-language=hlsl
+*.cs                    text diff=csharp
+*.hlsl                  text linguist-language=hlsl
+*.raytrace              text linguist-language=hlsl
+*.shader                text
+
+# Unity JSON files
+*.asmdef                unity-json
+*.asmref                unity-json
+*.index                 unity-json
+*.inputactions          unity-json
+*.shadergraph           unity-json
+*.shadersubgraph        unity-json
+
+# Unity UI Toolkit files
+*.tss                   text diff=css linguist-language=css
+*.uss                   text diff=css linguist-language=css
+*.uxml                  text linguist-language=xml linguist-detectable
+
+# Unity YAML files
+# merge=unityyamlmerge only does something once Unity's Smart Merge tool is set
+# up in Git's config. Until then Git uses its normal text merge, which is fine
+# while one person edits the scenes. Set it up if teammates join.
+*.anim                  unity-yaml
+*.asset                 unity-yaml
+*.brush                 unity-yaml
+*.controller            unity-yaml
+*.flare                 unity-yaml
+*.fontsettings          unity-yaml
+*.giparams              unity-yaml
+*.guiskin               unity-yaml
+*.lighting              unity-yaml
+*.mask                  unity-yaml
+*.mat                   unity-yaml
+*.meta                  unity-yaml
+*.mixer                 unity-yaml
+*.overrideController    unity-yaml
+*.playable              unity-yaml
+*.prefab                unity-yaml
+*.preset                unity-yaml
+*.renderTexture         unity-yaml
+*.scenetemplate         unity-yaml
+*.shadervariants        unity-yaml
+*.signal                unity-yaml
+*.spriteatlas           unity-yaml
+*.spriteatlasv2         unity-yaml
+*.terrainlayer          unity-yaml
+*.unity                 unity-yaml
+
+# "physic" for 3D but "physics" for 2D
+*.physicMaterial        unity-yaml
+*.physicsMaterial2D     unity-yaml
+
+# Hide third-party plugins and the package lock file from GitHub stats and diffs
+Assets/Plugins/**           linguist-generated
+Assets/ThirdParty/**        linguist-generated
+Packages/packages-lock.json linguist-generated
+
+# ---------------------------------------------------------------- Git LFS --
+
+# Unity
+*.cubemap               lfs
+*.unitypackage          lfs
+
+# Pixel art and image editors
+*.aseprite              lfs
+*.ase                   lfs
+*.kra                   lfs
+*.psd                   lfs
+*.psb                   lfs
+
+# Images
+*.bmp                   lfs
+*.exr                   lfs
+*.gif                   lfs
+*.hdr                   lfs
+*.iff                   lfs
+*.jpeg                  lfs
+*.jpg                   lfs
+*.pict                  lfs
+*.png                   lfs
+*.tga                   lfs
+*.tif                   lfs
+*.tiff                  lfs
+*.webp                  lfs
+
+# Audio
+*.aif                   lfs
+*.aiff                  lfs
+*.flac                  lfs
+*.it                    lfs
+*.mod                   lfs
+*.mp3                   lfs
+*.ogg                   lfs
+*.s3m                   lfs
+*.wav                   lfs
+*.xm                    lfs
+
+# Video
+*.asf                   lfs
+*.avi                   lfs
+*.flv                   lfs
+*.mov                   lfs
+*.mp4                   lfs
+*.mpeg                  lfs
+*.mpg                   lfs
+*.ogv                   lfs
+*.webm                  lfs
+*.wmv                   lfs
+
+# 3D models (unlikely in a 2D game, but asset packs sometimes include them)
+*.3ds                   lfs
+*.blend                 lfs
+*.dae                   lfs
+*.FBX                   lfs
+*.fbx                   lfs
+*.obj                   lfs
+
+# Fonts
+*.otf                   lfs
+*.ttf                   lfs
+
+# Compiled libraries (Steamworks, Easy Anti-Cheat and other SDKs ship these)
+*.a                     lfs
+*.dll                   lfs
+*.dylib                 lfs
+*.pdb                   lfs
+*.so                    lfs
+
+# Archives, executables, documents
+*.7z                    lfs
+*.bz2                   lfs
+*.gz                    lfs
+*.rar                   lfs
+*.tar                   lfs
+*.zip                   lfs
+*.exe                   lfs
+*.pdf                   lfs
+
+# Baked lighting data is binary even though it ends in .asset
+LightingData.asset      binary

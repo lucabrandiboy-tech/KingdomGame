@@ -70,7 +70,6 @@ namespace KingdomGame.EditorTools
             }
 
             checks.Add(CheckInputSystem());
-            checks.Add(CheckPixelCamera());
             checks.Add(CheckTestWall());
             checks.Add(CheckArtImport());
             Repaint();
@@ -275,7 +274,7 @@ namespace KingdomGame.EditorTools
             if (urp.msaaSampleCount <= 1)
                 return Pass(title);
             return Problem(Status.Warn, title,
-                $"MSAA is {urp.msaaSampleCount}x. It does nothing useful for pixel art and costs performance.",
+                $"MSAA is {urp.msaaSampleCount}x. Sprites don't need it (their edges are already smooth), and it costs performance.",
                 "Turn MSAA off", () =>
                 {
                     Undo.RecordObject(urp, "Turn MSAA off");
@@ -304,49 +303,21 @@ namespace KingdomGame.EditorTools
                 "\"Input System Package (New)\". Unity restarts.");
         }
 
-        static Check CheckPixelCamera()
-        {
-            const string title = "Main Camera has a Pixel Perfect Camera";
-            if (!SavedSceneIsOpen())
-                return Problem(Status.Fail, title, OpenSampleScene);
-
-            var camera = Camera.main;
-            if (camera == null)
-                return Problem(Status.Fail, title,
-                    "No camera tagged MainCamera in the open scene. Open Assets/Scenes/SampleScene and run the checks again.");
-
-            var pixel = camera.GetComponent<PixelPerfectCamera>();
-            string problem =
-                pixel == null ? "There's no Pixel Perfect Camera component." :
-                !camera.orthographic ? "The camera isn't orthographic." :
-                pixel.assetsPPU != PixelArt.PixelsPerUnit ? $"Assets PPU is {pixel.assetsPPU}, not {PixelArt.PixelsPerUnit}." :
-                pixel.refResolutionX != PixelArt.ReferenceWidth || pixel.refResolutionY != PixelArt.ReferenceHeight
-                    ? $"Reference Resolution is {pixel.refResolutionX} x {pixel.refResolutionY}, not {PixelArt.ReferenceWidth} x {PixelArt.ReferenceHeight}." :
-                pixel.gridSnapping != PixelPerfectCamera.GridSnapping.UpscaleRenderTexture
-                    ? "Grid Snapping isn't Upscale Render Texture." :
-                null;
-
-            if (problem == null)
-                return Pass(title,
-                    $"{PixelArt.PixelsPerUnit} pixels per unit, {PixelArt.ReferenceWidth} x {PixelArt.ReferenceHeight} reference resolution.");
-            return Problem(Status.Fail, title, problem, "Set up Main Camera (saves the scene)", () => ConfigureCamera(camera));
-        }
-
         static Check CheckTestWall()
         {
             const string title = "Test brick wall is in the scene";
             if (!SavedSceneIsOpen())
                 return Problem(Status.Fail, title, OpenSampleScene);
             if (FindTestWall() != null)
-                return Pass(title, "Press Play: it should look sharp, with square pixels, not blurry.");
+                return Pass(title, "Press Play: it should show up as a small brick wall.");
             return Problem(Status.Warn, title,
-                "A small picture drawn in code, to test that pixel art shows up crisp.",
+                "A small picture drawn in code, to test that art in Assets/Art imports correctly.",
                 "Place test wall (saves the scene)", PlaceTestWall);
         }
 
         static Check CheckArtImport()
         {
-            const string title = "Pixel art import settings (Assets/Art)";
+            const string title = "Art import settings (Assets/Art)";
             if (!AssetDatabase.IsValidFolder("Assets/Art"))
                 return Problem(Status.Warn, title,
                     "The Assets/Art folder is missing. Placing the test wall creates it.");
@@ -375,13 +346,6 @@ namespace KingdomGame.EditorTools
         }
 
         // ------------------------------------------------------------- fixes --
-
-        static void ConfigureCamera(Camera camera)
-        {
-            if (camera == null) return;
-            PixelCameraSetup.Configure(camera);
-            SaveScene(camera.gameObject.scene);
-        }
 
         static void Reimport(List<TextureImporter> importers)
         {

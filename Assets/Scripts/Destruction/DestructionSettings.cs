@@ -4,16 +4,24 @@ namespace KingdomGame.Destruction
 {
     /// <summary>
     /// Global settings for wall destruction: limits that keep it fast, how
-    /// flying pixels move, and when damaged walls crumble.
+    /// the flying pieces move and look, and when damaged walls crumble.
     /// </summary>
     [CreateAssetMenu(menuName = "KingdomGame/Destruction/Destruction Settings", fileName = "DestructionSettings")]
     public sealed class DestructionSettings : ScriptableObject
     {
-        [Header("Flying pixels (performance limits)")]
-        [Tooltip("Most flying pixels at once. Extra broken pixels land straight away as rubble.")]
-        [Min(0)] public int maxDebris = 2500;
-        [Tooltip("Most new flying pixels per frame, so one huge collapse can't freeze the game.")]
-        [Min(0)] public int maxNewDebrisPerFrame = 800;
+        [Header("Flying pieces (performance limits)")]
+        [Tooltip("Most flying pieces at once. Extra broken pixels land straight away as rubble.")]
+        [Min(0)] public int maxDebris = 1500;
+        [Tooltip("Most new flying pieces per frame, so one huge collapse can't freeze the game.")]
+        [Min(0)] public int maxNewDebrisPerFrame = 400;
+
+        [Header("Flying pieces (look)")]
+        [Tooltip("Flying pieces are little cubes (drawn to look 3D) this many pixels across, picked at random.")]
+        public Vector2 cubeSize = new Vector2(4f, 9f);
+        [Tooltip("Share of broken pixels that become cubes, on top of each damage type's Debris Chance. Cubes are bigger than pixels, so fewer are needed.")]
+        [Range(0, 1)] public float cubeDensity = 0.3f;
+        [Tooltip("How much bigger a cube looks per tile of height (it's closer to the camera).")]
+        [Min(0)] public float heightScale = 0.35f;
 
         [Header("Flying pixels (movement)")]
         [Tooltip("Pulls pixels back down after they pop up, in tiles per second squared.")]
@@ -41,10 +49,17 @@ namespace KingdomGame.Destruction
         [Tooltip("A wall with less than this share of its pixels left collapses completely.")]
         [Range(0, 1)] public float collapseBelow = 0.3f;
 
-        [Header("Drawing order (higher = drawn on top)")]
-        public int rubbleSortingOrder = -10;
-        public int wallSortingOrder = 0;
-        [Tooltip("Above the ruler and trees (which are sorted by height on screen, around 5000).")]
-        public int debrisSortingOrder = 20000;
+        [Header("Walls")]
+        [Tooltip("How tall walls look: their shadows fall this many tiles away.")]
+        [Min(0)] public float wallHeight = 0.22f;
+
+        [Header("Explosions")]
+        [Tooltip("Scorch marks left on the ground, as a share of the blast radius (0 = none).")]
+        [Range(0, 2)] public float scorchSize = 0.9f;
+        [Tooltip("Smoke puffs per explosion, per 10 pixels of blast radius.")]
+        [Min(0)] public float smokePerTenPixels = 1.5f;
+        public Color smokeColor = new Color(0.22f, 0.21f, 0.2f, 0.75f);
+        [Tooltip("Color of the flash of light when something explodes.")]
+        public Color flashColor = new Color(1f, 0.62f, 0.3f);
     }
 }

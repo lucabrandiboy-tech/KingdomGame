@@ -1,6 +1,7 @@
 <!--
-  Unit tests for the destruction math that doesn't need Unity
-  (Assets/Scripts/Destruction/DamageShape.cs and PixelAlgorithms.cs).
+  Unit tests for the game code that doesn't need Unity: the destruction math
+  (Assets/Scripts/Destruction/DamageShape.cs and PixelAlgorithms.cs) and the
+  villagers' path search (Assets/Scripts/Villagers/GridPathfinder.cs).
   The Repo checks GitHub Action runs them on every push. To run them
   yourself, see "Checks to run before every commit" in CLAUDE.md.
 -->
@@ -20,5 +21,6 @@
     <Compile Include="*.cs" />
     <Compile Include="../../Assets/Scripts/Destruction/DamageShape.cs" />
     <Compile Include="../../Assets/Scripts/Destruction/PixelAlgorithms.cs" />
+    <Compile Include="../../Assets/Scripts/Villagers/GridPathfinder.cs" />
   </ItemGroup>
 </Project>

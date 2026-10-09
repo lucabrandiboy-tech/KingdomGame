@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
+using KingdomGame.Building;
 using KingdomGame.Character;
 using KingdomGame.Combat;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
+using KingdomGame.Villagers;
 using KingdomGame.World;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 namespace KingdomGame.EditorTools
@@ -15,8 +18,9 @@ namespace KingdomGame.EditorTools
     /// <summary>
     /// Menu: KingdomGame > Build Game Scenes.
     /// Makes the settings assets in Assets/Data (kept if they already exist, so
-    /// your tuning survives) and rebuilds two scenes: Kingdom (the game) and
-    /// StressTest. Also removes the old Phase 1 test scenes and assets.
+    /// your tuning survives; settings added later are filled in) and rebuilds
+    /// two scenes: Kingdom (the game) and StressTest. Also removes the old
+    /// Phase 1 test scenes and assets.
     /// </summary>
     public static class GameSetup
     {
@@ -32,7 +36,6 @@ namespace KingdomGame.EditorTools
             "Assets/Scenes/Phase1_StressTest.unity",
         };
 
-        static readonly Color GroundColor = new Color32(58, 88, 48, 255);
 
         [MenuItem("KingdomGame/Build Game Scenes")]
         static void BuildGameScenes()
@@ -45,7 +48,7 @@ namespace KingdomGame.EditorTools
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             Folder("Assets", "Data");
-            foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World" })
+            foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look" })
                 Folder(DataRoot, area);
             Folder("Assets", "Scenes");
 
@@ -83,23 +86,23 @@ namespace KingdomGame.EditorTools
             var stone = Asset<StructureMaterial>("Destruction/StoneWall", m =>
             {
                 m.pixelHealth = 255; m.bulletPercent = 3; m.meleePercent = 8; m.explosivePercent = 100;
-                m.pattern = WallPattern.Bricks;
-                m.gapColor = new Color32(54, 52, 58, 255);
+                m.pattern = WallPattern.Stone;
+                m.gapColor = new Color32(46, 44, 42, 255);
                 m.colors = new[]
                 {
-                    new Color32(128, 126, 122, 255), new Color32(114, 112, 110, 255),
-                    new Color32(140, 136, 128, 255), new Color32(104, 104, 108, 255),
+                    new Color32(112, 110, 104, 255), new Color32(100, 98, 94, 255),
+                    new Color32(122, 118, 110, 255), new Color32(92, 92, 94, 255),
                 };
             });
             var wood = Asset<StructureMaterial>("Destruction/WoodPalisade", m =>
             {
                 m.pixelHealth = 140; m.bulletPercent = 8; m.meleePercent = 35; m.explosivePercent = 140;
-                m.pattern = WallPattern.Planks;
-                m.gapColor = new Color32(48, 32, 22, 255);
+                m.pattern = WallPattern.Logs;
+                m.gapColor = new Color32(30, 22, 16, 255);
                 m.colors = new[]
                 {
-                    new Color32(142, 96, 58, 255), new Color32(126, 84, 50, 255),
-                    new Color32(156, 108, 66, 255), new Color32(118, 80, 48, 255),
+                    new Color32(150, 112, 72, 255), new Color32(138, 102, 66, 255),
+                    new Color32(162, 122, 80, 255), new Color32(128, 94, 60, 255),
                 };
             });
 
@@ -147,21 +150,58 @@ namespace KingdomGame.EditorTools
                 c.explosion = c4Blast;
                 c.materials = new[] { stone, wood };
             });
+            // ---- Look: camera, glow and color grading
+            var glow = GlowMaterial();
+            var view = Asset<ViewConfig>("Look/ViewConfig", v => v.glowMaterial = glow);
+            if (view.glowMaterial == null && glow != null)
+            {
+                view.glowMaterial = glow;
+                EditorUtility.SetDirty(view);
+            }
+            var postProcessing = PostProcessingProfile();
+
+            // ---- Kingdom: buildings, villagers
+            var stoneWallBuilding = Asset<BuildingConfig>("Building/StoneWall", b =>
+            {
+                b.displayName = "Stone wall"; b.kind = BuildingKind.Wall; b.size = Vector2Int.one;
+                b.stoneCost = 10; b.buildSeconds = 4f; b.wallMaterial = stone; b.dragToPlaceLines = true;
+            });
+            var woodWallBuilding = Asset<BuildingConfig>("Building/WoodWall", b =>
+            {
+                b.displayName = "Wood wall"; b.kind = BuildingKind.Wall; b.size = Vector2Int.one;
+                b.woodCost = 8; b.buildSeconds = 3f; b.wallMaterial = wood; b.dragToPlaceLines = true;
+            });
+            var storehouse = Asset<BuildingConfig>("Building/Storehouse", b =>
+            {
+                b.displayName = "Storehouse"; b.kind = BuildingKind.Storage; b.size = new Vector2Int(2, 2);
+                b.woodCost = 60; b.stoneCost = 20; b.buildSeconds = 15f; b.storageCapacity = 1000; b.dragToPlaceLines = false;
+            });
+            var kingdomConfig = Asset<KingdomConfig>("Building/KingdomConfig", k => { });
+            var villagerConfig = Asset<VillagerConfig>("Villagers/VillagerConfig", v => { });
+
             var content = Asset<GameContent>("GameContent", c =>
             {
                 c.player = player; c.rifle = rifle; c.rocketLauncher = rockets; c.c4 = c4;
                 c.stone = stone; c.wood = wood; c.tree = tree; c.rock = rock; c.bush = bush;
                 c.world = worldConfig; c.dayNight = dayNight;
             });
+            // A Game Content made by an older version of this menu doesn't know the newer settings yet.
+            if (content.view == null) content.view = view;
+            if (content.kingdom == null) content.kingdom = kingdomConfig;
+            if (content.villager == null) content.villager = villagerConfig;
+            if (content.storehouse == null) content.storehouse = storehouse;
+            if (content.buildMenu == null || content.buildMenu.Length == 0)
+                content.buildMenu = new[] { stoneWallBuilding, woodWallBuilding, storehouse };
+            EditorUtility.SetDirty(content);
             AssetDatabase.SaveAssets();
 
             var damageTypes = new[] { bullet, rocketBlast, c4Blast, smash };
 
             // Scene 1: the game.
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
-            var camera = MakeCamera();
-            PixelCameraSetup.Configure(camera);
+            var camera = MakeCamera(view);
             var sun = MakeGlobalLight();
+            MakeVolume(postProcessing);
             MakeWorld(settings, damageTypes);
             var cycle = new GameObject("Day and Night").AddComponent<DayNightCycle>();
             cycle.Setup(dayNight, sun);
@@ -170,12 +210,12 @@ namespace KingdomGame.EditorTools
             bootstrap.DayNight = cycle;
             EditorSceneManager.SaveScene(scene, KingdomScenePath);
 
-            // Scene 2: stress test. No pixel-perfect camera here: it zooms out
-            // far enough to show every wall, which matters more for a benchmark.
+            // Scene 2: stress test, zoomed out far enough to show every wall.
             scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
-            camera = MakeCamera();
+            camera = MakeCamera(view);
             camera.orthographicSize = 12f;
             MakeGlobalLight();
+            MakeVolume(postProcessing);
             MakeWorld(settings, damageTypes);
             new GameObject("Stress Test").AddComponent<StressTest>().Config = stressConfig;
             EditorSceneManager.SaveScene(scene, StressScenePath);
@@ -206,18 +246,76 @@ namespace KingdomGame.EditorTools
                 AssetDatabase.CreateFolder(parent, name);
         }
 
-        static Camera MakeCamera()
+        static Camera MakeCamera(ViewConfig view)
         {
             var go = new GameObject("Main Camera") { tag = "MainCamera" };
             go.transform.position = new Vector3(0, 0, -10);
             var camera = go.AddComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = PixelArt.ReferenceHeight * 0.5f / PixelArt.PixelsPerUnit;
+            camera.orthographicSize = view.walkZoom;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = GroundColor;
+            camera.backgroundColor = view.backgroundColor;
+            // Post-processing (vignette, bloom, color grading) only shows on cameras that ask for it.
+            camera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
             go.AddComponent<AudioListener>();
-            go.AddComponent<CameraRig>();
+            go.AddComponent<CameraRig>().Setup(view);
             return camera;
+        }
+
+        // A material that ignores lighting, for things that glow (fire, sparks, shots).
+        static Material GlowMaterial()
+        {
+            const string path = DataRoot + "/Look/Glow.mat";
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null) return existing;
+            var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default");
+            if (shader == null)
+            {
+                Debug.LogWarning("Couldn't find URP's Sprite-Unlit-Default shader, so fire and sparks won't glow at night. Everything else works.");
+                return null;
+            }
+            var material = new Material(shader) { name = "Glow" };
+            AssetDatabase.CreateAsset(material, path);
+            return material;
+        }
+
+        // The dark, gritty look: dark corners, glow around bright things, more contrast, less color.
+        static VolumeProfile PostProcessingProfile()
+        {
+            const string path = DataRoot + "/Look/PostProcessing.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
+            if (existing != null) return existing;
+
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            AssetDatabase.CreateAsset(profile, path);
+            var vignette = profile.Add<Vignette>();
+            vignette.intensity.Override(0.38f);
+            vignette.smoothness.Override(0.45f);
+            var bloom = profile.Add<Bloom>();
+            bloom.threshold.Override(0.85f);
+            bloom.intensity.Override(0.7f);
+            bloom.scatter.Override(0.65f);
+            var grading = profile.Add<ColorAdjustments>();
+            grading.contrast.Override(15f);
+            grading.saturation.Override(-18f);
+            grading.postExposure.Override(-0.1f);
+            // The effects are saved inside the profile file.
+            foreach (var effect in profile.components)
+            {
+                effect.name = effect.GetType().Name;
+                AssetDatabase.AddObjectToAsset(effect, profile);
+            }
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+            return profile;
+        }
+
+        static void MakeVolume(VolumeProfile profile)
+        {
+            if (profile == null) return;
+            var volume = new GameObject("Post Processing").AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.sharedProfile = profile;
         }
 
         static Light2D MakeGlobalLight()

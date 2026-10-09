@@ -23,8 +23,6 @@ namespace KingdomGame.Combat
             public float Fuse;
         }
 
-        [SerializeField] int sortingOrder = 15000;
-
         readonly List<Charge> charges = new List<Charge>();
         readonly List<SpriteRenderer> renderers = new List<SpriteRenderer>();
         Sprite lightOn, lightOff;
@@ -134,7 +132,7 @@ namespace KingdomGame.Combat
                 var go = new GameObject("C4");
                 go.transform.SetParent(transform, false);
                 var r = go.AddComponent<SpriteRenderer>();
-                r.sortingOrder = sortingOrder;
+                r.sortingOrder = SortOrder.Charges;
                 r.enabled = false;
                 renderers.Add(r);
             }

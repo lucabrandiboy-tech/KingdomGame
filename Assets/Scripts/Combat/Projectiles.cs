@@ -23,7 +23,6 @@ namespace KingdomGame.Combat
 
         [Tooltip("Most shots in flight at once; extra shots aren't fired.")]
         [SerializeField] int maxShots = 512;
-        [SerializeField] int sortingOrder = 21000;
 
         readonly List<Shot> shots = new List<Shot>();
         readonly List<SpriteRenderer> renderers = new List<SpriteRenderer>();
@@ -114,8 +113,9 @@ namespace KingdomGame.Combat
                 var go = new GameObject("Shot");
                 go.transform.SetParent(transform, false);
                 var r = go.AddComponent<SpriteRenderer>();
-                r.sortingOrder = sortingOrder;
+                r.sortingOrder = SortOrder.Projectiles;
                 r.enabled = false;
+                Look.MakeGlow(r); // shots glow, even at night
                 renderers.Add(r);
             }
             return renderers[index];

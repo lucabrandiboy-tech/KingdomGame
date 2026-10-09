@@ -1,23 +1,21 @@
 namespace KingdomGame
 {
     /// <summary>
-    /// The project's pixel density: the one place these numbers live.
+    /// The project's art density: the one place this number lives.
     ///
-    /// One grid tile = one Unity unit = 64 x 64 pixels (it was 32 until Phase 2).
-    /// Every sprite in the game is drawn at this density so nothing looks blurrier
-    /// or chunkier than anything else. Changing <see cref="PixelsPerUnit"/> means
+    /// One grid tile = one Unity unit = 64 x 64 texture pixels. Every sprite is
+    /// drawn at this density so nothing looks blurrier or chunkier than anything
+    /// else, and wall destruction works on these pixels. Changing it means
     /// redrawing or re-importing all art, so treat it as fixed.
     ///
-    /// The reference resolution is how many game pixels the camera aims to show:
-    /// 1280 x 720 is 20 x 11.25 tiles. It scales up by a whole number on 1440p (2x)
-    /// and 4K (3x) screens. A 1080p screen can't show it at a whole-number size,
-    /// so it shows game pixels 1:1 and sees more of the world (30 x 17 tiles).
-    /// Unlike the pixel density, this can be changed without touching the art.
+    /// Since the switch to the dark realistic look (Phase 2) the camera zooms
+    /// freely and textures are smoothly filtered; there is no pixel-perfect
+    /// camera any more. The view is set in the ViewConfig asset (walking zoom 12
+    /// = 24 tiles from top to bottom, about 45 screen pixels per tile on a
+    /// 1080p screen); mipmaps keep the art smooth when it's shown smaller.
     /// </summary>
     public static class PixelArt
     {
         public const int PixelsPerUnit = 64;
-        public const int ReferenceWidth = 1280;
-        public const int ReferenceHeight = 720;
     }
 }

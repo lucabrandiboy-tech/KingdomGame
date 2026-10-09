@@ -15,7 +15,7 @@ namespace KingdomGame.Destruction
     public sealed class DestructibleStructure : MonoBehaviour
     {
         [SerializeField] StructureMaterial material;
-        [Tooltip("Size in grid tiles (1 tile = 32 x 32 pixels).")]
+        [Tooltip("Size in grid tiles (1 tile = 64 x 64 pixels).")]
         [SerializeField] Vector2Int size = new Vector2Int(4, 1);
 
         // Shared scratch buffers for integrity checks (main thread only).
@@ -76,7 +76,7 @@ namespace KingdomGame.Destruction
                         Debug.LogWarning($"{name}: cell {cell} already has a wall in it, skipping it.", this);
                         continue;
                     }
-                    var chunk = new PixelChunk(cell, this, world.Tiles.Get(material, cell), world.Settings.wallSortingOrder);
+                    var chunk = new PixelChunk(cell, this, world.Tiles.Get(material, cell), world.Settings.wallHeight);
                     chunks[y * size.x + x] = chunk;
                     world.Register(chunk);
                     InitialSolidCount += chunk.SolidCount;

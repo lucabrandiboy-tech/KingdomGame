@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 namespace KingdomGame
 {
     /// <summary>
-    /// Keyboard and mouse for Phase 1, in one place. Uses the Input System
+    /// Keyboard and mouse, in one place. Uses the Input System
     /// package when the project has it switched on, otherwise Unity's old
     /// Input Manager, so it compiles either way. Key rebinding and gamepads
     /// come later.
@@ -42,7 +42,26 @@ namespace KingdomGame
 
         public static bool FireHeld => MouseHeld(0);
         public static bool FirePressed => MousePressed(0);
+        public static bool FireReleased => MouseReleased(0);
         public static bool AltFirePressed => MousePressed(1);
+
+        /// <summary>Mouse wheel this frame: +1 per click away from you (zoom in), -1 towards you.</summary>
+        public static float Scroll
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                // The Input System reports 120 per wheel click on Windows; only the direction matters here.
+                float y = Mouse.current != null ? Mouse.current.scroll.ReadValue().y : 0f;
+                return y > 0.01f ? 1f : y < -0.01f ? -1f : 0f;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+                float y = Input.mouseScrollDelta.y;
+                return y > 0.01f ? 1f : y < -0.01f ? -1f : 0f;
+#else
+                return 0f;
+#endif
+            }
+        }
 
         public static bool Held(KeyCode key)
         {
@@ -76,6 +95,19 @@ namespace KingdomGame
             return (button == 0 ? mouse.leftButton : mouse.rightButton).isPressed;
 #elif ENABLE_LEGACY_INPUT_MANAGER
             return Input.GetMouseButton(button);
+#else
+            return false;
+#endif
+        }
+
+        static bool MouseReleased(int button)
+        {
+#if ENABLE_INPUT_SYSTEM
+            var mouse = Mouse.current;
+            if (mouse == null) return false;
+            return (button == 0 ? mouse.leftButton : mouse.rightButton).wasReleasedThisFrame;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetMouseButtonUp(button);
 #else
             return false;
 #endif
@@ -118,6 +150,12 @@ namespace KingdomGame
                 case KeyCode.E: return k.eKey;
                 case KeyCode.G: return k.gKey;
                 case KeyCode.F3: return k.f3Key;
+                case KeyCode.Alpha1: return k.digit1Key;
+                case KeyCode.Alpha2: return k.digit2Key;
+                case KeyCode.Alpha3: return k.digit3Key;
+                case KeyCode.Alpha4: return k.digit4Key;
+                case KeyCode.Alpha5: return k.digit5Key;
+                case KeyCode.Delete: return k.deleteKey;
                 case KeyCode.Escape: return k.escapeKey;
                 default:
                     Debug.LogWarning($"GameInput doesn't know key {key} yet. Add it to GameInput.Find.");

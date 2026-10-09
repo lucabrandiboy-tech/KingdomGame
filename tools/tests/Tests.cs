@@ -4,7 +4,7 @@ using System.Linq;
 using KingdomGame.Destruction;
 
 // Small self-contained test runner: no test framework needed.
-static class Tests
+static partial class Tests
 {
     static int failures;
 
@@ -26,6 +26,15 @@ static class Tests
         Run(nameof(RayStartingInsideWallHitsImmediately), RayStartingInsideWallHitsImmediately);
         Run(nameof(RayWorksWithNegativeAndDiagonalDirections), RayWorksWithNegativeAndDiagonalDirections);
         Run(nameof(RayMatchesBruteForceSampling), RayMatchesBruteForceSampling);
+
+        Run(nameof(PathStraightAndDiagonal), PathStraightAndDiagonal);
+        Run(nameof(PathGoesAroundAWall), PathGoesAroundAWall);
+        Run(nameof(PathNeverCutsCorners), PathNeverCutsCorners);
+        Run(nameof(PathFailsWhenEnclosed), PathFailsWhenEnclosed);
+        Run(nameof(PathEndsNextToABuilding), PathEndsNextToABuilding);
+        Run(nameof(PathFromGoalIsEmpty), PathFromGoalIsEmpty);
+        Run(nameof(PathIsShortestOnRandomGrids), PathIsShortestOnRandomGrids);
+        Run(nameof(SmoothedPathsStayClear), SmoothedPathsStayClear);
 
         Console.WriteLine(failures == 0 ? "All tests passed." : $"{failures} test(s) FAILED.");
         return failures == 0 ? 0 : 1;

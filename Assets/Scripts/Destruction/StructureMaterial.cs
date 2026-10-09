@@ -2,16 +2,16 @@ using UnityEngine;
 
 namespace KingdomGame.Destruction
 {
+    /// <summary>How a wall looks from above. (Saved as numbers, so Phase 2A's Bricks and Planks became Stone and Logs.)</summary>
     public enum WallPattern
     {
-        Bricks,
-        Planks,
+        Stone,
+        Logs,
     }
 
     /// <summary>
     /// What a wall is made of: how tough each pixel is and how it looks.
-    /// Phase 1 draws the wall pictures in code (<see cref="WallTiles"/>);
-    /// real pixel art replaces that later.
+    /// The wall pictures are drawn in code (<see cref="WallTiles"/>, <see cref="Art.WallArt"/>).
     /// </summary>
     [CreateAssetMenu(menuName = "KingdomGame/Destruction/Structure Material", fileName = "StructureMaterial")]
     public sealed class StructureMaterial : ScriptableObject
@@ -39,10 +39,10 @@ namespace KingdomGame.Destruction
         }
 
         [Header("Look")]
-        public WallPattern pattern = WallPattern.Bricks;
-        [Tooltip("Mortar (between bricks) or gaps (between planks).")]
+        public WallPattern pattern = WallPattern.Stone;
+        [Tooltip("Mortar (between stones) or the dark gaps between logs.")]
         public Color32 gapColor = new Color32(52, 46, 56, 255);
-        [Tooltip("Bricks or planks pick from these colors.")]
+        [Tooltip("Stones or logs pick from these colors (the art weathers them a little).")]
         public Color32[] colors =
         {
             new Color32(150, 82, 62, 255),

@@ -1,5 +1,9 @@
 # Phase 0: Setup, step by step
 
+> **Note (Phase 2):** this page is the record of the original setup. Since Phase 2 the game
+> uses a smooth, realistic look: there is no Pixel Perfect Camera any more, tiles are 64 × 64
+> pixels, and the Setup Check no longer checks the camera.
+
 When you finish this page you will have:
 
 - Unity 6.3 LTS installed

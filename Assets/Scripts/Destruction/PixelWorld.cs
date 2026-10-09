@@ -8,7 +8,7 @@ namespace KingdomGame.Destruction
     /// The one place that knows every destructible chunk in the scene, by grid
     /// cell. It applies damage events, answers "is this pixel solid?" for
     /// bullets, and once per frame (LateUpdate) crumbles broken structures,
-    /// moves the flying pixels and uploads changed chunks.
+    /// moves the flying pieces and explosion smoke, and uploads changed chunks.
     ///
     /// Put exactly one in each scene that has destructible walls.
     /// </summary>
@@ -23,6 +23,8 @@ namespace KingdomGame.Destruction
 
         /// <summary>A hit was applied: the event, its type, its world position and how many pixels broke.</summary>
         public event Action<DamageEvent, DamageType, Vector2, int> Damaged;
+        /// <summary>A grid cell got a wall chunk (true) or lost its last one (false). Villagers' paths use this.</summary>
+        public event Action<Vector2Int, bool> CellChanged;
 
         readonly Dictionary<Vector2Int, PixelChunk> chunks = new Dictionary<Vector2Int, PixelChunk>();
         readonly List<PixelChunk> toFlush = new List<PixelChunk>();
@@ -31,6 +33,7 @@ namespace KingdomGame.Destruction
 
         PixelDebris debris;
         RubbleLayer rubble;
+        ExplosionEffects effects;
         uint seedCounter;
         int newDebrisThisFrame;
 
@@ -68,6 +71,7 @@ namespace KingdomGame.Destruction
             }
             debris = new PixelDebris(transform, settings);
             rubble = new RubbleLayer(transform, settings);
+            effects = new ExplosionEffects(transform, settings);
         }
 
         void OnDestroy()
@@ -75,6 +79,7 @@ namespace KingdomGame.Destruction
             if (Current == this) Current = null;
             debris?.Dispose();
             rubble?.Dispose();
+            effects?.Dispose();
             Tiles.DestroyAll();
         }
 
@@ -82,10 +87,14 @@ namespace KingdomGame.Destruction
 
         public PixelChunk ChunkAt(Vector2Int cell) => chunks.TryGetValue(cell, out var chunk) ? chunk : null;
 
+        /// <summary>Every grid cell that has a wall chunk.</summary>
+        public IEnumerable<Vector2Int> ChunkCells => chunks.Keys;
+
         internal void Register(PixelChunk chunk)
         {
             chunks.Add(chunk.Cell, chunk);
             cachedCell = new Vector2Int(int.MinValue, int.MinValue);
+            CellChanged?.Invoke(chunk.Cell, true);
         }
 
         internal void Unregister(PixelChunk chunk)
@@ -99,6 +108,7 @@ namespace KingdomGame.Destruction
             toFlush.Remove(chunk);
             cachedCell = new Vector2Int(int.MinValue, int.MinValue);
             chunk.Destroy();
+            CellChanged?.Invoke(chunk.Cell, false);
         }
 
         internal void OnChunkFirstDamaged() => DamagedChunkCount++;
@@ -201,7 +211,7 @@ namespace KingdomGame.Destruction
                 broken++;
                 QueueFlush(chunk);
                 chunk.Owner.OnPixelRemoved();
-                if (random.Value() < type.debrisChance)
+                if (random.Value() < type.debrisChance * settings.cubeDensity)
                 {
                     var position = PixelCenter(pixel.X, pixel.Y);
                     var away = position - center;
@@ -222,6 +232,9 @@ namespace KingdomGame.Destruction
                 newDebrisThisFrame++;
             }
 
+            if (type.category == DamageCategory.Explosive)
+                effects.Explode(center, type.ToShape(hit.RadiusPx).RadiusPx, settings.rubble ? rubble : null);
+
             PixelsDestroyed += broken;
             Damaged?.Invoke(hit, type, center, broken);
             return broken;
@@ -240,6 +253,13 @@ namespace KingdomGame.Destruction
             PixelsDestroyed++;
             QueueFlush(chunk);
             var position = PixelCenter(pixelX, pixelY);
+            // Cubes are bigger than pixels, so only some pixels become cubes; the rest
+            // are left lying where they were, so the rubble keeps the wall's outline.
+            if (DamageShape.Hash(0xC1u, pixelX, pixelY) % 1000u >= (uint)(settings.cubeDensity * 150f))
+            {
+                if (settings.rubble) rubble.Drop(position, color);
+                return;
+            }
             var away = position - pushedFrom;
             var direction = away.sqrMagnitude > 1e-8f ? away.normalized : Vector2.down;
             var random = new FastRandom(DamageShape.Hash(0xC0u, pixelX, pixelY));
@@ -274,8 +294,8 @@ namespace KingdomGame.Destruction
         }
 
         /// <summary>
-        /// A puff of bright pixels that vanish when they land (no rubble): chips
-        /// when gathering, sparks, dust. Just for looks.
+        /// A puff of small chips that vanish when they land (no rubble): chips of
+        /// wood, stone or berries when gathering. Just for looks.
         /// </summary>
         public void Burst(Vector2 at, Color32 color, int count, float speed)
         {
@@ -283,16 +303,18 @@ namespace KingdomGame.Destruction
             for (int i = 0; i < count && newDebrisThisFrame < settings.maxNewDebrisPerFrame; i++)
             {
                 var velocity = random.Direction() * speed * Mathf.Lerp(0.4f, 1f, random.Value());
-                if (!debris.Launch(at, velocity, Mathf.Lerp(1.5f, 3.5f, random.Value()), color, spark: true)) break;
+                float size = Mathf.Lerp(2.5f, 4.5f, random.Value());
+                if (!debris.Launch(at, velocity, Mathf.Lerp(1.5f, 3.5f, random.Value()), color, false, size, vanish: true)) break;
                 newDebrisThisFrame++;
             }
         }
 
-        /// <summary>Removes all rubble and flying pixels (used by the stress test reset).</summary>
+        /// <summary>Removes all rubble, flying pieces, smoke and scorch marks (used by the stress test reset).</summary>
         public void ClearEffects()
         {
             debris.Clear();
             rubble.Clear();
+            effects.Clear();
         }
 
         // ------------------------------------------------------------- frame --
@@ -309,8 +331,9 @@ namespace KingdomGame.Destruction
             }
             toCheck.Clear();
 
-            // 2. Move the flying pixels; the ones that stop become rubble.
+            // 2. Move the flying pieces (the ones that stop become rubble), smoke and flashes.
             debris.Update(Time.deltaTime, settings.rubble ? rubble : null);
+            effects.Update(Time.deltaTime);
             newDebrisThisFrame = 0;
 
             // 3. Upload changed chunk pictures and rebuild their colliders.

@@ -20,35 +20,49 @@ phase. If you change your mind about one, change it here first.
 ## 2. Graphics: URP with the 2D Renderer (decided)
 
 The "Universal 2D" template sets this up. It gives us 2D lights (torches,
-muzzle flashes, explosions), 2D shadows from walls, day/night lighting,
-post-processing (bloom on fire), and the Pixel Perfect Camera.
+braziers, explosion flashes), day/night lighting, and post-processing (the
+dark corners, glow and color grading of the look below).
 
-## 3. Pixel density: 64 pixels per tile, 1280 × 720 view (decided, changed in Phase 2)
+## 3. Look: dark, realistic 2D seen from straight above (decided in Phase 2)
 
-- **One grid tile = one Unity unit = 64 × 64 pixels.** It was 32 until Phase 2,
-  when you asked for twice the detail. Every sprite uses this density. It's set
-  in one place: `Assets/Scripts/Core/PixelArt.cs`.
-- **Reference resolution 1280 × 720** (20 × 11 tiles). It scales by a whole
-  number on 1440p (2×) and 4K (3×) screens. A **1080p screen** can't show it at a
-  whole-number size, so the Pixel Perfect Camera shows game pixels 1:1 and you
-  see more of the world (about 30 × 17 tiles). That's a small advantage for
-  1080p players in PvP; we'll revisit it before Phase 6.
-- **Pixel Perfect Camera settings:**
-  - *Grid Snapping: Upscale Render Texture.* The scene is drawn at game
-    resolution and scaled up, so rotated guns, particles and flying pixels
-    stay real pixels. The camera moves in whole-pixel steps.
-  - *Crop Frame: None.*
-- **Import settings** (applied automatically to `Assets/Art` by
-  `PixelArtImporter`): Sprite, 64 PPU, Point filter (no blur), no compression,
-  no mipmaps.
-- **Art is drawn in code for now** (`Assets/Scripts/Art`): the ruler, trees,
-  rocks, bushes, ground and walls. `tools/art-preview` renders them to PNG
-  files so they can be checked without Unity. Real pixel art (made by hand or
-  from licensed packs) can replace them piece by piece.
-- **Known problem for Phase 2B:** the throne view zooms far out, and Pixel
-  Perfect Camera only allows whole-number zoom steps. Planned approach: the
-  throne view turns pixel snapping off while zoomed out.
-- **Asset packs:** pick packs drawn at 64 × 64 (or redraw at that density).
+You chose this over pixel art after seeing a dark 3D reference picture. It
+stays 2D (flat sprites, a top-down camera), which keeps the destruction system,
+the performance and the art pipeline simple, but it aims for a gritty,
+realistic look instead of crisp pixels.
+
+- **Straight top-down.** People, trees, rocks and buildings are drawn as seen
+  from above. Bodies turn to face where they aim or walk (the art is drawn
+  facing right and rotated). Nothing is sorted by its height on screen any
+  more: the drawing order is fixed per kind of thing (`Core/SortOrder.cs`).
+  Tree leaves are above everyone and fade when the ruler walks under them.
+- **One grid tile = one Unity unit = 64 × 64 texture pixels** (set in
+  `Core/PixelArt.cs`). Wall destruction still works on these pixels.
+- **No Pixel Perfect Camera.** Textures use smooth (bilinear) filtering with
+  mipmaps, so art can rotate, scale and be shown at any zoom without jagged
+  edges or shimmering. The camera zooms freely: walking view 24 tiles tall
+  (`ViewConfig`, changeable), the throne view much further out.
+  This also solved the old Phase 2B problem (pixel-perfect zoom only works in
+  whole steps).
+- **Light from the top-left** in all art, and **soft shadows** falling to the
+  bottom-right: blurred shadow sprites under trees, rocks, people and
+  buildings; walls cast a shadow of their current shape (holes included).
+- **Fake 3D debris.** Pieces breaking off walls are flat sprites drawn as real
+  3D cubes, with 8 tumbling frames, a shadow that drifts away as they fly up,
+  and a slight grow with height. Explosions add a flash of light, a fireball,
+  smoke and a scorch mark.
+- **Post-processing** (`Assets/Data/Look/PostProcessing`): vignette, bloom on
+  bright things (fire, sparks, shots ignore lighting via the Glow material, so
+  they glow at night), more contrast, less saturation.
+- **Art is drawn in code for now** (`Assets/Scripts/Art`). `tools/art-preview`
+  renders a mock screenshot and a sheet of every sprite so they can be checked
+  without Unity. Real art (hand-made or licensed packs, drawn top-down with
+  light from the top-left) can replace it piece by piece.
+- **Import settings** for files in `Assets/Art` (applied by `PixelArtImporter`):
+  Sprite, 64 pixels per unit, bilinear filter, mipmaps, no compression.
+- **Performance:** many sprites share textures (atlases for nature, buildings
+  and debris) so they draw in a few batches. Shadows double the number of
+  sprites; if that shows up in the stress test, the first thing to try is
+  baking static shadows into the ground.
 
 ## 4. Controls: Input System package (decided)
 
@@ -76,7 +90,7 @@ rebinding later without rewriting the controls.
 
 - Pictures, sounds, fonts and DLLs go to Git LFS (`.gitattributes` lists
   them). The free GitHub plan includes 10 GiB of LFS storage and 10 GiB of LFS
-  downloads per month. Pixel art is tiny; music and sound effects will be most
+  downloads per month. 2D art is small; music and sound effects will be most
   of it. Uploading doesn't count toward the download limit.
 - The **Repo checks** action runs after every push. It fails if an asset is
   missing its `.meta` file or a big file skipped LFS. It can't open Unity, so
@@ -125,7 +139,7 @@ server's CPU (unit AI, pathfinding, physics) and network bandwidth. The plan:
 install, which keeps community hosting simple.
 
 - The server autosaves every few minutes and on shutdown.
-- Wall damage is stored per 32 × 32-pixel chunk as a compressed "which pixels
+- Wall damage is stored per 64 × 64-pixel chunk as a compressed "which pixels
   are left" map, so late joiners and restarts get the exact damaged walls.
 - A wipe starts a new world file. Cosmetics, stats and saved blueprints (the
   things that survive wipes) live in a separate account database.
@@ -172,7 +186,8 @@ works with Steam games) gets added in Phase 9.
   smaller than *Min Standing Pixels* crumble, and a structure below *Collapse
   Below* of its pixels collapses. That's the "detached chunks break apart" rule
   for a top-down view, where nothing falls.
-- **Flying pixels** are pooled sprites (all made when the scene starts), capped
+- **Flying pieces** (since Phase 2: little fake-3D cubes, see section 3; a share
+  of the broken pixels becomes cubes) are pooled sprites (all made when the scene starts), capped
   at *Max Debris* and *Max New Debris Per Frame*. They pop up, fall, bounce and
   slide, then get painted into flat **rubble tiles**, so settled rubble costs
   nothing extra. They're only for looks and not part of the shared game state.
@@ -209,3 +224,32 @@ Breaking into a base should take explosives, like in Rust.
 - Later eras need tougher materials (metal, armored walls). Pixel health is
   stored in one byte (max 255); tougher materials will either resist more or we
   move to two bytes per pixel. Decide when metal walls arrive (Phase 3).
+
+## 13. Building and builder villagers (Phase 2B, decided)
+
+- **Throne view.** Sitting on the throne (E) pulls the camera far out. You
+  pick a building on the build bar (or 1-5), click to place it, or drag to
+  place a straight line of walls. The world keeps running.
+- **Blueprints, not instant buildings.** A placed building is a blueprint.
+  Nothing is paid when you place it: builder villagers fetch the resources
+  from storehouses, carry them over, then build. Cancelling gives back what was
+  already delivered. The ruler can also hand over resources from the backpack
+  and help build (hold E).
+- **Resources live in storehouses.** The backpack has to be emptied into a
+  storehouse (E) before villagers can use it. This is the brief's "physical
+  storage that can be raided"; destructible storehouses come with raids.
+- **Jobs:** idle villagers take the oldest blueprint that needs something, at
+  most 2 builders per blueprint (`KingdomConfig`). They reserve what they're
+  fetching, so two never go for the same stones.
+- **Paths:** A* on the tile grid (`Villagers/GridPathfinder.cs`, unit-tested),
+  8 directions, no squeezing between walls that touch at a corner, straightened
+  where the way is clear. The grid knows walls, buildings, trees and rocks, and
+  updates when they change; a villager whose way gets walled off finds another.
+- **Villagers have no physics body,** so they can't get stuck on each other or
+  on corners, and they don't push the ruler around. A building only appears
+  once nobody is standing on its spot.
+- **Performance with huge kingdoms:** a path search costs more the bigger the
+  map. Today's map (96 × 96) is fine. With hundreds of villagers on a big
+  server map we'll need cheaper searches (searching in larger regions first,
+  sharing paths, spreading searches over several frames). Not needed yet, and
+  noted so it isn't forgotten.

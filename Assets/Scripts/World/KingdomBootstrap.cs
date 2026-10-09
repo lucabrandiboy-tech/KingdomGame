@@ -1,7 +1,8 @@
-using KingdomGame.Art;
+using KingdomGame.Building;
 using KingdomGame.Character;
 using KingdomGame.Combat;
 using KingdomGame.Destruction;
+using KingdomGame.Economy;
 using KingdomGame.UI;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -9,8 +10,9 @@ using UnityEngine.Rendering.Universal;
 namespace KingdomGame.World
 {
     /// <summary>
-    /// Builds the game when you press Play: the map, the ruler with their gear,
-    /// the test outpost, day and night, and the on-screen info.
+    /// Builds the game when you press Play: the map, your kingdom (throne,
+    /// storehouse, builder villagers), the ruler with their gear, the test
+    /// outpost, day and night, and the on-screen info.
     /// </summary>
     public sealed class KingdomBootstrap : MonoBehaviour
     {
@@ -28,26 +30,79 @@ namespace KingdomGame.World
                 Debug.LogError("The game scene needs a PixelWorld and its Content set. Run KingdomGame > Build Game Scenes again.", this);
                 return;
             }
+            Look.Configure(content.view);
 
             int seed = content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
             Debug.Log($"Map seed {seed}. Put this number in WorldConfig's Seed to get the same map again.");
-            WorldGenerator.Generate(content, transform, seed);
+            var canopies = WorldGenerator.Generate(content, transform, seed);
             if (content.world.testOutpost) BuildOutpost(world);
 
-            var ruler = SpawnRuler();
+            var kingdom = MakeKingdom(world);
+            var ruler = SpawnRuler(kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero);
+            var rulerController = ruler.GetComponent<RulerController>();
+            kingdom.Ruler = ruler.transform;
+            kingdom.RulerRadius = content.player != null ? content.player.bodyRadius : 0.15f;
+            canopies.Focus = ruler.transform;
+            if (content.view != null) canopies.NearAlpha = content.view.canopyFadeAlpha;
+
+            CameraRig rig = null;
             var view = Camera.main;
             if (view != null)
             {
-                var rig = view.GetComponent<CameraRig>();
+                rig = view.GetComponent<CameraRig>();
                 if (rig == null) rig = view.gameObject.AddComponent<CameraRig>();
+                rig.Setup(content.view);
                 rig.Follow(ruler.transform);
+                int half = content.world.mapSize / 2;
+                rig.Bounds = new Rect(-half, -half, half * 2, half * 2);
+                if (content.view != null) view.backgroundColor = content.view.backgroundColor;
             }
 
+            var builder = kingdom.gameObject.AddComponent<BuildController>();
+            builder.Setup(kingdom, rulerController, rig, canopies, content.view);
+
             var hud = gameObject.AddComponent<GameHud>();
-            hud.Setup(ruler.GetComponent<RulerController>(), dayNight);
+            hud.Setup(rulerController, dayNight, kingdom, builder, rig);
             var debug = gameObject.AddComponent<DebugHud>();
             debug.visible = false;
             debug.toggleKey = KeyCode.F3;
+        }
+
+        Kingdom MakeKingdom(PixelWorld world)
+        {
+            var go = new GameObject("Kingdom");
+            go.transform.SetParent(transform, false);
+            var kingdom = go.AddComponent<Kingdom>();
+            int size = content.world.mapSize, half = size / 2;
+            var storehouse = content.storehouse;
+            if (storehouse == null && content.buildMenu != null)
+                foreach (var b in content.buildMenu)
+                    if (b != null && b.kind == BuildingKind.Storage) { storehouse = b; break; }
+            kingdom.Setup(content.kingdom, content.villager, content.buildMenu, world, new RectInt(-half, -half, size, size), storehouse);
+
+            var config = kingdom.Config;
+            var throne = kingdom.PlaceThrone(config.throneCell);
+            if (storehouse != null)
+            {
+                var storage = kingdom.AddStorage(storehouse, config.storageCell);
+                storage.Deposit(ResourceType.Wood, config.startWood);
+                storage.Deposit(ResourceType.Stone, config.startStone);
+                storage.Deposit(ResourceType.Food, config.startFood);
+            }
+            else
+            {
+                Debug.LogWarning("No storehouse building in the Game Content, so the kingdom starts without storage. Run KingdomGame > Build Game Scenes again.", this);
+            }
+
+            // Villagers start in a row in front of the throne.
+            for (int i = 0; i < config.startVillagers; i++)
+            {
+                float x = (i - (config.startVillagers - 1) * 0.5f) * 0.8f;
+                var spot = throne.Front + new Vector2(x, -1.1f);
+                if (!kingdom.Nav.Walkable(spot)) kingdom.Nav.NearestFreeSpot(spot, new RectInt(0, 0, 0, 0), out spot);
+                kingdom.AddVillager(spot);
+            }
+            return kingdom;
         }
 
         // A small walled yard east of the start: stone on two sides, wood on one,
@@ -69,13 +124,13 @@ namespace KingdomGame.World
             go.AddComponent<DestructibleStructure>().Build(world, material, new Vector2Int(width, height));
         }
 
-        GameObject SpawnRuler()
+        GameObject SpawnRuler(Vector2 at)
         {
             var shots = new GameObject("Projectiles").AddComponent<Projectiles>();
             var charges = new GameObject("Explosives").AddComponent<Explosives>();
 
             var ruler = new GameObject("Ruler");
-            var bodyLook = ruler.AddComponent<SpriteRenderer>();
+            ruler.transform.position = at;
 
             var body = ruler.AddComponent<Rigidbody2D>();
             body.gravityScale = 0f;
@@ -83,25 +138,20 @@ namespace KingdomGame.World
             body.interpolation = RigidbodyInterpolation2D.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
+            // Seen from above, the ruler's position is the middle of their body.
             var feet = ruler.AddComponent<CircleCollider2D>();
             feet.radius = content.player != null ? content.player.bodyRadius : 0.15f;
-            feet.offset = new Vector2(0f, feet.radius); // the ruler's position is at their feet
 
-            var gun = new GameObject("Gun").transform;
-            gun.SetParent(ruler.transform, false);
-            gun.localPosition = new Vector3(0f, 0.22f, 0f);
-            var gunLook = gun.gameObject.AddComponent<SpriteRenderer>();
-            gunLook.sprite = PixelTextures.ToSprite(CharacterArt.Rifle(), "Rifle");
+            var look = ruler.AddComponent<RulerLook>();
+            var gun = look.Build();
 
             // A warm light that comes on at night.
             var torch = new GameObject("Night light").AddComponent<Light2D>();
             torch.transform.SetParent(ruler.transform, false);
-            torch.transform.localPosition = new Vector3(0f, 0.3f, 0f);
             torch.lightType = Light2D.LightType.Point;
             if (dayNight != null) dayNight.AddNightLight(torch);
             else torch.enabled = false;
 
-            ruler.AddComponent<RulerLook>().Setup(bodyLook, gunLook);
             ruler.AddComponent<RulerController>().Setup(
                 content.player, content.rifle, content.rocketLauncher, content.c4, gun, shots, charges);
             return ruler;

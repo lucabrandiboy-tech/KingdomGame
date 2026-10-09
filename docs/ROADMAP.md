@@ -8,7 +8,8 @@ Status key: ✅ done and confirmed · 🔧 in progress · ⏳ not started
 ## ✅ Phase 0: Setup
 
 Unity 6.3 LTS project from the Universal 2D template in a private GitHub repo with
-Git LFS; pixel-perfect camera; every Setup Check line passed; Repo checks green.
+Git LFS; every Setup Check line passed; Repo checks green. (The pixel-perfect
+camera set up then was removed in Phase 2 with the switch to a realistic look.)
 
 ## ✅ Phase 1: Destruction prototype
 
@@ -25,21 +26,31 @@ Tested in Unity: shooting and blowing holes in walls, flying pixels, rubble.
 
 ## 🔧 Phase 2: Single-kingdom offline prototype
 
-Split into three steps, each tested before the next.
+Split into three steps. You asked to restyle the game and start 2B before 2A
+was tested, so **2A and 2B are tested together**: `docs/PHASE-2B-TEST.md`.
 
-**2A (written, not yet tested in Unity)**. Test steps: `docs/PHASE-2A-TEST.md`.
-- [x] 64 × 64-pixel tiles (twice the detail) and new code-drawn art: ground, walls, trees, rocks, bushes
-- [x] New ruler: slimmer, animated, faces the aim, slower
-- [x] Rust-style walls: each material resists bullets, melee and explosives differently; C4
+**2A (written, not yet tested in Unity)**
+- [x] 64 × 64-pixel tiles and Rust-style walls: each material resists bullets, melee and explosives differently; C4
 - [x] Generated map with forests, rocks and berry bushes; gathering wood, stone and food with E
 - [x] Backpack (limited personal inventory)
 - [x] Day/night cycle with a night light on the ruler
+- [x] **Restyled: dark realistic 2D, straight top-down** (`docs/DECISIONS.md` section 3):
+  new code-drawn art for everything, a top-down ruler who turns to aim,
+  soft shadows, tree leaves that fade when you walk under them, fake-3D
+  tumbling cubes when walls break, explosion flash/smoke/scorch marks,
+  post-processing, a free-zooming camera with a much wider view
 
-**2B** (next): throne view with grid placement, storage buildings, builder
-villagers constructing blueprints with stored resources.
+**2B (written, not yet tested in Unity)**
+- [x] Throne view: sit on the throne (E), the camera pulls out, WASD/wheel to look around
+- [x] Grid placement from a build bar: stone wall, wood wall, storehouse; drag to place lines of walls
+- [x] Blueprints with costs; cancel for a refund
+- [x] Storehouses: the kingdom's resources; empty your backpack into one (E)
+- [x] Builder villagers: fetch resources, carry them over, build; path finding around walls and trees
+- [x] The ruler can hand over resources and help build (hold E at a blueprint)
 
-**2C**: villager needs (food, housing, happiness), basic zombie waves drawn
-by noise and kingdom size and stronger at night, ruler health, death and respawn at the throne.
+**2C** (next, after 2A + 2B are tested): villager needs (food, housing,
+happiness), basic zombie waves drawn by noise and kingdom size and stronger at
+night, ruler health, death and respawn at the throne.
 
 ## ⏳ Phase 3: Production and eras
 Production chains and jobs · hand-carry then carts · tech tree for the first

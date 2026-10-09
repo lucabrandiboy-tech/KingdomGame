@@ -1,6 +1,7 @@
 # KingdomGame: notes for Claude
 
-Multiplayer top-down pixel-art kingdom builder / survival game in Unity. The full
+Multiplayer top-down kingdom builder / survival game in Unity, in a dark realistic
+2D style seen from straight above (it started as pixel art). The full
 design brief is `docs/BRIEF.md`; read it before starting any phase. Phase status
 is in `docs/ROADMAP.md`, and the decisions with their reasons in `docs/DECISIONS.md`.
 
@@ -30,16 +31,19 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
   `Assets/Scripts/Editor/`, namespace `KingdomGame.EditorTools`). No assembly
   definitions yet.
 - **Data-driven:** gameplay numbers live in ScriptableObjects under
-  `Assets/Data`, never hardcoded. Pixel density is the one exception:
-  `Assets/Scripts/Core/PixelArt.cs` (64 PPU, 1280 × 720 reference resolution).
+  `Assets/Data`, never hardcoded. The art density is the one exception:
+  `Assets/Scripts/Core/PixelArt.cs` (64 texture pixels per tile). Camera zoom
+  and the look (shadows, glow material) are in `ViewConfig`.
   Starting values for new assets are set in `Assets/Scripts/Editor/GameSetup.cs`
   (menu KingdomGame > Build Game Scenes), which keeps existing assets.
-- Art is drawn in code for now (`Assets/Scripts/Art`, pure C# on `PixelImage`).
-  Preview it with `dotnet run --project tools/art-preview/ArtPreview.csproj -- <folder>`
-  and look at the PNGs before committing art changes.
-- Drawing order: walls 0, rubble -10, ground -30000, standing things y-sorted
-  around 5000 (`YSort.Order`), C4 15000, flying pixels 20000, projectiles 21000.
-- Art in `Assets/Art` gets pixel-art import settings automatically
+- Art is drawn in code for now (`Assets/Scripts/Art`, pure C# on `PixelImage`),
+  seen from straight above, facing right, lit from the top-left. Preview it with
+  `dotnet run --project tools/art-preview/ArtPreview.csproj -- <folder>`
+  (scene.png is a mock screenshot) and look at the PNGs before committing art changes.
+- Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
+  Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
+- Textures are smooth (bilinear) with mipmaps; no Pixel Perfect Camera.
+  Art in `Assets/Art` gets these import settings automatically
   (`PixelArtImporter`). Asset packs go in `Assets/ThirdParty` and must be added
   to `CREDITS.md` with a commercial-use license.
 - **Every new file or folder under `Assets/` needs a `.meta` file.** When
@@ -52,16 +56,19 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
 ## Phase status
 
 Phases 0 and 1 are done and tested in Unity. Phase 2 is split into 2A
-(64 px art, Rust-style walls, C4, map with gathering, day/night: written,
-not yet tested), 2B (throne view, grid building, storage, builder villagers) and
-2C (villager needs, zombies, health and respawn). See `docs/ROADMAP.md`.
+(Rust-style walls, C4, map with gathering, day/night, restyled dark realistic
+top-down), 2B (throne view, grid building, storehouses, builder villagers) and
+2C (villager needs, zombies, health and respawn). 2A and 2B are written and
+compile-checked but **not yet run in Unity**; the user tests them together with
+`docs/PHASE-2B-TEST.md`. Don't start 2C before they confirm. See `docs/ROADMAP.md`.
 The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 
 ## Checks to run before every commit
 
 - `dotnet run --project tools/tests/DestructionTests.csproj`: unit tests for
-  the Unity-free destruction math (`DamageShape.cs`, `PixelAlgorithms.cs`).
-  Keep those two files free of `UnityEngine` so the tests can compile them.
+  the Unity-free code: destruction math (`DamageShape.cs`, `PixelAlgorithms.cs`)
+  and path finding (`Villagers/GridPathfinder.cs`). Keep those files free of
+  `UnityEngine` so the tests can compile them.
 - `python3 tools/check_meta.py`
 - `dotnet build tools/compile-check/CompileCheck.csproj` compiles every script
   in `Assets/` against Unity 2021.3 reference assemblies (NuGet

@@ -4,8 +4,8 @@ using UnityEngine;
 namespace KingdomGame.Destruction
 {
     /// <summary>
-    /// One 32 x 32-pixel tile of a wall (one grid cell). It owns the pixels'
-    /// colors and health, the picture on screen and the collider.
+    /// One 64 x 64-pixel tile of a wall (one grid cell). It owns the pixels'
+    /// colors and health, the picture on screen (and its shadow) and the collider.
     ///
     /// Undamaged, it shares its tile picture with every other undamaged chunk
     /// of the same material (cheap). The first hit gives it its own copy. After
@@ -28,6 +28,7 @@ namespace KingdomGame.Destruction
 
         readonly TileVariant variant;
         readonly SpriteRenderer spriteRenderer;
+        readonly SpriteRenderer shadowRenderer;
         readonly CustomCollider2D wallCollider;
 
         Color32[] colors;   // null while undamaged (the variant's pixels are used)
@@ -44,7 +45,7 @@ namespace KingdomGame.Destruction
         public int SolidCount { get; private set; }
         public bool IsDamaged => health != null;
 
-        public PixelChunk(Vector2Int cell, DestructibleStructure owner, TileVariant variant, int sortingOrder)
+        public PixelChunk(Vector2Int cell, DestructibleStructure owner, TileVariant variant, float wallHeight)
         {
             Cell = cell;
             Owner = owner;
@@ -62,7 +63,12 @@ namespace KingdomGame.Destruction
 
             spriteRenderer = GameObject.AddComponent<SpriteRenderer>();
             spriteRenderer.sprite = variant.Sprite;
-            spriteRenderer.sortingOrder = sortingOrder;
+            spriteRenderer.sortingOrder = SortOrder.Walls;
+
+            // The wall's shadow: the same picture in black, shifted away from the light.
+            // It shows the holes too, because it always uses the chunk's current picture.
+            shadowRenderer = Look.AddShadow(GameObject.transform, variant.Sprite, wallHeight);
+            shadowRenderer.color = new Color(0f, 0f, 0f, Look.ShadowOpacity);
 
             wallCollider = GameObject.AddComponent<CustomCollider2D>();
             SetShapes(variant.ColliderRects);
@@ -75,7 +81,7 @@ namespace KingdomGame.Destruction
         public Color32 ColorAt(int x, int y) => (colors ?? variant.Colors)[Index(x, y)];
 
         /// <summary>
-        /// Takes <paramref name="amount"/> health off one pixel (local 0..31
+        /// Takes <paramref name="amount"/> health off one pixel (local 0..63
         /// coordinates). Returns true if that broke the pixel off, with its color.
         /// </summary>
         public bool Damage(int x, int y, int amount, out Color32 brokenColor)
@@ -119,7 +125,9 @@ namespace KingdomGame.Destruction
         void RemoveAt(int i)
         {
             health[i] = 0;
-            colors[i] = default; // fully transparent
+            // Fully transparent, but keeping its color: smooth filtering blends edge
+            // pixels with their neighbors, and black ones would leave dark rims.
+            colors[i].a = 0;
             SolidCount--;
             pictureChanged = shapeChanged = true;
         }
@@ -146,7 +154,7 @@ namespace KingdomGame.Destruction
             if (pictureChanged && texture != null)
             {
                 texture.SetPixels32(colors);
-                texture.Apply(false);
+                texture.Apply(true);
             }
             if (shapeChanged)
             {
@@ -171,9 +179,10 @@ namespace KingdomGame.Destruction
             colors = (Color32[])variant.Colors.Clone();
             texture = PixelTextures.NewTexture(Size, Size, GameObject.name);
             texture.SetPixels32(colors);
-            texture.Apply(false);
+            texture.Apply(true);
             sprite = PixelTextures.NewSprite(texture, Vector2.zero);
             spriteRenderer.sprite = sprite;
+            shadowRenderer.sprite = sprite;
             Owner.World.OnChunkFirstDamaged();
         }
 

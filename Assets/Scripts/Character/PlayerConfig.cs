@@ -16,5 +16,7 @@ namespace KingdomGame.Character
         [Min(1)] public int backpackCapacity = 250;
         [Tooltip("Steps per second of the walking animation at full speed.")]
         [Min(0.1f)] public float stepsPerSecond = 8f;
+        [Tooltip("Building work per second while holding E at a blueprint (a villager does 1).")]
+        [Min(0)] public float buildRate = 1f;
     }
 }

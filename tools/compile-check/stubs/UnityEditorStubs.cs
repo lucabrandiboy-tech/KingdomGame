@@ -111,6 +111,7 @@ namespace UnityEditor
         public static void SaveAssets() { }
         public static string[] FindAssets(string filter, string[] searchInFolders) => null;
         public static void CreateAsset(Object asset, string path) { }
+        public static void AddObjectToAsset(Object objectToAdd, Object assetObject) { }
         public static bool DeleteAsset(string path) => false;
     }
 

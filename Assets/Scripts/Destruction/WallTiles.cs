@@ -56,9 +56,9 @@ namespace KingdomGame.Destruction
 
         static TileVariant Create(StructureMaterial material, int variantIndex)
         {
-            var colors = material.pattern == WallPattern.Planks
-                ? WallArt.Planks(Size, material.gapColor, material.colors, variantIndex)
-                : WallArt.Bricks(Size, material.gapColor, material.colors, variantIndex);
+            var colors = material.pattern == WallPattern.Logs
+                ? WallArt.Logs(Size, material.gapColor, material.colors, variantIndex)
+                : WallArt.Stone(Size, material.gapColor, material.colors, variantIndex);
 
             var health = new byte[colors.Length];
             int solid = 0;
@@ -74,7 +74,7 @@ namespace KingdomGame.Destruction
 
             var texture = PixelTextures.NewTexture(Size, Size, $"{material.name} tile {variantIndex}");
             texture.SetPixels32(colors);
-            texture.Apply(false);
+            texture.Apply(true);
 
             return new TileVariant
             {

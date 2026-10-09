@@ -1,7 +1,9 @@
+using KingdomGame.Building;
 using KingdomGame.Character;
 using KingdomGame.Combat;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
+using KingdomGame.Villagers;
 using UnityEngine;
 
 namespace KingdomGame.World
@@ -31,5 +33,16 @@ namespace KingdomGame.World
         [Header("World")]
         public WorldConfig world;
         public DayNightConfig dayNight;
+
+        [Header("Camera and look")]
+        public ViewConfig view;
+
+        [Header("Kingdom")]
+        public KingdomConfig kingdom;
+        public VillagerConfig villager;
+        [Tooltip("The storehouse your kingdom starts with.")]
+        public BuildingConfig storehouse;
+        [Tooltip("What you can build from the throne, in build-bar order (keys 1-5).")]
+        public BuildingConfig[] buildMenu = new BuildingConfig[0];
     }
 }

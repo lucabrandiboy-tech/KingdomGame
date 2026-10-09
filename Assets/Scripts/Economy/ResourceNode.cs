@@ -1,9 +1,26 @@
+using System;
 using System.Collections.Generic;
 using KingdomGame.Destruction;
 using UnityEngine;
 
 namespace KingdomGame.Economy
 {
+    /// <summary>The pictures one tree, rock or bush uses.</summary>
+    public sealed class NodeSprites
+    {
+        /// <summary>The part on the ground: trunk, rock or bush.</summary>
+        public Sprite Full;
+        /// <summary>Shown once it's used up (a stump, a bush without berries); null = it disappears.</summary>
+        public Sprite Empty;
+        /// <summary>Leaves above everything (trees only), or null.</summary>
+        public Sprite Canopy;
+        public Sprite Shadow;
+        public Sprite EmptyShadow;
+        /// <summary>How high it is, in tiles (how far its shadow falls).</summary>
+        public float ShadowHeight = 0.15f;
+        public float EmptyShadowHeight = 0.05f;
+    }
+
     /// <summary>
     /// One tree, rock or bush in the world. Gathering takes resources out of it;
     /// when it's empty a tree becomes a stump, a rock disappears and a bush loses
@@ -16,10 +33,14 @@ namespace KingdomGame.Economy
         /// <summary>Every node in the scene (for finding the closest one).</summary>
         public static IReadOnlyList<ResourceNode> All => all;
 
+        /// <summary>A node started or stopped blocking its grid cell (it was used up, grew back or was cleared).</summary>
+        public static event Action<ResourceNode> BlockingChanged;
+
         ResourceNodeConfig config;
-        SpriteRenderer look;
-        Sprite fullSprite, emptySprite;
+        NodeSprites sprites;
+        SpriteRenderer look, leaves, shadow;
         CircleCollider2D block;
+        bool solid;              // kept separately: the collider may be gone before OnDestroy runs
         Vector3 restPosition;
         float shakeTime;
         float regrowAt;
@@ -27,27 +48,53 @@ namespace KingdomGame.Economy
         public ResourceNodeConfig Config => config;
         public int Left { get; private set; }
         public bool Empty => Left <= 0;
+        /// <summary>True while it's solid (people bump into it, nothing can be built on its cell).</summary>
+        public bool Blocks => solid;
+        /// <summary>The grid cell it stands in.</summary>
+        public Vector2Int Cell => new Vector2Int(Mathf.FloorToInt(restPosition.x), Mathf.FloorToInt(restPosition.y));
+        /// <summary>The leaves (trees only), for fading them when someone walks under.</summary>
+        public SpriteRenderer Leaves => leaves;
 
-        /// <summary>Sets the node up. <paramref name="empty"/> is shown once it's used up (null = hide it).</summary>
-        public void Setup(ResourceNodeConfig nodeConfig, Sprite full, Sprite empty, int sortingOrder)
+        /// <summary>Sets the node up. <paramref name="rotation"/> turns the pictures (seen from above, any angle looks natural).</summary>
+        public void Setup(ResourceNodeConfig nodeConfig, NodeSprites nodeSprites, float rotation)
         {
             config = nodeConfig;
-            fullSprite = full;
-            emptySprite = empty;
+            sprites = nodeSprites;
             Left = config.amount;
             restPosition = transform.position;
 
-            look = gameObject.AddComponent<SpriteRenderer>();
-            look.sprite = full;
-            look.sortingOrder = sortingOrder;
+            look = Part("Look", sprites.Full, SortOrder.Nature, rotation);
+            if (sprites.Canopy != null) leaves = Part("Leaves", sprites.Canopy, SortOrder.Canopies, rotation * 1.7f + 40f);
+            if (sprites.Shadow != null)
+            {
+                // A tree's shadow comes from its leaves; everything else from its own picture.
+                shadow = Look.AddShadow(transform, sprites.Shadow, sprites.ShadowHeight, leaves != null ? rotation * 1.7f + 40f : rotation);
+            }
 
             block = gameObject.AddComponent<CircleCollider2D>();
             block.radius = config.blockRadius;
+            solid = true;
             enabled = false; // only runs while shaking or regrowing
         }
 
+        SpriteRenderer Part(string partName, Sprite sprite, int order, float rotation)
+        {
+            var go = new GameObject(partName);
+            go.transform.SetParent(transform, false);
+            go.transform.localRotation = Quaternion.Euler(0, 0, rotation);
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sprite = sprite;
+            r.sortingOrder = order;
+            return r;
+        }
+
         void Awake() => all.Add(this);
-        void OnDestroy() => all.Remove(this);
+
+        void OnDestroy()
+        {
+            all.Remove(this);
+            SetSolid(false);
+        }
 
         /// <summary>The distance from <paramref name="from"/> to the edge of the solid part.</summary>
         public float DistanceFrom(Vector2 from) =>
@@ -63,19 +110,56 @@ namespace KingdomGame.Economy
             shakeTime = 0.18f;
             enabled = true;
             var world = PixelWorld.Current;
-            if (world != null) world.Burst(restPosition + new Vector3(0, 0.25f, 0), config.chipColor, 6, 2.5f);
+            if (world != null) world.Burst(restPosition, config.chipColor, 6, 2.5f);
 
             if (Empty) UseUp();
             return taken;
         }
 
+        /// <summary>Takes it out of the world for good (a building is going up on this spot).</summary>
+        public void Clear() => Destroy(gameObject);
+
         void UseUp()
         {
-            if (emptySprite != null) look.sprite = emptySprite;
+            if (sprites.Empty != null) look.sprite = sprites.Empty;
             else look.enabled = false;
+            if (leaves != null) leaves.enabled = false;
+            if (shadow != null)
+            {
+                shadow.enabled = sprites.EmptyShadow != null;
+                if (shadow.enabled)
+                {
+                    shadow.sprite = sprites.EmptyShadow;
+                    shadow.transform.localPosition = (Vector3)(Look.ShadowDirection * sprites.EmptyShadowHeight);
+                    shadow.transform.localRotation = look.transform.localRotation;
+                }
+            }
             // Stumps and empty bushes stay solid; rocks that disappear don't.
-            block.enabled = emptySprite != null;
+            SetSolid(sprites.Empty != null);
             if (config.regrowSeconds > 0) regrowAt = Time.time + config.regrowSeconds;
+        }
+
+        void Regrow()
+        {
+            Left = config.amount;
+            look.sprite = sprites.Full;
+            look.enabled = true;
+            if (leaves != null) leaves.enabled = true;
+            if (shadow != null)
+            {
+                shadow.enabled = sprites.Shadow != null;
+                shadow.sprite = sprites.Shadow;
+                shadow.transform.localPosition = (Vector3)(Look.ShadowDirection * sprites.ShadowHeight);
+            }
+            SetSolid(true);
+        }
+
+        void SetSolid(bool value)
+        {
+            if (block != null) block.enabled = value;
+            if (solid == value) return;
+            solid = value;
+            BlockingChanged?.Invoke(this);
         }
 
         void Update()
@@ -85,20 +169,14 @@ namespace KingdomGame.Economy
             {
                 shakeTime -= Time.deltaTime;
                 float wobble = Mathf.Sin(shakeTime * 90f) * shakeTime * 0.25f;
-                transform.position = restPosition + new Vector3(Mathf.Round(wobble * PixelArt.PixelsPerUnit) / PixelArt.PixelsPerUnit, 0, 0);
+                transform.position = restPosition + new Vector3(wobble, 0, 0);
                 busy = shakeTime > 0f;
                 if (!busy) transform.position = restPosition;
             }
             if (Empty && config.regrowSeconds > 0)
             {
                 busy = true;
-                if (Time.time >= regrowAt)
-                {
-                    Left = config.amount;
-                    look.sprite = fullSprite;
-                    look.enabled = true;
-                    block.enabled = true;
-                }
+                if (Time.time >= regrowAt) Regrow();
             }
             if (!busy) enabled = false;
         }

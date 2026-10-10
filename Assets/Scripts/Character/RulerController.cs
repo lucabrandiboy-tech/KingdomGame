@@ -486,11 +486,17 @@ namespace KingdomGame.Character
                 foreach (var b in kingdom.Blueprints)
                     if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; }
             }
-            foreach (var n in ResourceNode.All)
-            {
-                if (n == null || n.Empty || n.Config == null) continue;
-                if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; }
-            }
+            // Trees, rocks and bushes in the cells round the ruler.
+            var nature = NatureMap.Current;
+            var at = NavCell(here);
+            if (nature != null)
+                for (int dy = -2; dy <= 2; dy++)
+                    for (int dx = -2; dx <= 2; dx++)
+                    {
+                        var n = nature.Live(at + new Vector2Int(dx, dy));
+                        if (n == null || n.Empty || n.Config == null) continue;
+                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; }
+                    }
 
             if (ladder != null) UseLadder(kingdom, ladder);
             else if (throne != null) UseThrone(kingdom);

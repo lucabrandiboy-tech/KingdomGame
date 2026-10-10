@@ -65,7 +65,8 @@ namespace KingdomGame.World
 
             int seed = saved != null ? saved.seed : content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
             Debug.Log($"Map seed {seed}. Put this number in WorldConfig's Seed to get the same map again.");
-            var canopies = WorldGenerator.Generate(content, transform, seed);
+            var parts = WorldGenerator.Generate(content, transform, seed);
+            var canopies = parts.Canopies;
             // The test outpost is for trying weapons on walls; survival starts on open ground.
             // (A saved game has its own walls: the outpost's are among them if they still stand.)
             if (content.world.testOutpost && !survival) BuildOutpost(world, saved == null);
@@ -78,6 +79,10 @@ namespace KingdomGame.World
             kingdom.RulerRadius = content.player != null ? content.player.bodyRadius : 0.15f;
             canopies.Focus = ruler.transform;
             kingdom.Canopies = canopies;
+            // Trees, rocks and bushes are real objects round the ruler, the camera's view and the kingdom.
+            parts.Streamer.Followed.Add(ruler.transform);
+            parts.Streamer.View = Camera.main;
+            parts.Streamer.Areas.Add(kingdom.ActiveArea);
             if (content.view != null) canopies.NearAlpha = content.view.canopyFadeAlpha;
 
             CameraRig rig = null;
@@ -126,6 +131,7 @@ namespace KingdomGame.World
             var saves = gameObject.AddComponent<SaveSystem>();
             saves.Setup(content, Mode, seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
             if (saved != null) saves.Restore(saved);
+            parts.Streamer.ShowNow();
             gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves);
             var debug = gameObject.AddComponent<DebugHud>();
             debug.visible = false;
@@ -172,7 +178,11 @@ namespace KingdomGame.World
             return kingdom;
         }
 
-        void OnDestroy() => ArtSprites.Release();
+        void OnDestroy()
+        {
+            ArtSprites.Release();
+            Economy.NatureMap.Current = null;
+        }
 
         // A small walled yard east of the start: stone on two sides, wood on one,
         // and a stone tower, for trying bullets, rockets and C4. Torches in the corners.

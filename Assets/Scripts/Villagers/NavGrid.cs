@@ -11,8 +11,9 @@ namespace KingdomGame.Villagers
     /// up and get destroyed, buildings are placed and trees and rocks are used
     /// up. Finds paths with <see cref="GridPathfinder"/>.
     ///
-    /// Each cell counts the things blocking it (a wall, a building, a tree), so
-    /// removing one of two blockers keeps the cell blocked.
+    /// Each cell counts the things blocking it (a wall, a building), so removing
+    /// one of two blockers keeps the cell blocked. Trees, rocks and bushes are
+    /// read straight from the <see cref="NatureMap"/> (most aren't real objects).
     /// </summary>
     public sealed class NavGrid
     {
@@ -25,16 +26,22 @@ namespace KingdomGame.Villagers
         readonly byte[] blockers;
         readonly GridPathfinder finder;
         readonly PixelWorld world;
-        readonly HashSet<ResourceNode> countedNodes = new HashSet<ResourceNode>();
+        readonly NatureMap nature;
         readonly List<GridPoint> found = new List<GridPoint>();
         readonly Func<int, int, bool> walkable;
 
-        public NavGrid(RectInt cells, PixelWorld pixelWorld)
+        /// <summary>
+        /// A grid over <paramref name="cells"/>. <paramref name="pixelWorld"/>'s walls and <paramref name="natureMap"/>'s
+        /// trees block it (either may be null: a house's inside has neither).
+        /// </summary>
+        public NavGrid(RectInt cells, PixelWorld pixelWorld, NatureMap natureMap = null)
         {
             Cells = cells;
             blockers = new byte[cells.width * cells.height];
             finder = new GridPathfinder(cells.width, cells.height);
-            walkable = (x, y) => x >= 0 && y >= 0 && x < Cells.width && y < Cells.height && blockers[y * Cells.width + x] == 0;
+            nature = natureMap;
+            walkable = (x, y) => x >= 0 && y >= 0 && x < Cells.width && y < Cells.height && blockers[y * Cells.width + x] == 0 &&
+                                 (nature == null || !nature.Blocks(new Vector2Int(Cells.x + x, Cells.y + y)));
 
             world = pixelWorld;
             if (world != null)
@@ -42,20 +49,17 @@ namespace KingdomGame.Villagers
                 foreach (var cell in world.ChunkCells) Change(cell, +1);
                 world.CellChanged += OnWallCellChanged;
             }
-            foreach (var node in ResourceNode.All) OnNodeChanged(node);
-            ResourceNode.BlockingChanged += OnNodeChanged;
         }
 
         /// <summary>Stops listening for changes. Call when the kingdom goes away.</summary>
         public void Dispose()
         {
             if (world != null) world.CellChanged -= OnWallCellChanged;
-            ResourceNode.BlockingChanged -= OnNodeChanged;
         }
 
         public bool Inside(Vector2Int cell) => Cells.Contains(cell);
 
-        public bool Walkable(Vector2Int cell) => Inside(cell) && blockers[Index(cell)] == 0;
+        public bool Walkable(Vector2Int cell) => Inside(cell) && blockers[Index(cell)] == 0 && (nature == null || !nature.Blocks(cell));
 
         public bool Walkable(Vector2 position) => Walkable(CellAt(position));
 
@@ -123,14 +127,6 @@ namespace KingdomGame.Villagers
         }
 
         void OnWallCellChanged(Vector2Int cell, bool added) => Change(cell, added ? +1 : -1);
-
-        void OnNodeChanged(ResourceNode node)
-        {
-            if (node == null) return;
-            bool blocks = node.Blocks;
-            if (blocks && countedNodes.Add(node)) Change(node.Cell, +1);
-            else if (!blocks && countedNodes.Remove(node)) Change(node.Cell, -1);
-        }
 
         void Change(Vector2Int cell, int amount)
         {

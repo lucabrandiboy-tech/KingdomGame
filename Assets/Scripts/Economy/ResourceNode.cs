@@ -22,30 +22,31 @@ namespace KingdomGame.Economy
     }
 
     /// <summary>
-    /// One tree, rock or bush in the world. Gathering takes resources out of it;
-    /// when it's empty a tree becomes a stump, a rock disappears and a bush loses
-    /// its berries (and grows them back if Regrow Seconds is set).
+    /// One tree, rock or bush in the world, as a real object (only the ones near players
+    /// and kingdoms are: the rest are just data in the <see cref="NatureMap"/>, which this
+    /// writes what happens to it back into). Gathering takes resources out of it; when
+    /// it's empty a tree becomes a stump, a rock disappears and a bush loses its berries
+    /// (and grows them back if Regrow Seconds is set).
     /// </summary>
     public sealed class ResourceNode : MonoBehaviour
     {
         static readonly List<ResourceNode> all = new List<ResourceNode>();
 
-        /// <summary>Every node in the scene (for finding the closest one).</summary>
+        /// <summary>Every node that's a real object right now (for finding the closest one).</summary>
         public static IReadOnlyList<ResourceNode> All => all;
-
-        /// <summary>A node started or stopped blocking its grid cell (it was used up, grew back or was cleared).</summary>
-        public static event Action<ResourceNode> BlockingChanged;
 
         ResourceNodeConfig config;
         NodeSprites sprites;
         SpriteRenderer look, leaves, shadow;
         CircleCollider2D block;
-        bool solid;              // kept separately: the collider may be gone before OnDestroy runs
+        bool solid;
         Vector3 restPosition;
         float shakeTime;
         float regrowAt;
         bool growing;
         float growStart, growEnd;
+        NatureMap map;
+        int index = -1;
 
         public ResourceNodeConfig Config => config;
         public int Left { get; private set; }
@@ -54,7 +55,7 @@ namespace KingdomGame.Economy
         public bool Growing => growing;
         /// <summary>How grown it is, 0..1 (1 when it isn't growing).</summary>
         public float Grown => growing ? Mathf.Clamp01((Time.time - growStart) / Mathf.Max(0.01f, growEnd - growStart)) : 1f;
-        /// <summary>True while it's solid (people bump into it, nothing can be built on its cell).</summary>
+        /// <summary>True while it's solid (people bump into it and walk round it).</summary>
         public bool Blocks => solid;
         /// <summary>The grid cell it stands in.</summary>
         public Vector2Int Cell => new Vector2Int(Mathf.FloorToInt(restPosition.x), Mathf.FloorToInt(restPosition.y));
@@ -62,12 +63,8 @@ namespace KingdomGame.Economy
         public SpriteRenderer Leaves => leaves;
         /// <summary>The villager gathering from it (one at a time), or null.</summary>
         public Component Gatherer { get; set; }
-        /// <summary>Planted by the kingdom (not part of the map as it was made).</summary>
-        public bool Planted { get; set; }
-        /// <summary>How long a growing one takes to grow, in all (for saving).</summary>
-        public float GrowSeconds => growing ? growEnd - growStart : 0f;
-        /// <summary>Seconds until a used-up one grows back, or -1 if it isn't waiting to (for saving).</summary>
-        public float RegrowLeft => Empty && !growing && config != null && config.regrowSeconds > 0 ? Mathf.Max(0f, regrowAt - Time.time) : -1f;
+        /// <summary>Planted by a kingdom (not part of the map as it was made).</summary>
+        public bool Planted => map != null && map.IsPlanted(index);
 
         /// <summary>Sets the node up. <paramref name="rotation"/> turns the pictures (seen from above, any angle looks natural).</summary>
         public void Setup(ResourceNodeConfig nodeConfig, NodeSprites nodeSprites, float rotation)
@@ -88,8 +85,51 @@ namespace KingdomGame.Economy
             block = gameObject.AddComponent<CircleCollider2D>();
             block.radius = config.blockRadius;
             solid = true;
-            BlockingChanged?.Invoke(this);   // planted while playing: walkers must go round it
             enabled = false; // only runs while shaking, regrowing or growing
+        }
+
+        /// <summary>
+        /// Ties it to its cell of the <paramref name="nature"/> map and takes on the state kept there
+        /// (how much is left, growing, growing back).
+        /// </summary>
+        public void Bind(NatureMap nature, int cellIndex)
+        {
+            map = nature;
+            index = cellIndex;
+            map.Attach(index, this);
+            map.StateOf(index, out int amountLeft, out bool isGrowing, out float start, out float end);
+            if (isGrowing)
+            {
+                Grow(Mathf.Max(1f, end - start));
+                growStart = start;
+                growEnd = end;
+                ShowGrowth();
+                return;
+            }
+            Left = Mathf.Clamp(amountLeft, 0, config.amount);
+            if (Left > 0) return;
+            ShowEmpty();
+            if (config.regrowSeconds > 0)
+            {
+                regrowAt = end > 0f ? end : Time.time + config.regrowSeconds;
+                enabled = true;
+            }
+        }
+
+        /// <summary>Unties it from the map (it's about to go; the map has its state).</summary>
+        public void Unbind()
+        {
+            if (map != null) map.Detach(index, this);
+            map = null;
+            index = -1;
+        }
+
+        /// <summary>Writes its state into the map (before saving, or before it goes).</summary>
+        public void WriteBack()
+        {
+            if (map == null) return;
+            bool waiting = !growing && Empty && config.regrowSeconds > 0;
+            map.Record(index, Left, growing, growStart, growing ? growEnd : regrowAt, waiting);
         }
 
         SpriteRenderer Part(string partName, Sprite sprite, int order, float rotation)
@@ -108,7 +148,7 @@ namespace KingdomGame.Economy
         void OnDestroy()
         {
             all.Remove(this);
-            SetSolid(false);
+            if (map != null) map.Detach(index, this);
         }
 
         /// <summary>The distance from <paramref name="from"/> to the edge of the solid part.</summary>
@@ -128,11 +168,16 @@ namespace KingdomGame.Economy
             if (world != null) world.Burst(restPosition, config.chipColor, 6, 2.5f);
 
             if (Empty) UseUp();
+            WriteBack();
             return taken;
         }
 
         /// <summary>Takes it out of the world for good (a building is going up on this spot).</summary>
-        public void Clear() => Destroy(gameObject);
+        public void Clear()
+        {
+            if (map != null) map.Clear(Cell);
+            else Destroy(gameObject);
+        }
 
         /// <summary>Starts it as a young one that grows to full size in <paramref name="seconds"/> (planted, or replanted after being used up).</summary>
         public void Grow(float seconds)
@@ -152,39 +197,6 @@ namespace KingdomGame.Economy
             SetSolid(true);
             ShowGrowth();
             enabled = true;
-        }
-
-        /// <summary>
-        /// Puts it back as it was in a saved game: <paramref name="grown"/> 0..1 for a young one still
-        /// growing (over <paramref name="growSeconds"/> in all), otherwise <paramref name="left"/> to gather
-        /// and, if it's used up, <paramref name="regrowLeft"/> seconds until it grows back (-1: it doesn't).
-        /// </summary>
-        public void Restore(int left, float grown, float growSeconds, float regrowLeft)
-        {
-            if (config == null) return;
-            if (grown >= 0f && grown < 1f)
-            {
-                float total = Mathf.Max(1f, growSeconds);
-                Grow(total);
-                growStart = Time.time - grown * total;
-                growEnd = growStart + total;
-                ShowGrowth();
-                return;
-            }
-            if (growing)
-            {
-                // Just planted (by the loading): it's grown already.
-                growing = false;
-                ShowGrowth();
-            }
-            Left = Mathf.Clamp(left, 0, config.amount);
-            if (Left > 0) return;
-            UseUp();
-            if (!growing && config.regrowSeconds > 0)
-            {
-                regrowAt = Time.time + Mathf.Max(0f, regrowLeft);
-                enabled = true;
-            }
         }
 
         // A growing one is drawn smaller: a quarter of its size when planted, full size when grown.
@@ -209,6 +221,13 @@ namespace KingdomGame.Economy
                 Grow(config.regrowSeconds);
                 return;
             }
+            ShowEmpty();
+            if (config.regrowSeconds > 0) regrowAt = Time.time + config.regrowSeconds;
+        }
+
+        // A stump, a bare bush, or (a rock) nothing.
+        void ShowEmpty()
+        {
             if (sprites.Empty != null) look.sprite = sprites.Empty;
             else look.enabled = false;
             if (leaves != null) leaves.enabled = false;
@@ -224,7 +243,6 @@ namespace KingdomGame.Economy
             }
             // Stumps and empty bushes stay solid; rocks that disappear don't.
             SetSolid(sprites.Empty != null);
-            if (config.regrowSeconds > 0) regrowAt = Time.time + config.regrowSeconds;
         }
 
         void Regrow()
@@ -240,14 +258,14 @@ namespace KingdomGame.Economy
                 shadow.transform.localPosition = (Vector3)(Look.ShadowDirection * sprites.ShadowHeight);
             }
             SetSolid(true);
+            WriteBack();
         }
 
         void SetSolid(bool value)
         {
             if (block != null) block.enabled = value;
-            if (solid == value) return;
             solid = value;
-            BlockingChanged?.Invoke(this);
+            if (map != null) map.SetBlocks(index, value);
         }
 
         void Update()
@@ -270,6 +288,7 @@ namespace KingdomGame.Economy
                     growing = false;
                     Left = config.amount;
                     ShowGrowth();
+                    WriteBack();
                 }
             }
             else if (Empty && config.regrowSeconds > 0)

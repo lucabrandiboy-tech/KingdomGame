@@ -51,6 +51,12 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
   castle_night/close.png, horde_night.png are mock screenshots lit like URP:
   linear color, URP's falloff, bloom, contrast) and look at the PNGs before
   committing art changes. Keep its lights, colors and layouts in step with the game.
+- Trees, rocks and bushes are data in `Economy/NatureMap.cs` (a 1024 map has
+  over 100,000). `World/NatureStreamer.cs` makes `ResourceNode` objects only near
+  rulers, the camera's view and kingdoms (`Kingdom.ActiveArea`), and they write
+  their state back into the map when they go. `ResourceNode.All` is only the shown
+  ones: anything that must see the whole map (paths, building checks, saving)
+  asks the map.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.

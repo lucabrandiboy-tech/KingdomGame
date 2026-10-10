@@ -66,9 +66,8 @@ namespace KingdomGame.Building
         // Walls and doors that went (roofs near them may have lost what held them up).
         readonly HashSet<Vector2Int> supportLost = new HashSet<Vector2Int>();
         RoofView roofView;
-        readonly Dictionary<Vector2Int, ResourceNode> nodes = new Dictionary<Vector2Int, ResourceNode>();
-        // The cells that had a tree, rock or bush when the map was made (saving notes which are gone).
-        readonly HashSet<Vector2Int> natural = new HashSet<Vector2Int>();
+        // Every tree, rock and bush on the map.
+        NatureMap nature;
         // Loading a saved game: the inside or mine square the next house or mine gets (-1: the first free one).
         int restoreSlot = -1;
 
@@ -118,7 +117,6 @@ namespace KingdomGame.Building
         public event Action Changed;
         /// <summary>Fades tree leaves near the ruler (planted trees join it).</summary>
         public World.CanopyFader Canopies { get; set; }
-        NodeSprites[,] natureLooks;
 
         /// <summary>The ruler is on the throne building (roofs turn see-through).</summary>
         public bool ThroneView { get; set; }
@@ -156,15 +154,10 @@ namespace KingdomGame.Building
             villagerConfig = villagers != null ? villagers : ScriptableObject.CreateInstance<VillagerConfig>();
             menu = buildMenu ?? new BuildingConfig[0];
             world = pixelWorld;
-            Nav = new NavGrid(mapCells, world);
+            nature = NatureMap.Current;
+            Nav = new NavGrid(mapCells, world, nature);
             // Builders shouldn't stand on a planned building's spot while they work (it couldn't be finished).
             Nav.NoStopping = cell => occupied.TryGetValue(cell, out var thing) && thing is Blueprint b && NeedsClearSpot(b.Config);
-            foreach (var node in ResourceNode.All)
-                if (node != null)
-                {
-                    nodes[node.Cell] = node;
-                    natural.Add(node.Cell);
-                }
             if (world != null) world.CellChanged += OnWallChanged;
             MakeSprites(otherBuildings);
             roofView = new GameObject("Roofs").AddComponent<RoofView>();
@@ -399,12 +392,8 @@ namespace KingdomGame.Building
         // Removes trees, stumps, rocks and bushes standing in these cells.
         void ClearNature(RectInt cells)
         {
-            foreach (var c in cells.allPositionsWithin)
-            {
-                if (!nodes.TryGetValue(c, out var node)) continue;
-                nodes.Remove(c);
-                if (node != null) node.Clear();
-            }
+            if (nature == null) return;
+            foreach (var c in cells.allPositionsWithin) nature.Clear(c);
         }
 
         // ------------------------------------------------------------ queries --
@@ -467,7 +456,11 @@ namespace KingdomGame.Building
         public RoofTile RoofAt(Vector2Int cell) => roofs.TryGetValue(cell, out var r) ? r as RoofTile : null;
 
         /// <summary>A tree, rock or bush that blocks this cell, or null.</summary>
-        public ResourceNode NodeAt(Vector2Int cell) => nodes.TryGetValue(cell, out var node) && node != null && node.Blocks ? node : null;
+        public ResourceNode NodeAt(Vector2Int cell)
+        {
+            var node = nature != null ? nature.Live(cell) : null;
+            return node != null && node.Blocks ? node : null;
+        }
 
         /// <summary>The room this cell is in, or null (outside).</summary>
         public Room RoomAt(Vector2Int cell)
@@ -659,10 +652,10 @@ namespace KingdomGame.Building
                     reason = "A ladder has to lean on a wall (R turns it)";
                     return false;
                 }
-                if (nodes.TryGetValue(c, out var node) && node != null && !node.Empty)
+                if (nature != null && nature.Standing(c, out var look))
                 {
-                    reason = node.Config != null && node.Config.look == NodeLook.Rock ? "A rock is in the way (gather it first: hold E)"
-                        : node.Config != null && node.Config.look == NodeLook.Tree ? "A tree is in the way (chop it first: hold E)"
+                    reason = look == NodeLook.Rock ? "A rock is in the way (gather it first: hold E)"
+                        : look == NodeLook.Tree ? "A tree is in the way (chop it first: hold E)"
                         : "A bush is in the way (pick it first: hold E)";
                     return false;
                 }
@@ -746,7 +739,7 @@ namespace KingdomGame.Building
                     reason = "The storehouse has its own roof";
                     return false;
                 }
-                if (nodes.TryGetValue(c, out var node) && node != null && !node.Empty && node.Config != null && node.Config.look == NodeLook.Tree)
+                if (nature != null && nature.Standing(c, out var look) && look == NodeLook.Tree)
                 {
                     reason = "A tree is in the way (chop it first: hold E)";
                     return false;
@@ -1676,21 +1669,44 @@ namespace KingdomGame.Building
         }
 
         /// <summary>A young tree or bush of <paramref name="kind"/> at <paramref name="cell"/>, fully grown in <paramref name="growSeconds"/>.</summary>
+        /// <summary>(Its object, if that part of the map is shown: the kingdom's area always is.)</summary>
         public ResourceNode Plant(ResourceNodeConfig kind, Vector2Int cell, float growSeconds)
         {
-            if (natureLooks == null) natureLooks = World.WorldGenerator.NatureSprites();
-            var go = new GameObject(kind.name);
-            go.transform.SetParent(transform, false);
-            go.transform.position = new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
-            var node = go.AddComponent<ResourceNode>();
+            if (nature == null || kind == null) return null;
             int variant = (int)(DamageShape.Hash(0x7Au, cell.x, cell.y) % (uint)NatureArt.Variants);
-            node.Setup(kind, natureLooks[(int)kind.look, variant], 0f);
-            node.Grow(growSeconds);
-            node.Planted = true;
-            nodes[cell] = node;
-            if (Canopies != null) Canopies.Add(node);
-            return node;
+            return nature.Plant(cell, kind, variant, growSeconds);
         }
+
+        /// <summary>
+        /// Where this kingdom's villagers work: round the throne and everything built, with a margin.
+        /// Trees and rocks there are always real objects, so gatherers can find them.
+        /// </summary>
+        public RectInt ActiveArea()
+        {
+            const int margin = 24;
+            if (Throne == null) return default;
+            if (Time.time >= areaAt)
+            {
+                areaAt = Time.time + 3f;
+                var c = Throne.Cells;
+                int x0 = c.xMin, y0 = c.yMin, x1 = c.xMax, y1 = c.yMax;
+                void Grow(RectInt r)
+                {
+                    if (Nav == null || !Nav.Cells.Contains(r.position)) return;   // insides and mines are off the map
+                    x0 = Mathf.Min(x0, r.xMin); y0 = Mathf.Min(y0, r.yMin); x1 = Mathf.Max(x1, r.xMax); y1 = Mathf.Max(y1, r.yMax);
+                }
+                foreach (var s in storages) if (s != null) Grow(s.Cells);
+                foreach (var h in houses) if (h != null) Grow(h.Cells);
+                foreach (var m in mines) if (m != null) Grow(m.Cells);
+                foreach (var f in furniture) if (f != null) Grow(f.Cells);
+                foreach (var b in blueprints) if (b != null) Grow(b.Cells);
+                area = new RectInt(x0 - margin, y0 - margin, x1 - x0 + margin * 2, y1 - y0 + margin * 2);
+            }
+            return area;
+        }
+
+        RectInt area;
+        float areaAt = -999f;
 
         // ------------------------------------------------------------ saving --
 
@@ -1711,21 +1727,6 @@ namespace KingdomGame.Building
                     if (thing != null && !(thing is Blueprint) && thing is IBuilt built && !all.Contains(built)) all.Add(built);
             return all;
         }
-
-        /// <summary>The cells where the map had a tree, rock or bush that's gone now (cut down to nothing, built over), for saving.</summary>
-        public List<Vector2Int> NatureGone()
-        {
-            var gone = new List<Vector2Int>();
-            foreach (var cell in natural)
-                if (!nodes.TryGetValue(cell, out var node) || node == null || node.Planted) gone.Add(cell);
-            return gone;
-        }
-
-        /// <summary>The tree, rock or bush at a cell (even a used-up one), or null.</summary>
-        public ResourceNode NodeIn(Vector2Int cell) => nodes.TryGetValue(cell, out var node) && node != null ? node : null;
-
-        /// <summary>Takes away the tree, rock or bush at a cell (loading a saved game where it's gone).</summary>
-        public void RemoveNature(Vector2Int cell) => ClearNature(new RectInt(cell, Vector2Int.one));
 
         /// <summary>Puts up a finished building from a saved game; a house or mine gets inside square <paramref name="slot"/> again.</summary>
         public Component Restore(BuildingConfig config, RectInt cells, int rotation, int slot)

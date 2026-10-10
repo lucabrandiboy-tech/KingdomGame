@@ -28,7 +28,7 @@ namespace KingdomGame.World
         public int day = 1;
         public float hour;
 
-        public List<Vector2Int> natureGone = new List<Vector2Int>();
+        /// <summary>Trees, rocks and bushes that aren't as the map made them.</summary>
         public List<NodeSave> nodes = new List<NodeSave>();
         public List<WallSave> walls = new List<WallSave>();
         public List<BuiltSave> built = new List<BuiltSave>();
@@ -41,13 +41,15 @@ namespace KingdomGame.World
         public SurvivalSave survival = new SurvivalSave();
     }
 
-    /// <summary>A tree, rock or bush that isn't as the map made it (planted, partly used, growing back).</summary>
+    /// <summary>A tree, rock or bush that isn't as the map made it (planted, partly used, growing back, gone).</summary>
     [Serializable]
     public sealed class NodeSave
     {
         public Vector2Int cell;
+        /// <summary>What stands there now (its asset's name), or empty if nothing does any more.</summary>
         public string config;
         public bool planted;
+        public int variant;
         public int left;
         /// <summary>0..1 while a young one grows, -1 otherwise.</summary>
         public float grown = -1f;

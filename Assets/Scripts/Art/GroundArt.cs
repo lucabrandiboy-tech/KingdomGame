@@ -251,8 +251,8 @@ namespace KingdomGame.Art
         /// </summary>
         public static void PatchMasks(int mapSize, int detail, uint seed, byte[] dry, byte[] mud)
         {
-            // The smooth patch values, 4 per tile, blended in between.
-            const int coarse = 4;
+            // The smooth patch values, 4 per tile (2 on big maps: they're 7 to 11 tiles across), blended in between.
+            int coarse = mapSize > 512 ? 2 : 4;
             int cn = mapSize * coarse + 2;
             var cd = new float[cn * cn];
             var cm = new float[cn * cn];

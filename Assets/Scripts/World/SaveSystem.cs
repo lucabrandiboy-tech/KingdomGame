@@ -138,24 +138,21 @@ namespace KingdomGame.World
                 data.hour = dayNight.Hour;
             }
 
-            // Nature: what's gone from the map as it was made, and what's planted or not as it was.
-            data.natureGone = kingdom.NatureGone();
-            foreach (var node in ResourceNode.All)
-            {
-                if (node == null || node.Config == null) continue;
-                if (!node.Planted && !node.Growing && node.Left == node.Config.amount) continue;
-                if (!node.Planted && kingdom.NodeIn(node.Cell) != node) continue;   // not the kingdom's (it wouldn't be found again)
-                data.nodes.Add(new NodeSave
-                {
-                    cell = node.Cell,
-                    config = node.Config.name,
-                    planted = node.Planted,
-                    left = node.Left,
-                    grown = node.Growing ? node.Grown : -1f,
-                    growSeconds = node.GrowSeconds,
-                    regrowLeft = node.RegrowLeft,
-                });
-            }
+            // Nature: every tree, rock and bush that isn't as the map made it (cut, planted, gone).
+            var nature = NatureMap.Current;
+            if (nature != null)
+                foreach (var c in nature.Changes())
+                    data.nodes.Add(new NodeSave
+                    {
+                        cell = c.Cell,
+                        config = c.Kind != null ? c.Kind.name : "",
+                        planted = c.Planted,
+                        variant = c.Variant,
+                        left = c.Left,
+                        grown = c.Grown,
+                        growSeconds = c.GrowSeconds,
+                        regrowLeft = c.RegrowLeft,
+                    });
 
             // Walls: each stretch once.
             if (world != null)
@@ -304,22 +301,18 @@ namespace KingdomGame.World
             foreach (var b in configs.Values) AddKind(b.plant);
 
             // Nature first (buildings went up where trees were cut down).
-            foreach (var cell in data.natureGone) kingdom.RemoveNature(cell);
-            foreach (var n in data.nodes)
-            {
-                ResourceNode node;
-                if (n.planted)
+            var nature = NatureMap.Current;
+            if (nature != null)
+                foreach (var n in data.nodes)
                 {
-                    if (n.config == null || !nodeKinds.TryGetValue(n.config, out var kind)) { missing++; continue; }
-                    kingdom.RemoveNature(n.cell);
-                    node = kingdom.Plant(kind, n.cell, Mathf.Max(1f, n.growSeconds));
+                    ResourceNodeConfig kind = null;
+                    if (!string.IsNullOrEmpty(n.config) && !nodeKinds.TryGetValue(n.config, out kind)) { missing++; continue; }
+                    nature.Apply(new NatureMap.Change
+                    {
+                        Cell = n.cell, Kind = kind, Planted = n.planted, Variant = n.variant, Left = n.left,
+                        Grown = n.grown, GrowSeconds = n.growSeconds, RegrowLeft = n.regrowLeft,
+                    });
                 }
-                else
-                {
-                    node = kingdom.NodeIn(n.cell);
-                }
-                if (node != null) node.Restore(n.left, n.grown, n.growSeconds, n.regrowLeft);
-            }
 
             // Walls (a stretch with pieces broken off comes back as the pieces that are left).
             foreach (var w in data.walls)

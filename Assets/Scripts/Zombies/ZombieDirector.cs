@@ -346,8 +346,11 @@ namespace KingdomGame.Zombies
             for (int x = 0; x < w; x++) { cost[x] = 0f; cost[(h - 1) * w + x] = 0f; }
             for (int y = 0; y < h; y++) { cost[y * w] = 0f; cost[y * w + w - 1] = 0f; }
             // Trees, rocks and bushes: walked round.
-            foreach (var node in ResourceNode.All)
-                if (node != null && node.Blocks) Set(node.Cell, 0f);
+            var nature = NatureMap.Current;
+            if (nature != null)
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        if (nature.Blocks(new Vector2Int(map.xMin + x, map.yMin + y))) cost[y * w + x] = 0f;
             for (int i = 0; i < cost.Length; i++) fixedBlock[i] = cost[i] <= 0f;
             // Walls: the more battering one would take, the further zombies will walk to go round it.
             if (world != null)

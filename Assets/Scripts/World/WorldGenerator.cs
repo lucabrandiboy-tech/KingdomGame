@@ -5,11 +5,26 @@ using UnityEngine;
 
 namespace KingdomGame.World
 {
+    /// <summary>What <see cref="WorldGenerator.Generate"/> made.</summary>
+    public sealed class WorldParts
+    {
+        /// <summary>Every tree, rock and bush (as data).</summary>
+        public NatureMap Nature;
+        /// <summary>Makes the ones near players and kingdoms into real objects.</summary>
+        public NatureStreamer Streamer;
+        /// <summary>Fades tree leaves near the ruler.</summary>
+        public CanopyFader Canopies;
+    }
+
     /// <summary>
     /// Builds the map: the ground (dark grass with big patches of dry grass and
     /// mud), a soft tint over it (darker under forests), invisible walls at the
     /// edges, and trees, rocks and berry bushes placed with noise so they form
     /// forests and clearings. The pictures come from <see cref="ArtSprites"/>.
+    /// The trees, rocks and bushes go into a <see cref="NatureMap"/>; the
+    /// <see cref="NatureStreamer"/> makes the ones near people into real objects.
+    /// The same seed and settings always make the same map (a server sends its
+    /// seed to the players, who make the map themselves).
     /// </summary>
     public static class WorldGenerator
     {
@@ -20,9 +35,14 @@ namespace KingdomGame.World
         const int MaxMask = 4096;
         /// <summary>Detail of the soft ground tint, in pixels per tile.</summary>
         const int TintDetail = 4;
+        /// <summary>Biggest tint texture, in pixels (it's soft: one pixel per tile is enough on big maps).</summary>
+        const int MaxTint = 1024;
 
-        /// <summary>Builds the map and returns the fader for its tree leaves.</summary>
-        public static CanopyFader Generate(GameContent content, Transform parent, int seed)
+        /// <summary>
+        /// Builds the map. <paramref name="drawGround"/> false skips the ground pictures
+        /// (a server with no screen doesn't need them).
+        /// </summary>
+        public static WorldParts Generate(GameContent content, Transform parent, int seed, bool drawGround = true)
         {
             var config = content.world;
             int half = config.mapSize / 2;
@@ -40,14 +60,18 @@ namespace KingdomGame.World
             float treeLine = Percentile(sorted, 1f - config.forestCover);
             float bushLine = Percentile(sorted, 1f - config.forestCover - 0.1f);
 
-            MakeGround(parent, size, s);
-            MakeTint(parent, size, forest, treeLine, bushLine, s);
+            if (drawGround)
+            {
+                MakeGround(parent, size, s);
+                MakeTint(parent, size, forest, treeLine, bushLine, s);
+            }
             MakeEdges(parent, half);
 
             var nature = new GameObject("Nature").transform;
             nature.SetParent(parent, false);
             var fader = nature.gameObject.AddComponent<CanopyFader>();
-            var looks = NatureSprites();
+            var map = new NatureMap(new RectInt(-half, -half, size, size), s);
+            NatureMap.Current = map;
 
             for (int y = -half + 1; y < half - 1; y++)
             {
@@ -65,23 +89,12 @@ namespace KingdomGame.World
                     else if (roll < config.rockChance) kind = content.rock;
                     if (kind == null) continue;
 
-                    // Jitter inside the tile so it doesn't look like a grid.
-                    float jx = (Noise.Hash01(s + 3u, x, y) - 0.5f) * 0.6f;
-                    float jy = (Noise.Hash01(s + 4u, x, y) - 0.5f) * 0.6f;
-                    var position = new Vector2(x + 0.5f + jx, y + 0.5f + jy);
-                    int variant = (int)(DamageShape.Hash(s + 5u, x, y) % Variants);
-                    // Not turned: the light is drawn into the pictures (from the top-left), and turning would turn it too.
-                    const float rotation = 0f;
-
-                    var go = new GameObject(kind.name);
-                    go.transform.SetParent(nature, false);
-                    go.transform.position = position;
-                    var node = go.AddComponent<ResourceNode>();
-                    node.Setup(kind, looks[(int)kind.look, variant], rotation);
-                    fader.Add(node);
+                    map.Generate(new Vector2Int(x, y), kind, (int)(DamageShape.Hash(s + 5u, x, y) % Variants));
                 }
             }
-            return fader;
+            var streamer = nature.gameObject.AddComponent<NatureStreamer>();
+            streamer.Setup(map, NatureSprites(), fader);
+            return new WorldParts { Nature = map, Streamer = streamer, Canopies = fader };
         }
 
         static float Percentile(float[] sorted, float fraction) =>
@@ -175,14 +188,16 @@ namespace KingdomGame.World
 
         // A few pixels per tile, smoothly stretched over the whole map: darker and
         // greener under forests, drier in the open, with soft blotches (GroundArt.Tint).
+        // Big maps get fewer pixels per tile (at most MaxTint across), so it doesn't take long to make.
         static void MakeTint(Transform parent, int size, float[] forest, float treeLine, float bushLine, uint seed)
         {
-            int n = size * TintDetail;
+            int tintDetail = Mathf.Clamp(MaxTint / size, 1, TintDetail);
+            int n = size * tintDetail;
             var pixels = new Color32[n * n];
             for (int y = 0; y < n; y++)
                 for (int x = 0; x < n; x++)
                 {
-                    float tx = (x + 0.5f) / TintDetail, ty = (y + 0.5f) / TintDetail;
+                    float tx = (x + 0.5f) / tintDetail, ty = (y + 0.5f) / tintDetail;
                     float wood = PixelImage.Smooth(bushLine, treeLine + 0.04f, Forest(forest, size, tx, ty));
                     float edge = Mathf.Min(Mathf.Min(tx, size - tx), Mathf.Min(ty, size - ty));
                     float rim = 1f - PixelImage.Smooth(0f, 6f, edge);
@@ -192,7 +207,7 @@ namespace KingdomGame.World
             var texture = PixelTextures.NewTexture(n, n, "Ground tint", false);
             texture.SetPixels32(pixels);
             texture.Apply(false, true);
-            var sprite = Sprite.Create(texture, new Rect(0, 0, n, n), Vector2.zero, TintDetail, 0, SpriteMeshType.FullRect);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, n, n), Vector2.zero, tintDetail, 0, SpriteMeshType.FullRect);
             var go = new GameObject("Ground tint");
             go.transform.SetParent(parent, false);
             go.transform.position = new Vector3(-size / 2, -size / 2, 0);

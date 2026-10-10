@@ -170,6 +170,13 @@ namespace KingdomGame.Building
             if (canopies != null && viewConfig != null) canopies.FarAlpha = viewConfig.throneCanopyAlpha;
         }
 
+        /// <summary>Closes everything (a house being furnished from the throne, then the throne view) and stands the ruler up.</summary>
+        public void LeaveAll()
+        {
+            if ((object)furnishing != null && furnishFromThrone) Leave();
+            Leave();
+        }
+
         /// <summary>Stands the ruler up and brings the camera back to them (furnishing a house: back to the throne, or to walking about inside).</summary>
         public void Leave()
         {
@@ -369,13 +376,12 @@ namespace KingdomGame.Building
             // The roof overhead: Shift + right click takes the whole roof off.
             var roof = kingdom.RoofAt(cell);
             if (roof != null)
-            {
                 roomText += $"\n{roof.Config.displayName} overhead.  Shift + right click: take the whole roof off (half its cost back)";
-                if (rightClick && GameInput.Shift)
-                {
-                    Say(kingdom.TearDownRoof(cell));
-                    return;
-                }
+            if (rightClick && GameInput.Shift)
+            {
+                // Shift is only ever for roofs: never tear down the wall under a roof's edge by mistake.
+                Say(roof != null ? kingdom.TearDownRoof(cell) : "No roof here (Shift + right click takes roofs off)");
+                rightClick = false;
             }
 
             var house = kingdom.HouseAt(cell);

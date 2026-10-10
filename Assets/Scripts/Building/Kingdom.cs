@@ -417,6 +417,10 @@ namespace KingdomGame.Building
                 if (s != null && inside.Contains(s.Cells.position)) inside.Nav.Block(s.Cells);
         }
 
+        /// <summary>Whether a roof of this kind is planned (not built yet) at a cell.</summary>
+        public bool RoofPlanned(Vector2Int cell, BuildingConfig config) =>
+            roofs.TryGetValue(cell, out var thing) && thing is Blueprint b && b.Config == config;
+
         /// <summary>The roof over a cell (built, not planned), or null.</summary>
         public RoofTile RoofAt(Vector2Int cell) => roofs.TryGetValue(cell, out var r) ? r as RoofTile : null;
 
@@ -491,6 +495,21 @@ namespace KingdomGame.Building
             }
         }
 
+        /// <summary>
+        /// About how far it is to walk from <paramref name="a"/> to <paramref name="b"/>: straight there in the
+        /// same place, otherwise out through the house doors in between (insides of houses are far off the map).
+        /// </summary>
+        public float Travel(Vector2 a, Vector2 b)
+        {
+            var ia = InteriorAt(a);
+            var ib = InteriorAt(b);
+            if (ia == ib) return (a - b).magnitude;
+            float d = 0f;
+            if (ia != null) { d += (a - ia.Entrance).magnitude; a = ia.House.Outside; }
+            if (ib != null) { d += (b - ib.Entrance).magnitude; b = ib.House.Outside; }
+            return d + (a - b).magnitude;
+        }
+
         /// <summary>The closest storehouse that has some of <paramref name="type"/> not promised to anyone.</summary>
         public Storage NearestWith(ResourceType type, Vector2 from)
         {
@@ -499,7 +518,7 @@ namespace KingdomGame.Building
             foreach (var s in storages)
             {
                 if (s.Available(type) <= 0) continue;
-                float d = (s.Center - from).sqrMagnitude;
+                float d = Travel(from, s.Center);
                 if (d < bestDistance) { best = s; bestDistance = d; }
             }
             return best;
@@ -513,7 +532,7 @@ namespace KingdomGame.Building
             foreach (var s in storages)
             {
                 if (s.Stock.SpaceLeft <= 0) continue;
-                float d = (s.Center - from).sqrMagnitude;
+                float d = Travel(from, s.Center);
                 if (d < bestDistance) { best = s; bestDistance = d; }
             }
             return best;
@@ -609,6 +628,9 @@ namespace KingdomGame.Building
         {
             foreach (var h in houses)
                 if (h != null && h.OutsideCell == cell) return true;
+            foreach (var b in blueprints)
+                if (b != null && !b.Cancelled && b.Upgrades == null && b.Config.kind == BuildingKind.House
+                    && House.FrontCell(b.Cells, b.Rotation) == cell) return true;
             return false;
         }
 
@@ -732,6 +754,8 @@ namespace KingdomGame.Building
             blueprint.MarkCancelled();
             blueprints.Remove(blueprint);
             if (blueprint.Upgrades != null) blueprint.Upgrades.Upgrade = null;
+            if (blueprint.Config.kind == BuildingKind.Roof && roofView != null)
+                foreach (var c in blueprint.Cells.allPositionsWithin) roofView.Touch(c);
             Free(LayerOf(blueprint.Config), blueprint.Cells, blueprint);
             int lost = 0;
             for (int i = 0; i < Inventory.TypeCount; i++)
@@ -1244,9 +1268,14 @@ namespace KingdomGame.Building
                 }
             }
 
+            if (b.Config.kind == BuildingKind.House && !Nav.Walkable(House.FrontCell(b.Cells, b.Rotation)))
+            {
+                b.Problem = "Finished, but something blocks the way to its door";
+                return;
+            }
             blueprints.Remove(b);
             Free(LayerOf(b.Config), b.Cells, b);
-            ClearNature(b.Cells);
+            if (b.Config.kind != BuildingKind.Roof) ClearNature(b.Cells);   // a roof goes over rocks and bushes
             Build(b.Config, b.Cells, b.Rotation);
             Destroy(b.gameObject);
         }

@@ -329,7 +329,7 @@ namespace KingdomGame.Character
             if (Seated && !h.Dead)
             {
                 var builder = Kingdom.Current != null ? Kingdom.Current.GetComponent<BuildController>() : null;
-                if (builder != null) builder.Leave();
+                if (builder != null) builder.LeaveAll();
                 Say("You're under attack!");
             }
         }
@@ -339,7 +339,7 @@ namespace KingdomGame.Character
             if (Seated || Busy)
             {
                 var builder = Kingdom.Current != null ? Kingdom.Current.GetComponent<BuildController>() : null;
-                if (builder != null) builder.Leave();
+                if (builder != null) builder.LeaveAll();
             }
             wantedVelocity = Vector2.zero;
             Velocity = Vector2.zero;
@@ -359,7 +359,11 @@ namespace KingdomGame.Character
             if ((object)Inside != null)
             {
                 Inside = null;
-                if (rig != null) rig.Inside = default;
+                if (rig != null)
+                {
+                    rig.Inside = default;
+                    rig.Follow(transform, true);   // straight back to the map, no glide across it
+                }
             }
             body.simulated = true;
             GetDown(at);

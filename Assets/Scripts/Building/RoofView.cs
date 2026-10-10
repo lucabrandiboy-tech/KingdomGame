@@ -20,6 +20,7 @@ namespace KingdomGame.Building
         const float RedrawDelay = 0.2f;        // seconds, so many changes at once make one drawing
         const int MaxPicture = 2048;           // pixels; a bigger roof is drawn with less detail
         const int ShadowDetail = 8;            // pixels per tile (shadows are blurry anyway)
+        const int BuildingDetail = 16;         // pixels per tile while builders are still finishing it (it's drawn again each time a cell is done)
 
         sealed class Piece
         {
@@ -118,7 +119,7 @@ namespace KingdomGame.Building
             int w = maxX - minX + 3, h = maxY - minY + 3;
             var mask = new bool[w * h];
             foreach (var c in piece.Cells) mask[(c.y - origin.y) * w + (c.x - origin.x)] = true;
-            int ppt = Mathf.Max(8, Mathf.Min(detail, MaxPicture / Mathf.Max(w, h)));
+            int ppt = Mathf.Max(8, Mathf.Min(StillBuilding(piece) ? BuildingDetail : detail, MaxPicture / Mathf.Max(w, h)));
             uint seed = (uint)(origin.x * 73856093) ^ (uint)(origin.y * 19349663);
             var style = piece.Config.roofStyle;
 
@@ -134,6 +135,16 @@ namespace KingdomGame.Building
 
             pieces.Add(piece);
             foreach (var c in piece.Cells) pieceAt[c] = piece;
+        }
+
+        // Whether more of this roof is planned right next to it (then it's drawn quickly and roughly, and properly when the last cell is done).
+        bool StillBuilding(Piece piece)
+        {
+            foreach (var c in piece.Cells)
+                if (kingdom.RoofPlanned(c + Vector2Int.left, piece.Config) || kingdom.RoofPlanned(c + Vector2Int.right, piece.Config)
+                    || kingdom.RoofPlanned(c + Vector2Int.down, piece.Config) || kingdom.RoofPlanned(c + Vector2Int.up, piece.Config))
+                    return true;
+            return false;
         }
 
         SpriteRenderer Part(string partName, Sprite sprite, int order, Vector2 at)

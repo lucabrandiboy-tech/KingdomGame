@@ -36,8 +36,9 @@ namespace KingdomGame.EditorTools
         /// 1: the high-detail look (evening start, fires, softer night, wall colors, color grading).
         /// 2: the castle and survival update (furniture on the build bar, zombie numbers for walls and weapons).
         /// 3: houses (a house you go into, bigger inside, upgraded age by age).
+        /// 4: roofs on the build bar (one kind per age).
         /// </summary>
-        const int SettingsVersion = 3;
+        const int SettingsVersion = 4;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -78,6 +79,7 @@ namespace KingdomGame.EditorTools
             bool castleUpdate = oldContent != null && oldContent.settingsVersion < 2;
             // ...and from before houses.
             bool housesUpdate = oldContent != null && oldContent.settingsVersion < 3;
+            bool roofsUpdate = oldContent != null && oldContent.settingsVersion < 4;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -221,6 +223,7 @@ namespace KingdomGame.EditorTools
             });
             var castle = CastleBuildings();
             var house = House(stone, wood);
+            var roofs = Roofs();
             var kingdomConfig = Asset<KingdomConfig>("Building/KingdomConfig", k => { });
             var villagerConfig = Asset<VillagerConfig>("Villagers/VillagerConfig", v => { });
 
@@ -263,6 +266,9 @@ namespace KingdomGame.EditorTools
             int firstStorage = castle.FindIndex(b => b != null && b.category == BuildCategory.Storage);
             menu.Insert(firstStorage >= 0 ? firstStorage + 2 : menu.Count, storehouse);
             menu.Add(house);
+            // Roofs go on the Floors & roofs tab after the rugs.
+            int afterFloors = menu.FindLastIndex(b => b != null && b.category == BuildCategory.Floors);
+            menu.InsertRange(afterFloors >= 0 ? afterFloors + 1 : menu.Count, roofs);
             if (content.buildMenu == null || content.buildMenu.Length == 0)
                 content.buildMenu = menu.ToArray();
             if (castleUpdate)
@@ -296,6 +302,14 @@ namespace KingdomGame.EditorTools
                 var list = new List<BuildingConfig>(content.buildMenu) { house };
                 content.buildMenu = list.ToArray();
                 Debug.Log("Added houses to your build bar (the Houses tab). Your other settings were kept.");
+            }
+
+            if (roofsUpdate)
+            {
+                var list = new List<BuildingConfig>(content.buildMenu);
+                foreach (var roof in roofs) if (!list.Contains(roof)) list.Add(roof);
+                content.buildMenu = list.ToArray();
+                Debug.Log("Added roofs to your build bar (the Floors & roofs tab). Your other settings were kept.");
             }
 
             // The pictures, at full detail (the first time takes a few minutes).
@@ -417,6 +431,29 @@ namespace KingdomGame.EditorTools
                 Store("Crates", "Crates", FurnitureArt.Crates, 1, 15, 3f, 250, 0.3f, 180f),
             };
             return list;
+        }
+
+        // Roofs, one kind per age: dragged over a room like a floor, drawn as one roof for its shape.
+        static List<BuildingConfig> Roofs()
+        {
+            BuildingConfig Roof(string file, string displayName, RoofStyle style, int wood, int stone, int food, float seconds) =>
+                Asset<BuildingConfig>("Building/Floors/" + file, b =>
+                {
+                    b.displayName = displayName; b.kind = BuildingKind.Roof; b.category = BuildCategory.Floors; b.roofStyle = style;
+                    b.size = Vector2Int.one; b.rotations = 1; b.woodCost = wood; b.stoneCost = stone; b.foodCost = food; b.buildSeconds = seconds;
+                    b.dragToPlaceLines = true; b.blocksMovement = false; b.health = 0f; b.height = 0f; b.roomTag = RoomTag.None;
+                });
+            return new List<BuildingConfig>
+            {
+                Roof("ThatchRoof", "Thatch roof", RoofStyle.Thatch, 2, 0, 1, 1.5f),
+                Roof("ShingleRoof", "Shingle roof", RoofStyle.WoodShingles, 3, 0, 0, 2f),
+                Roof("ClayTileRoof", "Clay tile roof", RoofStyle.ClayTiles, 1, 3, 0, 2.5f),
+                Roof("SlateRoof", "Slate roof", RoofStyle.Slate, 1, 4, 0, 3f),
+                Roof("CopperRoof", "Copper roof", RoofStyle.Copper, 2, 5, 0, 3.5f),
+                Roof("TinRoof", "Tin roof", RoofStyle.CorrugatedIron, 2, 4, 0, 2.5f),
+                Roof("TarFeltRoof", "Tar felt roof", RoofStyle.TarFelt, 3, 2, 1, 2.5f),
+                Roof("ConcreteRoof", "Concrete roof", RoofStyle.Concrete, 0, 7, 0, 4f),
+            };
         }
 
         // A house you go into: bigger inside than out, and a level for each age (a hut up to a concrete house).

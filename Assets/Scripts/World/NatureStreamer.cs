@@ -23,15 +23,14 @@ namespace KingdomGame.World
         NatureMap map;
         NodeSprites[,] looks;
         CanopyFader fader;
-        int chunksX, chunksY;
-        readonly Dictionary<int, float> shown = new Dictionary<int, float>();   // chunk -> last time it was wanted
-        readonly HashSet<int> wanted = new HashSet<int>();
-        readonly Queue<int> toShow = new Queue<int>();
-        readonly HashSet<int> queued = new HashSet<int>();
-        readonly List<int> scratch = new List<int>();
+        readonly Dictionary<Vector2Int, float> shown = new Dictionary<Vector2Int, float>();   // square -> last time it was wanted
+        readonly HashSet<Vector2Int> wanted = new HashSet<Vector2Int>();
+        readonly Queue<Vector2Int> toShow = new Queue<Vector2Int>();
+        readonly HashSet<Vector2Int> queued = new HashSet<Vector2Int>();
+        readonly List<Vector2Int> scratch = new List<Vector2Int>();
         readonly List<RectInt> areas = new List<RectInt>();
         // Squares asked for one at a time (a villager going to a tree there), and until when.
-        readonly Dictionary<int, float> pinned = new Dictionary<int, float>();
+        readonly Dictionary<Vector2Int, float> pinned = new Dictionary<Vector2Int, float>();
         float checkAt;
 
         /// <summary>Follow these (rulers): the map round each is shown out to <see cref="FollowRadius"/> tiles.</summary>
@@ -52,8 +51,6 @@ namespace KingdomGame.World
             map = natureMap;
             looks = nodeLooks;
             fader = canopies;
-            chunksX = (map.Cells.width + ChunkTiles - 1) / ChunkTiles;
-            chunksY = (map.Cells.height + ChunkTiles - 1) / ChunkTiles;
             map.Planted += OnPlanted;
         }
 
@@ -66,7 +63,7 @@ namespace KingdomGame.World
         public void ShowNow()
         {
             FindWanted();
-            foreach (int c in wanted) if (!shown.ContainsKey(c)) Show(c);
+            foreach (var c in wanted) if (!shown.ContainsKey(c)) Show(c);
             toShow.Clear();
             queued.Clear();
         }
@@ -79,7 +76,7 @@ namespace KingdomGame.World
                 checkAt = Time.unscaledTime + CheckSeconds;
                 FindWanted();
                 float now = Time.unscaledTime;
-                foreach (int c in wanted)
+                foreach (var c in wanted)
                 {
                     if (shown.ContainsKey(c)) shown[c] = now;
                     else if (queued.Add(c)) toShow.Enqueue(c);
@@ -88,11 +85,11 @@ namespace KingdomGame.World
                 scratch.Clear();
                 foreach (var pair in shown)
                     if (now - pair.Value > KeepSeconds) scratch.Add(pair.Key);
-                foreach (int c in scratch) Hide(c);
+                foreach (var c in scratch) Hide(c);
             }
             for (int n = 0; n < ChunksPerFrame && toShow.Count > 0; n++)
             {
-                int c = toShow.Dequeue();
+                var c = toShow.Dequeue();
                 queued.Remove(c);
                 if (!shown.ContainsKey(c) && wanted.Contains(c)) Show(c);
             }
@@ -124,7 +121,7 @@ namespace KingdomGame.World
                 foreach (var pair in pinned)
                     if (pair.Value < Time.unscaledTime) scratch.Add(pair.Key);
                     else wanted.Add(pair.Key);
-                foreach (int c in scratch) pinned.Remove(c);
+                foreach (var c in scratch) pinned.Remove(c);
             }
         }
 
@@ -134,44 +131,38 @@ namespace KingdomGame.World
         /// </summary>
         public ResourceNode ShowAt(Vector2Int cell)
         {
-            if (map == null || !map.Inside(cell)) return null;
-            int chunk = ChunkOf(cell);
+            if (map == null || !NatureMap.Inside(cell)) return null;
+            var chunk = ChunkOf(cell);
             pinned[chunk] = Time.unscaledTime + 60f;
             if (!shown.ContainsKey(chunk)) Show(chunk);
             else shown[chunk] = Time.unscaledTime;
             return map.Live(cell);
         }
 
+        static int FloorDiv(int v, int d) => v >= 0 ? v / d : -((-v + d - 1) / d);
+
         void Want(Rect r)
         {
-            var cells = map.Cells;
-            int x0 = Mathf.Max(0, Mathf.FloorToInt((r.xMin - cells.x) / ChunkTiles));
-            int y0 = Mathf.Max(0, Mathf.FloorToInt((r.yMin - cells.y) / ChunkTiles));
-            int x1 = Mathf.Min(chunksX - 1, Mathf.FloorToInt((r.xMax - cells.x) / ChunkTiles));
-            int y1 = Mathf.Min(chunksY - 1, Mathf.FloorToInt((r.yMax - cells.y) / ChunkTiles));
+            // Not past the world's edge.
+            float lim = NatureMap.Limit;
+            int x0 = FloorDiv(Mathf.FloorToInt(Mathf.Max(r.xMin, -lim)), ChunkTiles), y0 = FloorDiv(Mathf.FloorToInt(Mathf.Max(r.yMin, -lim)), ChunkTiles);
+            int x1 = FloorDiv(Mathf.FloorToInt(Mathf.Min(r.xMax, lim)), ChunkTiles), y1 = FloorDiv(Mathf.FloorToInt(Mathf.Min(r.yMax, lim)), ChunkTiles);
             for (int y = y0; y <= y1; y++)
                 for (int x = x0; x <= x1; x++)
-                    wanted.Add(y * chunksX + x);
+                    wanted.Add(new Vector2Int(x, y));
         }
 
-        RectInt ChunkCells(int chunk)
-        {
-            int cx = chunk % chunksX, cy = chunk / chunksX;
-            var cells = map.Cells;
-            int x = cells.x + cx * ChunkTiles, y = cells.y + cy * ChunkTiles;
-            return new RectInt(x, y, Mathf.Min(ChunkTiles, cells.xMax - x), Mathf.Min(ChunkTiles, cells.yMax - y));
-        }
+        static RectInt ChunkCells(Vector2Int chunk) => new RectInt(chunk.x * ChunkTiles, chunk.y * ChunkTiles, ChunkTiles, ChunkTiles);
 
-        int ChunkOf(Vector2Int cell) =>
-            (cell.y - map.Cells.y) / ChunkTiles * chunksX + (cell.x - map.Cells.x) / ChunkTiles;
+        static Vector2Int ChunkOf(Vector2Int cell) => new Vector2Int(FloorDiv(cell.x, ChunkTiles), FloorDiv(cell.y, ChunkTiles));
 
-        void Show(int chunk)
+        void Show(Vector2Int chunk)
         {
             shown[chunk] = Time.unscaledTime;
             foreach (var cell in ChunkCells(chunk).allPositionsWithin) Make(cell);
         }
 
-        void Hide(int chunk)
+        void Hide(Vector2Int chunk)
         {
             var area = ChunkCells(chunk);
             // Someone is gathering here: keep it a little longer.
@@ -198,17 +189,16 @@ namespace KingdomGame.World
         // A tree was planted (or put back from a save) in a square that's shown: make it now.
         void OnPlanted(Vector2Int cell)
         {
-            if (!map.Inside(cell) || !shown.ContainsKey(ChunkOf(cell))) return;
+            if (!NatureMap.Inside(cell) || !shown.ContainsKey(ChunkOf(cell))) return;
             if (map.Live(cell) == null) Make(cell);
         }
 
         void Make(Vector2Int cell)
         {
-            int i = map.Index(cell);
-            if (!map.Has(i) || map.Live(cell) != null) return;
-            var kind = map.KindOf(i);
+            var kind = map.KindAt(cell);
+            if (kind == null || map.Live(cell) != null) return;
             var position = new Vector2(cell.x + 0.5f, cell.y + 0.5f);
-            if (!map.IsPlanted(i))
+            if (!map.IsPlanted(cell))
             {
                 // Jitter inside the tile so the map doesn't look like a grid (the same every time).
                 position.x += (Noise.Hash01(map.Seed + 3u, cell.x, cell.y) - 0.5f) * 0.6f;
@@ -218,10 +208,10 @@ namespace KingdomGame.World
             go.transform.SetParent(transform, false);
             go.transform.position = position;
             var node = go.AddComponent<ResourceNode>();
-            int variant = Mathf.Clamp(map.VariantAt(i), 0, looks.GetLength(1) - 1);
+            int variant = Mathf.Clamp(map.VariantAt(cell), 0, looks.GetLength(1) - 1);
             // Not turned: the light is drawn into the pictures (from the top-left), and turning would turn it too.
             node.Setup(kind, looks[(int)kind.look, variant], 0f);
-            node.Bind(map, i);
+            node.Bind(map, cell);
             if (fader != null) fader.Add(node);
         }
     }

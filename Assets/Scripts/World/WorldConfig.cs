@@ -2,17 +2,18 @@ using UnityEngine;
 
 namespace KingdomGame.World
 {
-    /// <summary>How the map is generated. A new random map every play unless Seed is set.</summary>
+    /// <summary>
+    /// How the world is made. It's endless (up to NatureMap.Limit tiles out, hours of walking)
+    /// and worked out from a seed as you go: a new random world every new game unless Seed is set.
+    /// </summary>
     [CreateAssetMenu(menuName = "KingdomGame/World/World Config", fileName = "WorldConfig")]
     public sealed class WorldConfig : ScriptableObject
     {
-        [Tooltip("Map width and height in tiles. The ruler starts in the middle. Big maps take longer to start and use more memory (the ground's patches get a little less detailed past 128). Only the trees and rocks near you are real objects, so 1024 works.")]
-        [Range(32, 1024)] public int mapSize = 256;
-        [Tooltip("0 = a new random map every time. Any other number always makes the same map.")]
+        [Tooltip("0 = a new random world for every new game. Any other number always makes the same world.")]
         public int seed = 0;
 
         [Header("Nature")]
-        [Tooltip("Share of the map covered by forest (0-1).")]
+        [Tooltip("Share of the world covered by forest (0-1).")]
         [Range(0, 1)] public float forestCover = 0.35f;
         [Tooltip("How packed trees are inside a forest (0-1).")]
         [Range(0, 1)] public float treeDensity = 0.3f;

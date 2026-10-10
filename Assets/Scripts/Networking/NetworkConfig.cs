@@ -4,7 +4,8 @@ namespace KingdomGame.Networking
 {
     /// <summary>
     /// Settings for playing online. The server's can also be set when starting it from the
-    /// command line (-port, -maxplayers, -servername, -seed, -mapsize), which wins over these.
+    /// command line (-port, -maxplayers, -servername), which wins over these. A dedicated
+    /// server keeps its world in a file (-world name picks another one, -newworld starts over).
     /// </summary>
     [CreateAssetMenu(menuName = "KingdomGame/Network Config", fileName = "NetworkConfig")]
     public sealed class NetworkConfig : ScriptableObject
@@ -16,12 +17,10 @@ namespace KingdomGame.Networking
         [Range(1, 200)] public int maxPlayers = 16;
         [Tooltip("The name players see.")]
         public string serverName = "Kingdom server";
-        [Tooltip("Map width and height in tiles, for online worlds.")]
-        [Range(128, 1024)] public int mapSize = 1024;
-        [Tooltip("0 = a new random map for each new world. Any other number always makes the same map.")]
+        [Tooltip("0 = a new random world for each new world. Any other number always makes the same world.")]
         public int seed = 0;
-        [Tooltip("Tiles between players' kingdoms (throne to throne).")]
-        [Range(24, 400)] public int kingdomSpacing = 96;
+        [Tooltip("Tiles between players' kingdoms (throne to throne). Keep it at least the Kingdom Config's Lands Size, so kingdoms' lands don't overlap.")]
+        [Range(24, 4000)] public int kingdomSpacing = 560;
         [Tooltip("Frames a second the server runs at. It has no screen to draw, so it doesn't need many.")]
         [Range(10, 120)] public int serverFrameRate = 30;
 

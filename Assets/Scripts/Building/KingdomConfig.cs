@@ -11,6 +11,8 @@ namespace KingdomGame.Building
         public Vector2Int throneCell = new Vector2Int(-1, 2);
         [Tooltip("Bottom-left grid cell of the first storehouse.")]
         public Vector2Int storageCell = new Vector2Int(-6, -1);
+        [Tooltip("Tiles across the kingdom's lands (a square round the throne): it builds there, and its villagers and the zombies that come for it find their way there. The world itself goes on.")]
+        [Range(128, 2048)] public int landsSize = 512;
         [Min(0)] public int startWood = 80;
         [Min(0)] public int startStone = 60;
         [Min(0)] public int startFood = 20;

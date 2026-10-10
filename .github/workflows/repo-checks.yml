@@ -32,3 +32,6 @@ jobs:
 
       - name: Network tests (a real server and players over UDP on the runner)
         run: dotnet run --project tools/net-tests/NetTests.csproj
+
+      - name: Endless world tests (nature map squares, saving changes, ground squares joining up)
+        run: dotnet run --project tools/world-tests/WorldTests.csproj

@@ -5,17 +5,26 @@ using UnityEngine;
 namespace KingdomGame.Economy
 {
     /// <summary>
-    /// Every tree, rock and bush on the map, kept as data: what it is, how much is left,
-    /// and whether it's growing or growing back. A 1024-tile map has well over 100,000 of
-    /// them, far too many to be real objects at once, so only the ones near players and
-    /// kingdoms are made into <see cref="ResourceNode"/>s (by World.NatureStreamer). Those
-    /// write what happens to them back here when they're taken away again.
+    /// Every tree, rock and bush in an endless world. What grows where is worked out from the
+    /// world's seed (the generator, the same on every computer), a square of
+    /// <see cref="ChunkTiles"/> tiles at a time, when something first asks about it; only
+    /// changes (cut, planted, gone, growing back) are kept for good and saved. Squares nobody
+    /// has changed are forgotten again when there are too many, and worked out again if needed.
     ///
-    /// Walkers' paths read <see cref="Blocks"/> straight from here, so trees far from
-    /// anyone still stand in the way.
+    /// Only the ones near players and kingdoms are real objects (<see cref="ResourceNode"/>s,
+    /// made by World.NatureStreamer); they write what happens to them back here. Walkers'
+    /// paths read <see cref="Blocks"/> straight from here.
+    ///
+    /// The world goes <see cref="Limit"/> tiles out from the middle each way (hours of
+    /// walking): further out, the numbers a computer keeps positions in get too coarse.
     /// </summary>
     public sealed class NatureMap
     {
+        public const int ChunkTiles = 32;
+        /// <summary>The world's edge, in tiles from the middle (house insides and mines are beyond it).</summary>
+        public const int Limit = 32000;
+        const int MaxChunks = 6000;
+
         [Flags]
         enum Flag : byte
         {
@@ -24,81 +33,178 @@ namespace KingdomGame.Economy
             Blocks = 1,
             /// <summary>Planted by a kingdom (no jitter, and saved in full).</summary>
             Planted = 2,
-            /// <summary>Not as the map made it (saved).</summary>
+            /// <summary>Not as the world made it (saved).</summary>
             Changed = 4,
         }
 
-        /// <summary>Time state while a node isn't a real object: growing (start, end) or growing back (at).</summary>
+        sealed class Chunk
+        {
+            public readonly byte[] Kind = new byte[ChunkTiles * ChunkTiles];       // 0 = nothing, else kinds[k - 1]
+            public readonly byte[] Variant = new byte[ChunkTiles * ChunkTiles];
+            public readonly short[] Left = new short[ChunkTiles * ChunkTiles];
+            public readonly Flag[] Flags = new Flag[ChunkTiles * ChunkTiles];
+            public int Changed;    // cells changed (the square is kept for good when > 0)
+            public int Live;       // cells shown as real objects
+            public int Used;       // the frame it was last asked about
+        }
+
+        /// <summary>Time state while a node isn't a real object: growing (start, end) or growing back (at end).</summary>
         struct Timer
         {
             public bool Growing;
             public float Start, End;
         }
 
+        /// <summary>What stands at a cell when the world is made: a kind (or null) and a picture variant.</summary>
+        public delegate ResourceNodeConfig Generator(int x, int y, out int variant);
+
         public static NatureMap Current { get; set; }
 
-        public readonly RectInt Cells;
         public readonly uint Seed;
+        readonly Generator generate;
         readonly List<ResourceNodeConfig> kinds = new List<ResourceNodeConfig>();
         readonly Dictionary<ResourceNodeConfig, byte> kindIndex = new Dictionary<ResourceNodeConfig, byte>();
-        readonly byte[] kind;      // 0 = nothing, else kinds[kind - 1]
-        readonly byte[] variant;
-        readonly short[] left;
-        readonly Flag[] flags;
-        readonly Dictionary<int, Timer> timers = new Dictionary<int, Timer>();
-        readonly Dictionary<int, ResourceNode> live = new Dictionary<int, ResourceNode>();
+        readonly Dictionary<Vector2Int, Chunk> chunks = new Dictionary<Vector2Int, Chunk>();
+        readonly Dictionary<Vector2Int, Timer> timers = new Dictionary<Vector2Int, Timer>();
+        readonly Dictionary<Vector2Int, ResourceNode> live = new Dictionary<Vector2Int, ResourceNode>();
+        Vector2Int lastKey = new Vector2Int(int.MinValue, int.MinValue);
+        Chunk lastChunk;
 
         /// <summary>A cell started or stopped being solid (for zombie paths).</summary>
         public event Action<Vector2Int> BlockingChanged;
-        /// <summary>A node was planted where there was none: the streamer makes it if that part of the map is shown.</summary>
+        /// <summary>A node was planted (or put back from a save): the streamer makes it if that part of the world is shown.</summary>
         public event Action<Vector2Int> Planted;
 
-        public NatureMap(RectInt cells, uint seed)
+        /// <summary>Squares worked out and kept in memory right now (for the debug screen and tests).</summary>
+        public int Squares => chunks.Count;
+
+        public NatureMap(uint seed, Generator generator)
         {
-            Cells = cells;
             Seed = seed;
-            int n = cells.width * cells.height;
-            kind = new byte[n];
-            variant = new byte[n];
-            left = new short[n];
-            flags = new Flag[n];
+            generate = generator;
         }
 
-        public bool Inside(Vector2Int cell) => Cells.Contains(cell);
-        public int Index(Vector2Int cell) => (cell.y - Cells.y) * Cells.width + (cell.x - Cells.x);
-        public Vector2Int CellOf(int index) => new Vector2Int(Cells.x + index % Cells.width, Cells.y + index / Cells.width);
+        /// <summary>Whether a cell is in the world (not past its edge).</summary>
+        public static bool Inside(Vector2Int cell) => cell.x > -Limit && cell.x < Limit && cell.y > -Limit && cell.y < Limit;
 
-        /// <summary>Whether a tree, rock or bush (or a stump) stands in the way here.</summary>
-        public bool Blocks(Vector2Int cell) => Inside(cell) && (flags[Index(cell)] & Flag.Blocks) != 0;
+        static int FloorDiv(int a, int b) => a >= 0 ? a / b : -((-a + b - 1) / b);
+
+        Chunk ChunkFor(Vector2Int cell, out int i)
+        {
+            var key = new Vector2Int(FloorDiv(cell.x, ChunkTiles), FloorDiv(cell.y, ChunkTiles));
+            i = (cell.y - key.y * ChunkTiles) * ChunkTiles + (cell.x - key.x * ChunkTiles);
+            if (key == lastKey && lastChunk != null) return lastChunk;
+            if (!chunks.TryGetValue(key, out var chunk))
+            {
+                if (chunks.Count >= MaxChunks) Forget();
+                chunk = Make(key);
+                chunks[key] = chunk;
+            }
+            chunk.Used = Time.frameCount;
+            lastKey = key;
+            lastChunk = chunk;
+            return chunk;
+        }
+
+        // Works out what grows in a square (the same every time, from the seed).
+        Chunk Make(Vector2Int key)
+        {
+            var chunk = new Chunk();
+            for (int y = 0; y < ChunkTiles; y++)
+                for (int x = 0; x < ChunkTiles; x++)
+                {
+                    int wx = key.x * ChunkTiles + x, wy = key.y * ChunkTiles + y;
+                    int variant = 0;
+                    var config = generate != null ? generate(wx, wy, out variant) : null;
+                    if (config == null) continue;
+                    int i = y * ChunkTiles + x;
+                    chunk.Kind[i] = KindIndex(config);
+                    chunk.Variant[i] = (byte)Mathf.Clamp(variant, 0, 255);
+                    chunk.Left[i] = (short)Mathf.Clamp(config.amount, 0, short.MaxValue);
+                    chunk.Flags[i] = Flag.Blocks;
+                }
+            return chunk;
+        }
+
+        // Too many squares: forget the oldest half of those nobody changed and nothing is shown in.
+        void Forget()
+        {
+            var unchanged = new List<KeyValuePair<Vector2Int, Chunk>>();
+            foreach (var pair in chunks)
+                if (pair.Value.Changed == 0 && pair.Value.Live == 0) unchanged.Add(pair);
+            unchanged.Sort((a, b) => a.Value.Used.CompareTo(b.Value.Used));
+            for (int k = 0; k < unchanged.Count / 2; k++) chunks.Remove(unchanged[k].Key);
+            lastChunk = null;
+            lastKey = new Vector2Int(int.MinValue, int.MinValue);
+        }
+
+        byte KindIndex(ResourceNodeConfig config)
+        {
+            if (kindIndex.TryGetValue(config, out byte k)) return k;
+            if (kinds.Count >= 255) throw new InvalidOperationException("More than 255 kinds of trees, rocks and bushes.");
+            kinds.Add(config);
+            k = (byte)kinds.Count;
+            kindIndex[config] = k;
+            return k;
+        }
+
+        static void MarkChanged(Chunk chunk, int i)
+        {
+            if ((chunk.Flags[i] & Flag.Changed) != 0) return;
+            chunk.Flags[i] |= Flag.Changed;
+            chunk.Changed++;
+        }
+
+        // ---------------------------------------------------------- reading --
+
+        /// <summary>Whether a tree, rock or bush (or a stump) stands in the way here. Past the world's edge: yes.</summary>
+        public bool Blocks(Vector2Int cell)
+        {
+            if (!Inside(cell)) return true;
+            var chunk = ChunkFor(cell, out int i);
+            return (chunk.Flags[i] & Flag.Blocks) != 0;
+        }
 
         /// <summary>Whether a tree, rock or bush stands here with something left to gather (it's in the way of building).</summary>
         public bool Standing(Vector2Int cell, out NodeLook look)
         {
             look = NodeLook.Tree;
             if (!Inside(cell)) return false;
-            int i = Index(cell);
-            if (kind[i] == 0) return false;
-            if (live.TryGetValue(i, out var node) && node != null)
+            if (live.TryGetValue(cell, out var node) && node != null)
             {
                 look = node.Config.look;
                 return !node.Empty;
             }
-            look = kinds[kind[i] - 1].look;
-            Settle(i);
-            return left[i] > 0;
+            var chunk = ChunkFor(cell, out int i);
+            if (chunk.Kind[i] == 0) return false;
+            look = kinds[chunk.Kind[i] - 1].look;
+            Settle(cell, chunk, i);
+            return chunk.Left[i] > 0;
         }
 
-        // A node that isn't a real object finished growing (or growing back) while nobody was near:
-        // it's full now. (A real object does this itself in its Update.)
-        void Settle(int i)
+        // A node that isn't a real object finished growing (or growing back) while nobody was near: it's full now.
+        void Settle(Vector2Int cell, Chunk chunk, int i)
         {
-            if (!timers.TryGetValue(i, out var t) || Time.time < t.End || live.ContainsKey(i)) return;
-            timers.Remove(i);
-            var config = KindOf(i);
-            if (config == null) return;
-            left[i] = (short)Mathf.Clamp(config.amount, 0, short.MaxValue);
-            SetBlocks(i, true);
+            if (!timers.TryGetValue(cell, out var t) || Time.time < t.End || live.ContainsKey(cell)) return;
+            timers.Remove(cell);
+            if (chunk.Kind[i] == 0) return;
+            chunk.Left[i] = (short)Mathf.Clamp(kinds[chunk.Kind[i] - 1].amount, 0, short.MaxValue);
+            SetBlocks(cell, chunk, i, true);
         }
+
+        /// <summary>What kind stands at a cell, or null.</summary>
+        public ResourceNodeConfig KindAt(Vector2Int cell)
+        {
+            if (!Inside(cell)) return null;
+            var chunk = ChunkFor(cell, out int i);
+            return chunk.Kind[i] != 0 ? kinds[chunk.Kind[i] - 1] : null;
+        }
+
+        public bool IsPlanted(Vector2Int cell) => Inside(cell) && (ChunkFor(cell, out int i).Flags[i] & Flag.Planted) != 0;
+        public int VariantAt(Vector2Int cell) => Inside(cell) ? ChunkFor(cell, out int i).Variant[i] : 0;
+
+        /// <summary>The real object for a cell, if that part of the world is shown, or null.</summary>
+        public ResourceNode Live(Vector2Int cell) => live.TryGetValue(cell, out var n) && n != null ? n : null;
 
         /// <summary>
         /// The nearest cell to <paramref name="from"/> (within <paramref name="radius"/> tiles) with a tree, rock or
@@ -121,66 +227,38 @@ namespace KingdomGame.Economy
                     for (int dx = -r; dx <= r; dx += edgeRow ? 1 : 2 * r)
                     {
                         var cell = new Vector2Int(center.x + dx, center.y + dy);
-                        if (!Inside(cell)) continue;
-                        int i = Index(cell);
-                        if (kind[i] == 0 || kinds[kind[i] - 1].resource != type) continue;
-                        if (!Standing(cell, out _) || (skip != null && skip(cell))) continue;
-                        float d = (new Vector2(cell.x + 0.5f, cell.y + 0.5f) - from).sqrMagnitude;
-                        if (d < best) { best = d; found = cell; }
+                        var kind = KindAt(cell);
+                        if (kind != null && kind.resource == type && Standing(cell, out _) && (skip == null || !skip(cell)))
+                        {
+                            float d = (new Vector2(cell.x + 0.5f, cell.y + 0.5f) - from).sqrMagnitude;
+                            if (d < best) { best = d; found = cell; }
+                        }
+                        if (r == 0) break;
                     }
                 }
             }
             return best < float.MaxValue;
         }
 
-        /// <summary>What kind stands at a cell, or null.</summary>
-        public ResourceNodeConfig KindAt(Vector2Int cell) => Inside(cell) && kind[Index(cell)] != 0 ? kinds[kind[Index(cell)] - 1] : null;
-
-        /// <summary>The real object for a cell, if that part of the map is shown, or null.</summary>
-        public ResourceNode Live(Vector2Int cell) => Inside(cell) && live.TryGetValue(Index(cell), out var n) && n != null ? n : null;
-
-        public bool IsPlanted(int index) => (flags[index] & Flag.Planted) != 0;
-        public byte VariantAt(int index) => variant[index];
-
-        byte KindIndex(ResourceNodeConfig config)
-        {
-            if (kindIndex.TryGetValue(config, out byte k)) return k;
-            if (kinds.Count >= 255) throw new InvalidOperationException("More than 255 kinds of trees, rocks and bushes.");
-            kinds.Add(config);
-            k = (byte)kinds.Count;
-            kindIndex[config] = k;
-            return k;
-        }
-
-        // ---------------------------------------------------------- the map --
-
-        /// <summary>Puts a full-grown node on the map as it's made (not a change: not saved).</summary>
-        public void Generate(Vector2Int cell, ResourceNodeConfig config, int variantIndex)
-        {
-            if (!Inside(cell) || config == null) return;
-            int i = Index(cell);
-            kind[i] = KindIndex(config);
-            variant[i] = (byte)variantIndex;
-            left[i] = (short)Mathf.Clamp(config.amount, 0, short.MaxValue);
-            flags[i] = Flag.Blocks;
-        }
+        // ---------------------------------------------------------- changes --
 
         /// <summary>
         /// A young tree or bush planted at <paramref name="cell"/>, fully grown in <paramref name="growSeconds"/>.
-        /// Returns its object if that part of the map is shown (the streamer makes it), else null.
+        /// Returns its object if that part of the world is shown (the streamer makes it), else null.
         /// </summary>
         public ResourceNode Plant(Vector2Int cell, ResourceNodeConfig config, int variantIndex, float growSeconds)
         {
             if (!Inside(cell) || config == null) return null;
             Clear(cell);
-            int i = Index(cell);
-            kind[i] = KindIndex(config);
-            variant[i] = (byte)variantIndex;
-            left[i] = 0;
-            flags[i] = Flag.Planted | Flag.Changed;
+            var chunk = ChunkFor(cell, out int i);
+            chunk.Kind[i] = KindIndex(config);
+            chunk.Variant[i] = (byte)Mathf.Clamp(variantIndex, 0, 255);
+            chunk.Left[i] = 0;
+            chunk.Flags[i] |= Flag.Planted;
+            MarkChanged(chunk, i);
             float now = Time.time;
-            timers[i] = new Timer { Growing = true, Start = now, End = now + Mathf.Max(1f, growSeconds) };
-            SetBlocks(i, true);
+            timers[cell] = new Timer { Growing = true, Start = now, End = now + Mathf.Max(1f, growSeconds) };
+            SetBlocks(cell, chunk, i, true);
             Planted?.Invoke(cell);
             return Live(cell);
         }
@@ -189,46 +267,57 @@ namespace KingdomGame.Economy
         public void Clear(Vector2Int cell)
         {
             if (!Inside(cell)) return;
-            int i = Index(cell);
-            if (kind[i] == 0) return;
-            if (live.TryGetValue(i, out var node))
+            var chunk = ChunkFor(cell, out int i);
+            if (chunk.Kind[i] == 0) return;
+            if (live.TryGetValue(cell, out var node))
             {
-                live.Remove(i);
-                if (node != null) node.Unbind();
-                if (node != null) UnityEngine.Object.Destroy(node.gameObject);
+                Detach(cell, node);
+                if (node != null)
+                {
+                    node.Unbind();
+                    UnityEngine.Object.Destroy(node.gameObject);
+                }
+                chunk = ChunkFor(cell, out i);
             }
-            kind[i] = 0;
-            left[i] = 0;
-            timers.Remove(i);
-            SetBlocks(i, false);
-            flags[i] = Flag.Changed;
+            chunk.Kind[i] = 0;
+            chunk.Left[i] = 0;
+            timers.Remove(cell);
+            chunk.Flags[i] &= ~Flag.Planted;
+            MarkChanged(chunk, i);   // (before telling anyone: a changed square is never forgotten)
+            SetBlocks(cell, chunk, i, false);
         }
 
         // ------------------------------------------------------ live objects --
 
         /// <summary>A node's object was made for this cell (it reads its state with <see cref="StateOf"/>).</summary>
-        internal void Attach(int index, ResourceNode node) => live[index] = node;
-
-        /// <summary>A node's object is going (that part of the map isn't shown): what happened to it is kept here.</summary>
-        internal void Detach(int index, ResourceNode node)
+        internal void Attach(Vector2Int cell, ResourceNode node)
         {
-            if (live.TryGetValue(index, out var n) && n == node) live.Remove(index);
+            if (live.ContainsKey(cell)) return;
+            live[cell] = node;
+            ChunkFor(cell, out _).Live++;
         }
 
-        /// <summary>The cells shown as real objects right now.</summary>
-        public IEnumerable<int> LiveCells => live.Keys;
+        /// <summary>A node's object is going (that part of the world isn't shown): what happened to it is kept here.</summary>
+        internal void Detach(Vector2Int cell, ResourceNode node)
+        {
+            if (!live.TryGetValue(cell, out var n) || n != node) return;
+            live.Remove(cell);
+            var chunk = ChunkFor(cell, out _);
+            chunk.Live = Mathf.Max(0, chunk.Live - 1);
+        }
 
         /// <summary>
         /// The state of a node for its object: how much is left, and (as times on Time.time) whether
         /// it's growing (from <paramref name="start"/> to <paramref name="end"/>) or growing back at <paramref name="end"/>.
         /// </summary>
-        public void StateOf(int index, out int amountLeft, out bool growing, out float start, out float end)
+        public void StateOf(Vector2Int cell, out int amountLeft, out bool growing, out float start, out float end)
         {
-            Settle(index);
-            amountLeft = left[index];
+            var chunk = ChunkFor(cell, out int i);
+            Settle(cell, chunk, i);
+            amountLeft = chunk.Left[i];
             growing = false;
             start = end = 0f;
-            if (timers.TryGetValue(index, out var t))
+            if (timers.TryGetValue(cell, out var t))
             {
                 growing = t.Growing;
                 start = t.Start;
@@ -237,34 +326,38 @@ namespace KingdomGame.Economy
         }
 
         /// <summary>A live node's state changed (gathered from, grew, used up): written down here.</summary>
-        internal void Record(int index, int amountLeft, bool growing, float start, float end, bool waiting)
+        internal void Record(Vector2Int cell, int amountLeft, bool growing, float start, float end, bool waiting)
         {
-            // Nothing happened to it (it's only going because nobody is near): it stays as the map made it.
-            if (!growing && !waiting && left[index] == amountLeft && !timers.ContainsKey(index)) return;
-            left[index] = (short)Mathf.Clamp(amountLeft, 0, short.MaxValue);
-            if (growing) timers[index] = new Timer { Growing = true, Start = start, End = end };
-            else if (waiting) timers[index] = new Timer { Growing = false, Start = 0f, End = end };
-            else timers.Remove(index);
-            flags[index] |= Flag.Changed;
+            var chunk = ChunkFor(cell, out int i);
+            // Nothing happened to it (it's only going because nobody is near): it stays as the world made it.
+            if (!growing && !waiting && chunk.Left[i] == amountLeft && !timers.ContainsKey(cell)) return;
+            chunk.Left[i] = (short)Mathf.Clamp(amountLeft, 0, short.MaxValue);
+            if (growing) timers[cell] = new Timer { Growing = true, Start = start, End = end };
+            else if (waiting) timers[cell] = new Timer { Growing = false, Start = 0f, End = end };
+            else timers.Remove(cell);
+            MarkChanged(chunk, i);
         }
 
         /// <summary>A live node became solid or stopped being (a rock used up disappears; a stump stays).</summary>
-        internal void SetBlocks(int index, bool blocks)
+        internal void SetBlocks(Vector2Int cell, bool blocks)
         {
-            bool was = (flags[index] & Flag.Blocks) != 0;
-            if (was == blocks) return;
-            if (blocks) flags[index] |= Flag.Blocks;
-            else flags[index] &= ~Flag.Blocks;
-            BlockingChanged?.Invoke(CellOf(index));
+            if (!Inside(cell)) return;
+            var chunk = ChunkFor(cell, out int i);
+            SetBlocks(cell, chunk, i, blocks);
         }
 
-        /// <summary>Whether a cell has a node at all (for the streamer).</summary>
-        public bool Has(int index) => kind[index] != 0;
-        public ResourceNodeConfig KindOf(int index) => kind[index] != 0 ? kinds[kind[index] - 1] : null;
+        void SetBlocks(Vector2Int cell, Chunk chunk, int i, bool blocks)
+        {
+            bool was = (chunk.Flags[i] & Flag.Blocks) != 0;
+            if (was == blocks) return;
+            if (blocks) chunk.Flags[i] |= Flag.Blocks;
+            else chunk.Flags[i] &= ~Flag.Blocks;
+            BlockingChanged?.Invoke(cell);
+        }
 
         // ------------------------------------------------------------ saving --
 
-        /// <summary>One cell that isn't as the map made it.</summary>
+        /// <summary>One cell that isn't as the world made it.</summary>
         public struct Change
         {
             public Vector2Int Cell;
@@ -280,64 +373,81 @@ namespace KingdomGame.Economy
             public float RegrowLeft;
         }
 
-        /// <summary>Every cell that isn't as the map made it (live objects' latest state included).</summary>
+        /// <summary>Every cell that isn't as the world made it (live objects' latest state included).</summary>
         public List<Change> Changes()
         {
             foreach (var pair in live)
                 if (pair.Value != null) pair.Value.WriteBack();
             float now = Time.time;
             var changes = new List<Change>();
-            for (int i = 0; i < flags.Length; i++)
+            // (The changed squares are listed first: settling a cell tells listeners, who may ask about other squares.)
+            var changed = new List<KeyValuePair<Vector2Int, Chunk>>();
+            foreach (var pair in chunks)
+                if (pair.Value.Changed > 0) changed.Add(pair);
+            foreach (var pair in changed)
             {
-                if ((flags[i] & Flag.Changed) == 0) continue;
-                Settle(i);
-                var c = new Change { Cell = CellOf(i), Kind = KindOf(i), Planted = IsPlanted(i), Variant = variant[i], Left = left[i], Grown = -1f, RegrowLeft = -1f };
-                if (timers.TryGetValue(i, out var t))
+                var chunk = pair.Value;
+                for (int i = 0; i < chunk.Flags.Length; i++)
                 {
-                    if (t.Growing)
+                    if ((chunk.Flags[i] & Flag.Changed) == 0) continue;
+                    var cell = new Vector2Int(pair.Key.x * ChunkTiles + i % ChunkTiles, pair.Key.y * ChunkTiles + i / ChunkTiles);
+                    Settle(cell, chunk, i);
+                    var c = new Change
                     {
-                        c.GrowSeconds = Mathf.Max(1f, t.End - t.Start);
-                        c.Grown = Mathf.Clamp01((now - t.Start) / c.GrowSeconds);
+                        Cell = cell, Kind = chunk.Kind[i] != 0 ? kinds[chunk.Kind[i] - 1] : null, Planted = (chunk.Flags[i] & Flag.Planted) != 0,
+                        Variant = chunk.Variant[i], Left = chunk.Left[i], Grown = -1f, RegrowLeft = -1f,
+                    };
+                    if (timers.TryGetValue(cell, out var t))
+                    {
+                        if (t.Growing)
+                        {
+                            c.GrowSeconds = Mathf.Max(1f, t.End - t.Start);
+                            c.Grown = Mathf.Clamp01((now - t.Start) / c.GrowSeconds);
+                        }
+                        else c.RegrowLeft = Mathf.Max(0f, t.End - now);
                     }
-                    else c.RegrowLeft = Mathf.Max(0f, t.End - now);
+                    changes.Add(c);
                 }
-                changes.Add(c);
             }
             return changes;
         }
 
-        /// <summary>Puts back one change from a save (before any of that part of the map is shown).</summary>
+        /// <summary>Puts back one change from a save.</summary>
         public void Apply(Change c)
         {
             if (!Inside(c.Cell)) return;
-            int i = Index(c.Cell);
             if (c.Kind == null)
             {
                 Clear(c.Cell);
+                var gone = ChunkFor(c.Cell, out int g);
+                MarkChanged(gone, g);   // (nothing stood there, as the world is made now: still noted, so it stays saved)
                 return;
             }
-            if (live.ContainsKey(i)) Clear(c.Cell);
-            kind[i] = KindIndex(c.Kind);
-            variant[i] = (byte)Mathf.Clamp(c.Variant, 0, 255);
-            left[i] = (short)Mathf.Clamp(c.Left, 0, short.MaxValue);
-            flags[i] = Flag.Changed | (c.Planted ? Flag.Planted : Flag.None) | (flags[i] & Flag.Blocks);
-            timers.Remove(i);
+            if (live.ContainsKey(c.Cell)) Clear(c.Cell);
+            var chunk = ChunkFor(c.Cell, out int i);
+            chunk.Kind[i] = KindIndex(c.Kind);
+            chunk.Variant[i] = (byte)Mathf.Clamp(c.Variant, 0, 255);
+            chunk.Left[i] = (short)Mathf.Clamp(c.Left, 0, short.MaxValue);
+            if (c.Planted) chunk.Flags[i] |= Flag.Planted;
+            else chunk.Flags[i] &= ~Flag.Planted;
+            MarkChanged(chunk, i);
+            timers.Remove(c.Cell);
             float now = Time.time;
             bool blocks;
             if (c.Grown >= 0f && c.Grown < 1f)
             {
                 float total = Mathf.Max(1f, c.GrowSeconds);
                 float start = now - c.Grown * total;
-                timers[i] = new Timer { Growing = true, Start = start, End = start + total };
+                timers[c.Cell] = new Timer { Growing = true, Start = start, End = start + total };
                 blocks = true;
             }
             else
             {
-                if (c.Left <= 0 && c.RegrowLeft >= 0f) timers[i] = new Timer { Growing = false, End = now + c.RegrowLeft };
+                if (c.Left <= 0 && c.RegrowLeft >= 0f) timers[c.Cell] = new Timer { Growing = false, End = now + c.RegrowLeft };
                 // Used up: a stump or bare bush stays in the way; a rock is gone.
                 blocks = c.Left > 0 || c.Kind.look != NodeLook.Rock;
             }
-            SetBlocks(i, blocks);
+            SetBlocks(c.Cell, chunk, i, blocks);
             Planted?.Invoke(c.Cell);
         }
     }

@@ -1,4 +1,4 @@
-// Minimal UnityEngine stand-ins so the art code runs outside Unity (preview only).
+// Minimal UnityEngine stand-ins so the art code runs outside Unity (the art preview, and tools/world-tests).
 namespace UnityEngine
 {
     public struct Color32
@@ -15,11 +15,23 @@ namespace UnityEngine
         public static Vector2 operator -(Vector2 a, Vector2 b) => new Vector2(a.x - b.x, a.y - b.y);
         public static Vector2 operator *(Vector2 a, float k) => new Vector2(a.x * k, a.y * k);
         public static Vector2 operator /(Vector2 a, float k) => new Vector2(a.x / k, a.y / k);
+        public float sqrMagnitude => x * x + y * y;
     }
-    public struct Vector2Int
+    public struct Vector2Int : System.IEquatable<Vector2Int>
     {
         public int x, y;
         public Vector2Int(int x, int y) { this.x = x; this.y = y; }
+        public static Vector2Int zero => new Vector2Int(0, 0);
+        public static Vector2Int operator +(Vector2Int a, Vector2Int b) => new Vector2Int(a.x + b.x, a.y + b.y);
+        public static Vector2Int operator -(Vector2Int a, Vector2Int b) => new Vector2Int(a.x - b.x, a.y - b.y);
+        public static Vector2Int operator *(Vector2Int a, int k) => new Vector2Int(a.x * k, a.y * k);
+        public static bool operator ==(Vector2Int a, Vector2Int b) => a.x == b.x && a.y == b.y;
+        public static bool operator !=(Vector2Int a, Vector2Int b) => !(a == b);
+        public static implicit operator Vector2(Vector2Int v) => new Vector2(v.x, v.y);
+        public bool Equals(Vector2Int o) => this == o;
+        public override bool Equals(object o) => o is Vector2Int v && this == v;
+        public override int GetHashCode() => x * 73856093 ^ y * 19349663;
+        public override string ToString() => $"({x}, {y})";
     }
     public struct Vector3
     {

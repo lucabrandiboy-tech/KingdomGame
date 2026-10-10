@@ -18,6 +18,7 @@ static class Tests
         Run(nameof(PlannerSpacesKingdoms), PlannerSpacesKingdoms);
         Run(nameof(PlannerKeepsToGoodSpots), PlannerKeepsToGoodSpots);
         Run(nameof(PlannerStillPlacesWhenFull), PlannerStillPlacesWhenFull);
+        Run(nameof(PlannerGoesOnInAnEndlessWorld), PlannerGoesOnInAnEndlessWorld);
         Run(nameof(NamesAndChatAreCleaned), NamesAndChatAreCleaned);
         Run(nameof(BufferInterpolatesAndSnapsOnJumps), BufferInterpolatesAndSnapsOnJumps);
         Run(nameof(ServerClockFollowsQuickestMessages), ServerClockFollowsQuickestMessages);
@@ -30,6 +31,9 @@ static class Tests
         Run(nameof(FullServerTurnsAway), FullServerTurnsAway);
         Run(nameof(SameKeyTwiceIsTurnedAway), SameKeyTwiceIsTurnedAway);
         Run(nameof(RejoiningGetsTheSameKingdom), RejoiningGetsTheSameKingdom);
+        Run(nameof(RejoiningComesBackWhereYouLeft), RejoiningComesBackWhereYouLeft);
+        Run(nameof(SavedPlayersComeBackOnANewServer), SavedPlayersComeBackOnANewServer);
+        Run(nameof(SavedKingdomNumbersDontClash), SavedKingdomNumbersDontClash);
         Run(nameof(NobodyThereFailsWithAReason), NobodyThereFailsWithAReason);
         Run(nameof(ManySnapshotEntriesArriveInPieces), ManySnapshotEntriesArriveInPieces);
         Run(nameof(HostIsSeenAndHeard), HostIsSeenAndHeard);
@@ -90,7 +94,7 @@ static class Tests
     {
         var server = new ServerCore(new ServerSettings
         {
-            Port = 0, MaxPlayers = maxPlayers, Name = "Test server", Seed = 4242, MapSize = 1024,
+            Port = 0, MaxPlayers = maxPlayers, Name = "Test server", Seed = 4242,
             KingdomSpacing = 96, InterestRadius = interest, SnapshotRate = 30f, MaxSpeed = 6f,
         });
         server.Clock = () => (3, 21.5f);
@@ -121,14 +125,14 @@ static class Tests
 
     static void PlannerSpacesKingdoms()
     {
-        var planner = new KingdomPlanner(1024, 96, 7);
+        var planner = new KingdomPlanner(32000, 96, 7);
         var first = planner.Next();
         Check(Math.Abs(first.X) <= 2 && Math.Abs(first.Y) <= 2, $"first kingdom at {first}, not the middle");
         for (int i = 0; i < 40; i++) planner.Next();
         var spots = planner.Spots;
         for (int a = 0; a < spots.Count; a++)
         {
-            Check(Math.Abs(spots[a].X) <= 512 - 16 && Math.Abs(spots[a].Y) <= 512 - 16, $"spot {spots[a]} is at the map's edge");
+            Check(Math.Abs(spots[a].X) <= 32000 - 96 && Math.Abs(spots[a].Y) <= 32000 - 96, $"spot {spots[a]} is at the world's edge");
             for (int b = a + 1; b < spots.Count; b++)
             {
                 double dx = spots[a].X - spots[b].X, dy = spots[a].Y - spots[b].Y;
@@ -142,7 +146,7 @@ static class Tests
 
     static void PlannerKeepsToGoodSpots()
     {
-        var planner = new KingdomPlanner(512, 64, 3) { IsGood = (x, y) => x > 0 };   // only the east half is open ground
+        var planner = new KingdomPlanner(32000, 64, 3) { IsGood = (x, y) => x > 0 };   // only the east half is open ground
         for (int i = 0; i < 10; i++)
         {
             var s = planner.Next();
@@ -155,6 +159,30 @@ static class Tests
         var planner = new KingdomPlanner(128, 96, 1);
         for (int i = 0; i < 12; i++) planner.Next();
         Check(planner.Spots.Count == 12, "not everyone got a spot");
+    }
+
+    // Hundreds of kingdoms in an endless world: all far enough apart, none past the edge, and
+    // packed round the first (not scattered over the world), quickly.
+    static void PlannerGoesOnInAnEndlessWorld()
+    {
+        var planner = new KingdomPlanner(32000, 560, 11);
+        var watch = Stopwatch.StartNew();
+        for (int i = 0; i < 200; i++) planner.Next();
+        var spots = planner.Spots;
+        double furthest = 0;
+        for (int a = 0; a < spots.Count; a++)
+        {
+            Check(Math.Abs(spots[a].X) < 32000 && Math.Abs(spots[a].Y) < 32000, $"spot {spots[a]} is past the world's edge");
+            furthest = Math.Max(furthest, Math.Sqrt((double)spots[a].X * spots[a].X + (double)spots[a].Y * spots[a].Y));
+            for (int b = a + 1; b < spots.Count; b++)
+            {
+                double dx = spots[a].X - spots[b].X, dy = spots[a].Y - spots[b].Y;
+                Check(Math.Sqrt(dx * dx + dy * dy) >= 560, $"kingdoms {spots[a]} and {spots[b]} are too close");
+            }
+        }
+        // 200 kingdoms 560 apart fit in a circle about 560 * sqrt(200) / 1.9 across... give it plenty of room.
+        Check(furthest < 560 * Math.Sqrt(200) * 1.5, $"the kingdoms are spread {furthest:0} tiles out: not neighbours");
+        Check(watch.Elapsed.TotalSeconds < 5, $"placing 200 kingdoms took {watch.Elapsed.TotalSeconds:0.0} s");
     }
 
     static void NamesAndChatAreCleaned()
@@ -207,7 +235,7 @@ static class Tests
         try
         {
             Check(a.Welcome.YourId != b.Welcome.YourId, "players got the same id");
-            Check(a.Welcome.Seed == 4242 && b.Welcome.MapSize == 1024, "the world wasn't sent");
+            Check(a.Welcome.Seed == 4242 && b.Welcome.Seed == 4242, "the world wasn't sent");
             Check(a.Welcome.Day == 3 && Math.Abs(b.Welcome.Hour - 21.5f) < 1e-4, "the clock wasn't sent");
             Check(a.Welcome.ServerName == "Test server", "server name");
             Check(a.Welcome.YourKingdom != b.Welcome.YourKingdom, "players share a kingdom");
@@ -403,6 +431,115 @@ static class Tests
             back.Core.Disconnect();
         }
         finally { Stop(server, b); }
+    }
+
+    // Leaving and coming back puts you where you were (the first time, at your throne).
+    static void RejoiningComesBackWhereYouLeft()
+    {
+        var server = NewServer();
+        var a = new Player(server.Port, "key-a", "Alice");
+        var b = new Player(server.Port, "key-b", "Bob");
+        Pump(server, new[] { a, b }, () => a.Welcome != null && b.Welcome != null);
+        Player back = null;
+        try
+        {
+            Check(!a.Welcome.HasSpawn, "a first-time player was given somewhere to start");
+            int oldId = a.Welcome.YourId;
+            // Walk a little way, a step at a time (not too fast for the server).
+            for (int step = 1; step <= 10; step++)
+            {
+                var m = new Motion { X = step * 0.5f, Y = 40f + step * 0.25f, Aim = 0, Flags = MotionFlags.Walking };
+                if (step == 1) m.Flags |= MotionFlags.Jumped;
+                a.Core.SendState(m);
+                Pump(server, new[] { a, b }, () => FindPlayer(server, oldId) is PlayerSession p && p.HasMotion && Math.Abs(p.Motion.X - m.X) < 1e-4);
+            }
+            a.Core.Disconnect();
+            Pump(server, new[] { b }, () => b.Left.Contains(oldId));
+            back = new Player(server.Port, "key-a", "Alice");
+            Pump(server, new[] { b, back }, () => back.Welcome != null);
+            Check(back.Welcome.HasSpawn, "the returning player wasn't told where they were");
+            Check(Math.Abs(back.Welcome.SpawnX - 5f) < 1e-3 && Math.Abs(back.Welcome.SpawnY - 42.5f) < 1e-3,
+                $"came back at {back.Welcome.SpawnX}, {back.Welcome.SpawnY}, not 5, 42.5");
+        }
+        finally { Stop(server, b); back?.Core.Disconnect(); }
+    }
+
+    static PlayerSession FindPlayer(ServerCore server, int id)
+    {
+        foreach (var p in server.Players) if (p.Id == id) return p;
+        return null;
+    }
+
+    // A hosted world is saved (the players who joined: their kingdoms, where they were) and loaded
+    // into a new server: they get their kingdoms back and come back where they were, the host's own
+    // kingdom isn't in the save, and someone new gets a spot away from all of them.
+    static void SavedPlayersComeBackOnANewServer()
+    {
+        var first = NewServer();
+        first.AddLocalPlayer("host-key", "Hosty", new KingdomInfo { X = -1, Y = 2 });
+        var a = new Player(first.Port, "key-a", "Alice");
+        var b = new Player(first.Port, "key-b", "Bob");
+        Pump(first, new[] { a, b }, () => a.Welcome != null && b.Welcome != null);
+        var aKingdom = a.Welcome.Kingdoms.Find(k => k.Id == a.Welcome.YourKingdom);
+        var bKingdom = b.Welcome.Kingdoms.Find(k => k.Id == b.Welcome.YourKingdom);
+        List<KingdomInfo> savedKingdoms;
+        List<PlayerRecord> savedPlayers;
+        try
+        {
+            // Alice is standing somewhere when the game is saved (still on); Bob never moved.
+            a.Core.SendState(new Motion { X = 300.5f, Y = -20.25f, Flags = MotionFlags.Jumped });
+            Pump(first, new[] { a, b }, () => FindPlayer(first, a.Welcome.YourId) is PlayerSession p && p.HasMotion);
+            (savedKingdoms, savedPlayers) = first.Remembered();
+        }
+        finally { Stop(first, a, b); }
+
+        Check(savedKingdoms.Count == 2, $"{savedKingdoms.Count} kingdoms saved, not the 2 that joined (the host's isn't saved)");
+        Check(!savedPlayers.Exists(p => p.Key == "host-key"), "the host was saved with the others");
+        var savedAlice = savedPlayers.Find(p => p.Key == "key-a");
+        Check(savedAlice != null && savedAlice.HasPosition && Math.Abs(savedAlice.X - 300.5f) < 1e-3, "Alice's spot wasn't saved");
+        var savedBob = savedPlayers.Find(p => p.Key == "key-b");
+        Check(savedBob != null && !savedBob.HasPosition, "Bob never moved, but has a saved spot");
+
+        var second = NewServer();
+        second.Remember(savedKingdoms, savedPlayers);
+        var host = second.AddLocalPlayer("host-key", "Hosty", new KingdomInfo { X = -1, Y = 2 });
+        var alice = new Player(second.Port, "key-a", "Alice");
+        var carol = new Player(second.Port, "key-c", "Carol");
+        try
+        {
+            Pump(second, new[] { alice, carol }, () => alice.Welcome != null && carol.Welcome != null);
+            var mine = alice.Welcome.Kingdoms.Find(k => k.Id == alice.Welcome.YourKingdom);
+            Check(mine != null && mine.X == aKingdom.X && mine.Y == aKingdom.Y, "Alice's kingdom moved");
+            Check(alice.Welcome.HasSpawn && Math.Abs(alice.Welcome.SpawnX - 300.5f) < 1e-3 && Math.Abs(alice.Welcome.SpawnY + 20.25f) < 1e-3,
+                "Alice didn't come back where she was");
+            Check(alice.Welcome.Kingdoms.Exists(k => k.X == bKingdom.X && k.Y == bKingdom.Y && k.Owner == "Bob"), "Bob's kingdom is gone while he's away");
+            var ids = new HashSet<int>();
+            foreach (var k in carol.Welcome.Kingdoms) Check(ids.Add(k.Id), $"two kingdoms are number {k.Id}");
+            Check(carol.Welcome.Kingdoms.Count == 4, $"{carol.Welcome.Kingdoms.Count} kingdoms, not host + Alice + Bob + Carol");
+            Check(host.KingdomId > 0 && host.KingdomId != mine.Id, "the host's kingdom took a saved one's number");
+            var theirs = carol.Welcome.Kingdoms.Find(k => k.Id == carol.Welcome.YourKingdom);
+            foreach (var k in carol.Welcome.Kingdoms)
+            {
+                if (k == theirs) continue;
+                double d = Math.Sqrt(Math.Pow(k.X - theirs.X, 2) + Math.Pow(k.Y - theirs.Y, 2));
+                Check(d >= 96, $"Carol's kingdom is {d:0} tiles from {k.Owner}'s");
+            }
+            Check(!carol.Welcome.HasSpawn, "a new player was given somewhere to start");
+        }
+        finally { Stop(second, alice, carol); }
+    }
+
+    // A save whose kingdom has the number the host's would get: they get different ones.
+    static void SavedKingdomNumbersDontClash()
+    {
+        var server = new ServerCore(new ServerSettings { Port = 0 });
+        server.Remember(new[] { new KingdomInfo { Id = 1, Owner = "Old", X = 500, Y = 0 }, new KingdomInfo { Id = 1, Owner = "Twin", X = 0, Y = 900 } },
+            new[] { new PlayerRecord { Key = "k-old", Name = "Old", KingdomId = 1 } });
+        var host = server.AddLocalPlayer("host-key", "Hosty", new KingdomInfo { Id = 1, X = 0, Y = 0 });
+        var ids = new HashSet<int>();
+        foreach (var k in server.Kingdoms) Check(ids.Add(k.Id), $"two kingdoms are number {k.Id}");
+        Check(server.Kingdoms.Count == 3, "a kingdom was lost");
+        Check(server.OwnerKey(host.KingdomId) == "host-key", "the host doesn't own their kingdom");
     }
 
     static void NobodyThereFailsWithAReason()

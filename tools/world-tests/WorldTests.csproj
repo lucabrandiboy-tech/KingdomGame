@@ -1,0 +1,29 @@
+<!--
+  Tests for the endless world's code outside Unity: the nature map (Assets/Scripts/Economy/NatureMap.cs:
+  trees, rocks and bushes worked out from the seed, square by square, with only changes kept and saved)
+  and the ground squares (GroundArt.PatchMasksAt / TintAt: neighbouring squares must join up exactly).
+  Uses the art preview's UnityEngine stand-ins plus a few more (Stubs.cs).
+  How to run it: see "Checks to run before every commit" in CLAUDE.md.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <Compile Include="../art-preview/Shim.cs" />
+    <Compile Include="../../Assets/Scripts/Art/*.cs" />
+    <Compile Include="../../Assets/Scripts/Core/PixelArt.cs" />
+    <Compile Include="../../Assets/Scripts/Destruction/DamageShape.cs" />
+    <Compile Include="../../Assets/Scripts/Economy/NatureMap.cs" />
+    <Compile Include="../../Assets/Scripts/Economy/ResourceNodeConfig.cs" />
+    <Compile Include="../../Assets/Scripts/Economy/Inventory.cs" />
+  </ItemGroup>
+</Project>

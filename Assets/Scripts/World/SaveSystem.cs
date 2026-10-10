@@ -44,6 +44,9 @@ namespace KingdomGame.World
         public bool HasSave => SaveFiles.Exists(mode, hosted);
         /// <summary>A game you host (saved in its own file).</summary>
         public bool Hosted { get => hosted; set => hosted = value; }
+        /// <summary>The game being hosted (its players are saved too), or null.</summary>
+        public Networking.NetHost Host { get; set; }
+        OthersSave loadedOthers;
 
         public void Setup(GameContent gameContent, GameMode gameMode, int mapSeed, Kingdom owner, RulerController rulerController,
             Research tech, DayNightCycle clock, SurvivalDirector survival, ZombieDirector zombieDirector, PixelWorld pixelWorld)
@@ -149,7 +152,7 @@ namespace KingdomGame.World
             {
                 mode = mode.ToString(),
                 seed = seed,
-                mapSize = NatureMap.Current != null ? NatureMap.Current.Cells.width : content.world != null ? content.world.mapSize : 0,
+                landsSize = kingdom.Nav != null ? kingdom.Nav.Cells.width : 0,
                 savedAt = System.DateTime.Now.ToString("d MMM HH:mm"),
             };
             if (dayNight != null)
@@ -260,6 +263,9 @@ namespace KingdomGame.World
 
             if (research != null) data.research = research.Save();
             if (kingdom.Armory != null) data.armory = kingdom.Armory.Save();
+            // The players who joined (their kingdoms and where they are). If hosting didn't start this time,
+            // the ones from the save are kept as they were.
+            data.others = Host != null && Host.Core != null ? OthersSave.From(Host.Core) : loadedOthers ?? new OthersSave();
             if (waves != null)
             {
                 data.hasSurvival = true;
@@ -292,6 +298,7 @@ namespace KingdomGame.World
         public int Restore(SaveData data)
         {
             if (data == null) return 0;
+            loadedOthers = data.others;
             int missing;
             try
             {
@@ -313,9 +320,8 @@ namespace KingdomGame.World
         int RestoreAll(SaveData data)
         {
             int missing = 0;
-            int size = NatureMap.Current != null ? NatureMap.Current.Cells.width : 0;
-            if (data.mapSize != 0 && size != 0 && data.mapSize != size)
-                Debug.LogWarning($"This game was saved on a map {data.mapSize} tiles across, but the map is {size}: it won't be quite the same.");
+            if (data.version < 3)
+                Debug.LogWarning("This game was saved before worlds were endless: what you built comes back, but the trees and ground round it are new.");
 
             if (dayNight != null) dayNight.SetTime(data.day, data.hour);
             if (research != null && data.research != null) research.Load(data.research);
@@ -417,7 +423,7 @@ namespace KingdomGame.World
 
             foreach (var bag in data.bags) LootBag.Drop(bag.position, bag.amounts);
 
-            var rulerAt = Reachable(data.ruler.position);
+            var rulerAt = Reachable(data.ruler.position, true);
             ruler.Restore(rulerAt, kingdom.PlaceAt(rulerAt), data.ruler.onWalls, data.ruler.health, data.ruler.backpack);
 
             if (waves != null && data.hasSurvival)
@@ -435,10 +441,12 @@ namespace KingdomGame.World
         }
 
         // Somewhere they can be: where they were, unless that was inside a house or mine that couldn't
-        // be put back (far off the map, in nothing): then by the throne.
-        Vector2 Reachable(Vector2 position)
+        // be put back (far off the map, in nothing): then by the throne. Villagers stay on the kingdom's
+        // lands; the ruler can have been anywhere in the world (`anywhere`).
+        Vector2 Reachable(Vector2 position, bool anywhere = false)
         {
-            if (kingdom.Nav.Cells.Contains(NavGrid.CellAt(position)) || kingdom.PlaceAt(position) != null) return position;
+            var cell = NavGrid.CellAt(position);
+            if (kingdom.Nav.Cells.Contains(cell) || (anywhere && NatureMap.Inside(cell)) || kingdom.PlaceAt(position) != null) return position;
             return kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero;
         }
 

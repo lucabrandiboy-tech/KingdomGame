@@ -108,11 +108,13 @@ namespace KingdomGame.Networking
         public int YourId;
         public int YourKingdom;
         public string ServerName;
-        /// <summary>Everyone makes the same map from the same seed and size.</summary>
+        /// <summary>Everyone makes the same world from the same seed.</summary>
         public int Seed;
-        public int MapSize;
         public int Day;
         public float Hour;
+        /// <summary>Where you were when you last left this server (false the first time: start at your throne).</summary>
+        public bool HasSpawn;
+        public float SpawnX, SpawnY;
         public readonly List<PlayerInfo> Players = new List<PlayerInfo>();
         public readonly List<KingdomInfo> Kingdoms = new List<KingdomInfo>();
 
@@ -123,9 +125,11 @@ namespace KingdomGame.Networking
             w.Put(YourKingdom);
             w.Put(ServerName ?? "", Protocol.MaxServerNameLength);
             w.Put(Seed);
-            w.Put(MapSize);
             w.Put(Day);
             w.Put(Hour);
+            w.Put(HasSpawn);
+            w.Put(SpawnX);
+            w.Put(SpawnY);
             w.Put((ushort)Players.Count);
             foreach (var p in Players) p.Write(w);
             w.Put((ushort)Kingdoms.Count);
@@ -141,9 +145,11 @@ namespace KingdomGame.Networking
                 YourKingdom = r.GetInt(),
                 ServerName = r.GetString(Protocol.MaxServerNameLength),
                 Seed = r.GetInt(),
-                MapSize = r.GetInt(),
                 Day = r.GetInt(),
                 Hour = r.GetFloat(),
+                HasSpawn = r.GetBool(),
+                SpawnX = r.GetFloat(),
+                SpawnY = r.GetFloat(),
             };
             int players = r.GetUShort();
             for (int i = 0; i < players; i++) info.Players.Add(PlayerInfo.Read(r));
@@ -156,7 +162,7 @@ namespace KingdomGame.Networking
     public static class Protocol
     {
         /// <summary>Goes up whenever messages change: a game and a server must have the same one.</summary>
-        public const int Version = 1;
+        public const int Version = 2;
         /// <summary>Starts every connection request, so stray traffic is turned away early.</summary>
         public const string Key = "KingdomGame";
         public const int DefaultPort = 7777;

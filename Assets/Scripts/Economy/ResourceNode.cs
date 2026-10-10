@@ -46,7 +46,7 @@ namespace KingdomGame.Economy
         bool growing;
         float growStart, growEnd;
         NatureMap map;
-        int index = -1;
+        Vector2Int mapCell;
 
         public ResourceNodeConfig Config => config;
         public int Left { get; private set; }
@@ -64,7 +64,7 @@ namespace KingdomGame.Economy
         /// <summary>The villager gathering from it (one at a time), or null.</summary>
         public Component Gatherer { get; set; }
         /// <summary>Planted by a kingdom (not part of the map as it was made).</summary>
-        public bool Planted => map != null && map.IsPlanted(index);
+        public bool Planted => map != null && map.IsPlanted(mapCell);
 
         /// <summary>Sets the node up. <paramref name="rotation"/> turns the pictures (seen from above, any angle looks natural).</summary>
         public void Setup(ResourceNodeConfig nodeConfig, NodeSprites nodeSprites, float rotation)
@@ -89,15 +89,15 @@ namespace KingdomGame.Economy
         }
 
         /// <summary>
-        /// Ties it to its cell of the <paramref name="nature"/> map and takes on the state kept there
+        /// Ties it to <paramref name="cell"/> of the <paramref name="nature"/> map and takes on the state kept there
         /// (how much is left, growing, growing back).
         /// </summary>
-        public void Bind(NatureMap nature, int cellIndex)
+        public void Bind(NatureMap nature, Vector2Int cell)
         {
             map = nature;
-            index = cellIndex;
-            map.Attach(index, this);
-            map.StateOf(index, out int amountLeft, out bool isGrowing, out float start, out float end);
+            mapCell = cell;
+            map.Attach(mapCell, this);
+            map.StateOf(mapCell, out int amountLeft, out bool isGrowing, out float start, out float end);
             if (isGrowing)
             {
                 Grow(Mathf.Max(1f, end - start));
@@ -119,9 +119,8 @@ namespace KingdomGame.Economy
         /// <summary>Unties it from the map (it's about to go; the map has its state).</summary>
         public void Unbind()
         {
-            if (map != null) map.Detach(index, this);
+            if (map != null) map.Detach(mapCell, this);
             map = null;
-            index = -1;
         }
 
         /// <summary>Writes its state into the map (before saving, or before it goes).</summary>
@@ -129,7 +128,7 @@ namespace KingdomGame.Economy
         {
             if (map == null) return;
             bool waiting = !growing && Empty && config.regrowSeconds > 0;
-            map.Record(index, Left, growing, growStart, growing ? growEnd : regrowAt, waiting);
+            map.Record(mapCell, Left, growing, growStart, growing ? growEnd : regrowAt, waiting);
         }
 
         SpriteRenderer Part(string partName, Sprite sprite, int order, float rotation)
@@ -148,7 +147,7 @@ namespace KingdomGame.Economy
         void OnDestroy()
         {
             all.Remove(this);
-            if (map != null) map.Detach(index, this);
+            if (map != null) map.Detach(mapCell, this);
         }
 
         /// <summary>The distance from <paramref name="from"/> to the edge of the solid part.</summary>
@@ -175,7 +174,7 @@ namespace KingdomGame.Economy
         /// <summary>Takes it out of the world for good (a building is going up on this spot).</summary>
         public void Clear()
         {
-            if (map != null) map.Clear(Cell);
+            if (map != null) map.Clear(mapCell);
             else Destroy(gameObject);
         }
 
@@ -265,7 +264,7 @@ namespace KingdomGame.Economy
         {
             if (block != null) block.enabled = value;
             solid = value;
-            if (map != null) map.SetBlocks(index, value);
+            if (map != null) map.SetBlocks(mapCell, value);
         }
 
         void Update()

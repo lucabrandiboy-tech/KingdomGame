@@ -14,7 +14,8 @@ namespace KingdomGame.Networking
         public int MaxPlayers = 16;
         public string Name = "Kingdom server";
         public int Seed = 1;
-        public int MapSize = 1024;
+        /// <summary>Tiles from the middle of the world to its edge (the world is endless up to there).</summary>
+        public int WorldLimit = 32000;
         /// <summary>Tiles between kingdoms.</summary>
         public int KingdomSpacing = 96;
         /// <summary>Players are told about others within this many tiles.</summary>
@@ -27,6 +28,19 @@ namespace KingdomGame.Networking
         public float ClockSeconds = 10f;
         /// <summary>Seconds a player must wait between chat messages.</summary>
         public float ChatSeconds = 0.5f;
+    }
+
+    /// <summary>
+    /// What the server remembers about someone who has played on it (kept while they're away,
+    /// and saved with the world): their kingdom, and where they were when they last left.
+    /// </summary>
+    public sealed class PlayerRecord
+    {
+        public string Key;
+        public string Name;
+        public int KingdomId;
+        public bool HasPosition;
+        public float X, Y;
     }
 
     /// <summary>One player on the server.</summary>
@@ -67,11 +81,11 @@ namespace KingdomGame.Networking
         readonly Dictionary<int, (string Key, string Name)> pending = new Dictionary<int, (string, string)>();
         readonly Dictionary<int, PlayerSession> byPeer = new Dictionary<int, PlayerSession>();
         readonly List<PlayerSession> players = new List<PlayerSession>();
-        readonly Dictionary<string, int> kingdomOfKey = new Dictionary<string, int>();
+        readonly Dictionary<string, PlayerRecord> records = new Dictionary<string, PlayerRecord>();
         readonly List<KingdomInfo> kingdoms = new List<KingdomInfo>();
         readonly KingdomPlanner planner;
         readonly List<(PlayerSession P, float D)> near = new List<(PlayerSession, float)>();
-        int nextId = 1;
+        int nextId = 1, nextKingdomId = 1;
         double now, nextSnapshot, nextClock;
 
         public ServerSettings Settings => settings;
@@ -98,7 +112,7 @@ namespace KingdomGame.Networking
         public ServerCore(ServerSettings serverSettings)
         {
             settings = serverSettings ?? new ServerSettings();
-            planner = new KingdomPlanner(settings.MapSize, settings.KingdomSpacing, settings.Seed);
+            planner = new KingdomPlanner(settings.WorldLimit, settings.KingdomSpacing, settings.Seed);
             net = new NetManager(this)
             {
                 AutoRecycle = false,
@@ -118,12 +132,92 @@ namespace KingdomGame.Networking
 
         public void Stop() => net.Stop(true);
 
-        /// <summary>A kingdom from before (loading the world): its spot is taken and its owner gets it back.</summary>
+        /// <summary>
+        /// A kingdom from before (loading the world): its spot is taken and its owner gets it back.
+        /// An <see cref="KingdomInfo.Id"/> of 0 (or one already used) gets a new one.
+        /// </summary>
         public void AddKingdom(KingdomInfo kingdom, string ownerKey)
         {
+            if (kingdom == null) return;
+            if (kingdom.Id <= 0 || Find(kingdom.Id) != null) kingdom.Id = nextKingdomId;
+            nextKingdomId = Math.Max(nextKingdomId, kingdom.Id + 1);
             kingdoms.Add(kingdom);
             planner.Add(kingdom.X, kingdom.Y);
-            if (!string.IsNullOrEmpty(ownerKey)) kingdomOfKey[ownerKey] = kingdom.Id;
+            if (string.IsNullOrEmpty(ownerKey)) return;
+            var record = Record(ownerKey, kingdom.Owner);
+            record.KingdomId = kingdom.Id;
+        }
+
+        PlayerRecord Record(string key, string name)
+        {
+            if (!records.TryGetValue(key, out var record))
+            {
+                record = new PlayerRecord { Key = key };
+                records[key] = record;
+            }
+            if (!string.IsNullOrEmpty(name)) record.Name = name;
+            return record;
+        }
+
+        /// <summary>
+        /// Puts back what was saved about the players (before anyone joins): their kingdoms, and
+        /// where each of them was. Players whose kingdom isn't among <paramref name="savedKingdoms"/> get a new one when they come.
+        /// </summary>
+        public void Remember(IEnumerable<KingdomInfo> savedKingdoms, IEnumerable<PlayerRecord> savedPlayers)
+        {
+            var owners = new Dictionary<int, PlayerRecord>();
+            if (savedPlayers != null)
+                foreach (var p in savedPlayers)
+                    if (p != null && !string.IsNullOrEmpty(p.Key) && p.KingdomId > 0) owners[p.KingdomId] = p;
+            if (savedKingdoms != null)
+                foreach (var k in savedKingdoms)
+                {
+                    if (k == null) continue;
+                    owners.TryGetValue(k.Id, out var owner);
+                    int savedId = k.Id;
+                    var copy = new KingdomInfo { Id = k.Id, Owner = k.Owner, X = k.X, Y = k.Y };
+                    AddKingdom(copy, owner?.Key);
+                    if (owner == null) continue;
+                    var record = records[owner.Key];
+                    record.Name = string.IsNullOrEmpty(owner.Name) ? record.Name : owner.Name;
+                    record.HasPosition = owner.HasPosition && IsFinite(owner.X) && IsFinite(owner.Y);
+                    record.X = owner.X;
+                    record.Y = owner.Y;
+                    if (copy.Id != savedId) Log?.Invoke($"Kingdom {savedId} was given number {copy.Id} (its number was taken)");
+                }
+        }
+
+        static bool IsFinite(float v) => !float.IsNaN(v) && !float.IsInfinity(v);
+
+        /// <summary>
+        /// What to save about the players who joined (not the host on this computer, whose kingdom and ruler
+        /// the game saves itself): every kingdom of theirs, and each player with where they are now or were last.
+        /// </summary>
+        public (List<KingdomInfo> Kingdoms, List<PlayerRecord> Players) Remembered()
+        {
+            var local = new HashSet<int>();
+            foreach (var p in players)
+                if (p.IsLocal) local.Add(p.KingdomId);
+            foreach (var p in players)
+                if (!p.IsLocal) Note(p);
+            var keptKingdoms = new List<KingdomInfo>();
+            foreach (var k in kingdoms)
+                if (!local.Contains(k.Id)) keptKingdoms.Add(new KingdomInfo { Id = k.Id, Owner = k.Owner, X = k.X, Y = k.Y });
+            var keptPlayers = new List<PlayerRecord>();
+            foreach (var r in records.Values)
+                if (r.KingdomId > 0 && !local.Contains(r.KingdomId))
+                    keptPlayers.Add(new PlayerRecord { Key = r.Key, Name = r.Name, KingdomId = r.KingdomId, HasPosition = r.HasPosition, X = r.X, Y = r.Y });
+            return (keptKingdoms, keptPlayers);
+        }
+
+        // Writes down where a player is (to put them back there next time), unless they're dead or inside somewhere.
+        void Note(PlayerSession p)
+        {
+            if (!p.HasMotion || (p.Motion.Flags & (MotionFlags.Dead | MotionFlags.Inside)) != 0) return;
+            var record = Record(p.Key, p.Name);
+            record.HasPosition = true;
+            record.X = p.Motion.X;
+            record.Y = p.Motion.Y;
         }
 
         /// <summary>
@@ -136,6 +230,7 @@ namespace KingdomGame.Networking
             if (kingdom != null)
             {
                 kingdom.Owner = name;
+                kingdom.Id = 0;   // (a new number: one from a save may have it)
                 AddKingdom(kingdom, key);
             }
             var session = new PlayerSession { Id = nextId++, Key = key, Name = name, KingdomId = kingdom != null ? kingdom.Id : 0, IsLocal = true, LastStateAt = now };
@@ -161,7 +256,7 @@ namespace KingdomGame.Networking
         /// <summary>The key of whoever owns a kingdom (for saving), or null.</summary>
         public string OwnerKey(int kingdomId)
         {
-            foreach (var pair in kingdomOfKey) if (pair.Value == kingdomId) return pair.Key;
+            foreach (var r in records.Values) if (r.KingdomId == kingdomId) return r.Key;
             return null;
         }
 
@@ -244,13 +339,16 @@ namespace KingdomGame.Networking
             pending.Remove(peer.Id);
 
             // Their kingdom: the one they had, or a new spot.
-            if (!kingdomOfKey.TryGetValue(who.Key, out int kingdomId))
+            var record = Record(who.Key, who.Name);
+            int kingdomId = record.KingdomId;
+            var theirs = kingdomId > 0 ? Find(kingdomId) : null;
+            if (theirs == null)
             {
                 var (x, y) = planner.Next();
-                var kingdom = new KingdomInfo { Id = kingdoms.Count + 1, Owner = who.Name, X = x, Y = y };
+                var kingdom = new KingdomInfo { Id = nextKingdomId++, Owner = who.Name, X = x, Y = y };
                 kingdoms.Add(kingdom);
-                kingdomOfKey[who.Key] = kingdom.Id;
-                kingdomId = kingdom.Id;
+                record.KingdomId = kingdomId = kingdom.Id;
+                record.HasPosition = false;   // (they start at their new throne)
                 Log?.Invoke($"{who.Name}'s kingdom goes at {x}, {y}");
                 KingdomPlaced?.Invoke(kingdom);
                 writer.Reset();
@@ -260,7 +358,7 @@ namespace KingdomGame.Networking
             }
             else
             {
-                Find(kingdomId).Owner = who.Name;   // they may have changed their name
+                theirs.Owner = who.Name;   // they may have changed their name
             }
 
             var session = new PlayerSession { Id = nextId++, Key = who.Key, Name = who.Name, KingdomId = kingdomId, Peer = peer, LastStateAt = now };
@@ -275,8 +373,8 @@ namespace KingdomGame.Networking
             var (day, hour) = Clock != null ? Clock() : (1, 8f);
             var welcome = new WelcomeInfo
             {
-                YourId = session.Id, YourKingdom = kingdomId, ServerName = settings.Name, Seed = settings.Seed, MapSize = settings.MapSize,
-                Day = day, Hour = hour,
+                YourId = session.Id, YourKingdom = kingdomId, ServerName = settings.Name, Seed = settings.Seed,
+                Day = day, Hour = hour, HasSpawn = record.HasPosition, SpawnX = record.X, SpawnY = record.Y,
             };
             foreach (var p in players) welcome.Players.Add(new PlayerInfo { Id = p.Id, Name = p.Name, KingdomId = p.KingdomId });
             welcome.Kingdoms.AddRange(kingdoms);
@@ -300,6 +398,7 @@ namespace KingdomGame.Networking
             byPeer.Remove(peer.Id);
             players.Remove(session);
             session.Peer = null;
+            Note(session);
             writer.Reset();
             writer.Put((byte)Msg.PlayerLeft);
             writer.Put(session.Id);

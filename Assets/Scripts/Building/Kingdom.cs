@@ -94,10 +94,10 @@ namespace KingdomGame.Building
         public IReadOnlyList<House> Houses => houses;
         /// <summary>Every place you go into: houses' insides and mines.</summary>
         public IReadOnlyList<Place> Places => places;
-        /// <summary>Where the insides of houses are: far off the map, one square each.</summary>
-        public static readonly Vector2Int InsideOrigin = new Vector2Int(4000, 4000);
-        /// <summary>Where the mines are (further off), one square of <see cref="MineSlot"/> tiles each.</summary>
-        public static readonly Vector2Int MineOrigin = new Vector2Int(4000, 12000);
+        /// <summary>Where the insides of houses are: past the world's edge (south), one square each.</summary>
+        public static readonly Vector2Int InsideOrigin = new Vector2Int(0, -36000);
+        /// <summary>Where the mines are (further south), one square of <see cref="MineSlot"/> tiles each.</summary>
+        public static readonly Vector2Int MineOrigin = new Vector2Int(0, -40000);
         public const int MineSlot = 100;
         public IReadOnlyList<MineShaft> Mines => mines;
         public IReadOnlyList<BuildingConfig> BuildMenu => menu;
@@ -404,7 +404,7 @@ namespace KingdomGame.Building
         /// <summary>The house inside or mine that this cell is in, or null on the map.</summary>
         public Place PlaceAt(Vector2Int cell)
         {
-            if (cell.x < InsideOrigin.x || cell.y < InsideOrigin.y) return null;
+            if (NatureMap.Inside(cell)) return null;   // in the world, not in a house or mine
             foreach (var s in places)
                 if (s != null && s.Contains(cell)) return s;
             return null;
@@ -630,7 +630,7 @@ namespace KingdomGame.Building
             {
                 if (c.x < map.xMin + 1 || c.y < map.yMin + 1 || c.x >= map.xMax - 1 || c.y >= map.yMax - 1)
                 {
-                    reason = "Too close to the edge of the map";
+                    reason = "Too far from your throne: your kingdom's lands end here";
                     return false;
                 }
                 if (layer.TryGetValue(c, out var thing) && thing != null)
@@ -736,7 +736,7 @@ namespace KingdomGame.Building
             {
                 if (c.x < map.xMin + 1 || c.y < map.yMin + 1 || c.x >= map.xMax - 1 || c.y >= map.yMax - 1)
                 {
-                    reason = "Too close to the edge of the map";
+                    reason = "Too far from your throne: your kingdom's lands end here";
                     return false;
                 }
                 if (roofs.TryGetValue(c, out var thing) && thing != null)
@@ -1267,8 +1267,8 @@ namespace KingdomGame.Building
         {
             if (NearestWithSpace(Throne != null ? Throne.Center : Vector2.zero) == null) return "storage is full";
             foreach (var n in ResourceNode.All)
-                if (n != null && !n.Empty && n.Config != null && n.Config.resource == type) return null;
-            if (nature != null && Throne != null && nature.FindNearest(Throne.Center, type, SearchRadius, null, out _)) return null;
+                if (n != null && !n.Empty && n.Config != null && n.Config.resource == type && Nav.Cells.Contains(n.Cell)) return null;
+            if (nature != null && Throne != null && nature.FindNearest(Throne.Center, type, SearchRadius, c => !Nav.Cells.Contains(c), out _)) return null;
             return type == ResourceType.Wood ? "no trees left: plant some (Farming tab)" : type == ResourceType.Food ? "no berries left: plant bushes (Farming tab)" : "no rocks left";
         }
 
@@ -1373,6 +1373,7 @@ namespace KingdomGame.Building
             {
                 if (n == null || n.Empty || n.Config == null || n.Config.resource != type || n.Gatherer != null) continue;
                 if (unreachableNodes.TryGetValue(n.Cell, out float until) && until > now) continue;
+                if (!Nav.Cells.Contains(n.Cell)) continue;   // past the kingdom's lands (near the ruler out exploring)
                 float d = Travel(from, n.transform.position) - (n.Config.replant ? 6f : 0f);
                 if (d < bestDistance) { best = n; bestDistance = d; }
             }
@@ -1380,6 +1381,7 @@ namespace KingdomGame.Building
             if (nature == null || Streamer == null) return best;
             bool Skip(Vector2Int c)
             {
+                if (!Nav.Cells.Contains(c)) return true;
                 if (unreachableNodes.TryGetValue(c, out float t) && t > now) return true;
                 var live = nature.Live(c);
                 return live != null && live.Gatherer != null;

@@ -8,93 +8,87 @@ namespace KingdomGame.World
     /// <summary>What <see cref="WorldGenerator.Generate"/> made.</summary>
     public sealed class WorldParts
     {
-        /// <summary>Every tree, rock and bush (as data).</summary>
+        /// <summary>Every tree, rock and bush (worked out from the seed as needed).</summary>
         public NatureMap Nature;
         /// <summary>Makes the ones near players and kingdoms into real objects.</summary>
         public NatureStreamer Streamer;
         /// <summary>Fades tree leaves near the ruler.</summary>
         public CanopyFader Canopies;
+        /// <summary>The ground round the camera (null on a server with no screen).</summary>
+        public GroundStreamer Ground;
     }
 
     /// <summary>
-    /// Builds the map: the ground (dark grass with big patches of dry grass and
-    /// mud), a soft tint over it (darker under forests), invisible walls at the
-    /// edges, and trees, rocks and berry bushes placed with noise so they form
-    /// forests and clearings. The pictures come from <see cref="ArtSprites"/>.
-    /// The trees, rocks and bushes go into a <see cref="NatureMap"/>; the
-    /// <see cref="NatureStreamer"/> makes the ones near people into real objects.
-    /// The same seed and settings always make the same map (a server sends its
-    /// seed to the players, who make the map themselves).
+    /// Makes an endless world from a seed: dark grass with big patches of dry grass and mud,
+    /// a soft tint over it (darker under forests), and trees, rocks and berry bushes placed
+    /// with noise so they form forests and clearings. Nothing is made up front: what's at any
+    /// spot is worked out from the seed and the spot when it's needed (<see cref="NatureMap"/>
+    /// for trees, <see cref="GroundStreamer"/> for the ground), so the same seed always makes
+    /// the same world on every computer (a host sends its seed to the players, who make the
+    /// world themselves). The world's edge is <see cref="NatureMap.Limit"/> tiles out.
     /// </summary>
     public static class WorldGenerator
     {
         const int Variants = NatureArt.Variants;
-        /// <summary>Most detail of the ground patch masks, in mask pixels per tile (fine enough for ragged edges).</summary>
-        const int MaskDetail = 32;
-        /// <summary>Biggest mask texture, in pixels: on big maps the masks get fewer pixels per tile to fit (video memory).</summary>
-        const int MaxMask = 4096;
-        /// <summary>Detail of the soft ground tint, in pixels per tile.</summary>
-        const int TintDetail = 4;
-        /// <summary>Biggest tint texture, in pixels (it's soft: one pixel per tile is enough on big maps).</summary>
-        const int MaxTint = 1024;
 
         /// <summary>
-        /// Builds the map, <paramref name="mapSize"/> tiles across (0: World Config's Map Size).
-        /// <paramref name="drawGround"/> false skips the ground pictures (a server with no screen doesn't need them).
+        /// Makes the world for <paramref name="seed"/>. <paramref name="drawGround"/> false skips the
+        /// ground pictures (a server with no screen doesn't need them).
         /// </summary>
-        public static WorldParts Generate(GameContent content, Transform parent, int seed, bool drawGround = true, int mapSize = 0)
+        public static WorldParts Generate(GameContent content, Transform parent, int seed, bool drawGround = true)
         {
             var config = content.world;
-            int size = mapSize > 0 ? mapSize : config.mapSize;
-            int half = size / 2;
             uint s = (uint)seed;
 
-            // "Forest-ness" of every tile. The cut-off is chosen so that exactly
-            // Forest Cover of the map is forest, whatever the noise looks like.
-            var forest = new float[size * size];
-            for (int y = 0; y < size; y++)
-                for (int x = 0; x < size; x++)
-                    forest[y * size + x] = Noise.Fractal(x / 14f, y / 14f, s + 1u, 3);
-            var sorted = (float[])forest.Clone();
-            System.Array.Sort(sorted);
-            float treeLine = Percentile(sorted, 1f - config.forestCover);
-            float bushLine = Percentile(sorted, 1f - config.forestCover - 0.1f);
+            // How much forest there is anywhere (smooth noise), and the levels where woods and bushes
+            // start: chosen from a big sample round the middle so that about Forest Cover of the world is forest.
+            System.Func<float, float, float> forest = (x, y) => Noise.Fractal(x / 14f, y / 14f, s + 1u, 3);
+            var sample = new float[160 * 160];
+            for (int y = 0; y < 160; y++)
+                for (int x = 0; x < 160; x++)
+                    sample[y * 160 + x] = forest(x * 6.3f - 504f, y * 6.3f - 504f);
+            System.Array.Sort(sample);
+            float treeLine = Percentile(sample, 1f - config.forestCover);
+            float bushLine = Percentile(sample, 1f - config.forestCover - 0.1f);
 
-            if (drawGround)
+            int clear2 = config.clearRadius * config.clearRadius;
+            bool outpost = config.testOutpost;
+            var tree = content.tree;
+            var bush = content.bush;
+            var rock = content.rock;
+            float treeDensity = config.treeDensity, bushChance = config.bushChance, rockChance = config.rockChance;
+            ResourceNodeConfig At(int x, int y, out int variant)
             {
-                MakeGround(parent, size, s);
-                MakeTint(parent, size, forest, treeLine, bushLine, s);
+                variant = 0;
+                if (x * x + y * y < clear2) return null;
+                if (outpost && x >= 3 && x <= 15 && y >= -6 && y <= 6) return null;   // keep the outpost clear
+                float here = forest(x, y);
+                float roll = Noise.Hash01(s + 2u, x, y);
+                ResourceNodeConfig kind = null;
+                if (here > treeLine) { if (roll < treeDensity) kind = tree; }
+                else if (here > bushLine) { if (roll < bushChance) kind = bush; }
+                else if (roll < rockChance) kind = rock;
+                if (kind != null) variant = (int)(DamageShape.Hash(s + 5u, x, y) % Variants);
+                return kind;
             }
-            MakeEdges(parent, half);
 
             var nature = new GameObject("Nature").transform;
             nature.SetParent(parent, false);
             var fader = nature.gameObject.AddComponent<CanopyFader>();
-            var map = new NatureMap(new RectInt(-half, -half, size, size), s);
+            var map = new NatureMap(s, At);
             NatureMap.Current = map;
-
-            for (int y = -half + 1; y < half - 1; y++)
-            {
-                for (int x = -half + 1; x < half - 1; x++)
-                {
-                    if (x * x + y * y < config.clearRadius * config.clearRadius) continue;
-                    if (config.testOutpost && x >= 3 && x <= 15 && y >= -6 && y <= 6) continue; // keep the outpost clear
-
-                    float here = forest[(y + half) * size + (x + half)];
-                    float roll = Noise.Hash01(s + 2u, x, y);
-                    ResourceNodeConfig kind = null;
-
-                    if (here > treeLine) { if (roll < config.treeDensity) kind = content.tree; }
-                    else if (here > bushLine) { if (roll < config.bushChance) kind = content.bush; }
-                    else if (roll < config.rockChance) kind = content.rock;
-                    if (kind == null) continue;
-
-                    map.Generate(new Vector2Int(x, y), kind, (int)(DamageShape.Hash(s + 5u, x, y) % Variants));
-                }
-            }
             var streamer = nature.gameObject.AddComponent<NatureStreamer>();
             streamer.Setup(map, NatureSprites(), fader);
-            return new WorldParts { Nature = map, Streamer = streamer, Canopies = fader };
+
+            GroundStreamer ground = null;
+            if (drawGround)
+            {
+                ground = new GameObject("Ground").AddComponent<GroundStreamer>();
+                ground.transform.SetParent(parent, false);
+                ground.Setup(Camera.main, s, forest, treeLine, bushLine);
+            }
+            MakeEdges(parent, NatureMap.Limit);
+            return new WorldParts { Nature = map, Streamer = streamer, Canopies = fader, Ground = ground };
         }
 
         static float Percentile(float[] sorted, float fraction) =>
@@ -126,108 +120,7 @@ namespace KingdomGame.World
             return looks;
         }
 
-        // Dark grass everywhere, with dry grass and mud in big patches: each patch
-        // layer only shows inside its sprite mask, made from the patch noise.
-        static void MakeGround(Transform parent, int mapSize, uint seed)
-        {
-            var root = new GameObject("Ground").transform;
-            root.SetParent(parent, false);
-            root.position = new Vector3(-mapSize / 2, -mapSize / 2, 0);
-            Layer(root, "Grass", ArtKeys.GroundGrass, mapSize, SortOrder.Ground, false);
-            Layer(root, "Dry grass", ArtKeys.GroundDry, mapSize, SortOrder.Ground + 2, true);
-            Layer(root, "Mud", ArtKeys.GroundMud, mapSize, SortOrder.Ground + 4, true);
-
-            int detail = Mathf.Clamp(MaxMask / mapSize, 4, MaskDetail);
-            int n = mapSize * detail;
-            var dry = new byte[n * n];
-            var mud = new byte[n * n];
-            GroundArt.PatchMasks(mapSize, detail, seed, dry, mud);
-            Mask(root, "Dry grass mask", dry, n, detail, SortOrder.Ground + 1, SortOrder.Ground + 2);
-            Mask(root, "Mud mask", mud, n, detail, SortOrder.Ground + 3, SortOrder.Ground + 4);
-        }
-
-        static void Layer(Transform root, string layerName, string key, int mapSize, int order, bool masked)
-        {
-            var go = new GameObject(layerName);
-            go.transform.SetParent(root, false);
-            var r = go.AddComponent<SpriteRenderer>();
-            r.sprite = ArtSprites.Get(key);
-            r.drawMode = SpriteDrawMode.Tiled;
-            r.tileMode = SpriteTileMode.Continuous;
-            r.size = new Vector2(mapSize, mapSize);
-            r.sortingOrder = order;
-            if (masked) r.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
-            // Tiled sprites are laid out from their pivot; the ground's pivot is its bottom-left corner.
-            go.transform.localPosition = Vector3.zero;
-        }
-
-        // A sprite mask over the whole map: it only affects the layer between back and front order.
-        // One byte per mask pixel (Alpha8), with mipmaps so the ragged edges don't shimmer far zoomed out.
-        static void Mask(Transform root, string maskName, byte[] alpha, int size, int detail, int back, int front)
-        {
-            var texture = new Texture2D(size, size, TextureFormat.Alpha8, true)
-            {
-                name = maskName,
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp,
-            };
-            texture.SetPixelData(alpha, 0);
-            texture.Apply(true, true);
-            var sprite = Sprite.Create(texture, new Rect(0, 0, size, size), Vector2.zero, detail, 0, SpriteMeshType.FullRect);
-            var go = new GameObject(maskName);
-            go.transform.SetParent(root, false);
-            var mask = go.AddComponent<SpriteMask>();
-            mask.sprite = sprite;
-            mask.alphaCutoff = 0.5f;
-            mask.isCustomRangeActive = true;
-            mask.backSortingLayerID = 0;
-            mask.frontSortingLayerID = 0;
-            mask.backSortingOrder = back;
-            mask.frontSortingOrder = front;
-        }
-
-        // A few pixels per tile, smoothly stretched over the whole map: darker and
-        // greener under forests, drier in the open, with soft blotches (GroundArt.Tint).
-        // Big maps get fewer pixels per tile (at most MaxTint across), so it doesn't take long to make.
-        static void MakeTint(Transform parent, int size, float[] forest, float treeLine, float bushLine, uint seed)
-        {
-            int tintDetail = Mathf.Clamp(MaxTint / size, 1, TintDetail);
-            int n = size * tintDetail;
-            var pixels = new Color32[n * n];
-            for (int y = 0; y < n; y++)
-                for (int x = 0; x < n; x++)
-                {
-                    float tx = (x + 0.5f) / tintDetail, ty = (y + 0.5f) / tintDetail;
-                    float wood = PixelImage.Smooth(bushLine, treeLine + 0.04f, Forest(forest, size, tx, ty));
-                    float edge = Mathf.Min(Mathf.Min(tx, size - tx), Mathf.Min(ty, size - ty));
-                    float rim = 1f - PixelImage.Smooth(0f, 6f, edge);
-                    GroundArt.Patches(tx - size / 2, ty - size / 2, seed, out float dry, out float mud);
-                    pixels[y * n + x] = GroundArt.Tint(tx, ty, seed, wood, rim, dry, mud);
-                }
-            var texture = PixelTextures.NewTexture(n, n, "Ground tint", false);
-            texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-            var sprite = Sprite.Create(texture, new Rect(0, 0, n, n), Vector2.zero, tintDetail, 0, SpriteMeshType.FullRect);
-            var go = new GameObject("Ground tint");
-            go.transform.SetParent(parent, false);
-            go.transform.position = new Vector3(-size / 2, -size / 2, 0);
-            var r = go.AddComponent<SpriteRenderer>();
-            r.sprite = sprite;
-            r.sortingOrder = SortOrder.GroundTint;
-        }
-
-        // The forest-ness between tile centers, blended smoothly.
-        static float Forest(float[] forest, int size, float x, float y)
-        {
-            float gx = Mathf.Clamp(x - 0.5f, 0f, size - 1.001f), gy = Mathf.Clamp(y - 0.5f, 0f, size - 1.001f);
-            int x0 = (int)gx, y0 = (int)gy;
-            float fx = gx - x0, fy = gy - y0;
-            int x1 = Mathf.Min(x0 + 1, size - 1), y1 = Mathf.Min(y0 + 1, size - 1);
-            return Mathf.Lerp(Mathf.Lerp(forest[y0 * size + x0], forest[y0 * size + x1], fx),
-                              Mathf.Lerp(forest[y1 * size + x0], forest[y1 * size + x1], fx), fy);
-        }
-
-        // Invisible walls around the map so nobody walks off the edge.
+        // Invisible walls at the world's edge.
         static void MakeEdges(Transform parent, int half)
         {
             var go = new GameObject("Map edges");

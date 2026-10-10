@@ -295,6 +295,76 @@ namespace KingdomGame.Art
             }
         }
 
+        /// <summary>
+        /// Like <see cref="PatchMasks"/>, for one square of an endless world: <paramref name="tiles"/> across,
+        /// its bottom-left corner at tile (<paramref name="originX"/>, <paramref name="originY"/>). Squares next to
+        /// each other join up exactly (everything is worked out from world positions). Plain maths: safe to run
+        /// on another thread.
+        /// </summary>
+        public static void PatchMasksAt(int originX, int originY, int tiles, int detail, uint seed, byte[] dry, byte[] mud)
+        {
+            const int coarse = 2;   // patch samples per tile (the patches are big and soft; the fine noise gives the ragged edges)
+            int cn = tiles * coarse + 2;
+            var cd = new float[cn * cn];
+            var cm = new float[cn * cn];
+            for (int y = 0; y < cn; y++)
+                for (int x = 0; x < cn; x++)
+                {
+                    Patches(originX + x / (float)coarse, originY + y / (float)coarse, seed, out float d, out float m);
+                    cd[y * cn + x] = d;
+                    cm[y * cn + x] = m;
+                }
+            var fineA = FineNoise(8, detail, seed + 81u);
+            var fineB = FineNoise(5, detail, seed + 82u);
+            int na = 8 * detail, nb = 5 * detail;
+            int n = tiles * detail;
+            int px0 = originX * detail, py0 = originY * detail;   // this square's first pixel in the whole world
+            for (int y = 0; y < n; y++)
+            {
+                float gy = (y + 0.5f) * coarse / detail;
+                int y0 = (int)gy;
+                float fy = gy - y0;
+                int wy = py0 + y;
+                int ra = Mod(wy, na) * na, rb = Mod(wy, nb) * nb, rb2 = Mod(wy + nb / 2, nb) * nb;
+                for (int x = 0; x < n; x++)
+                {
+                    float gx = (x + 0.5f) * coarse / detail;
+                    int x0 = (int)gx;
+                    float fx = gx - x0;
+                    int i = y0 * cn + x0;
+                    int wx = px0 + x;
+                    float d = Mathf.Lerp(Mathf.Lerp(cd[i], cd[i + 1], fx), Mathf.Lerp(cd[i + cn], cd[i + cn + 1], fx), fy);
+                    float m = Mathf.Lerp(Mathf.Lerp(cm[i], cm[i + 1], fx), Mathf.Lerp(cm[i + cn], cm[i + cn + 1], fx), fy);
+                    float noiseDry = fineA[ra + Mod(wx, na)] + fineB[rb + Mod(wx, nb)];
+                    float noiseMud = fineA[ra + Mod(wx + na / 2, na)] + fineB[rb2 + Mod(wx, nb)];
+                    dry[y * n + x] = MaskAlpha(d + noiseDry * 0.8f);
+                    mud[y * n + x] = MaskAlpha(m + noiseMud * 0.8f);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The soft tint (<see cref="Tint"/>) over one square of an endless world, <paramref name="detail"/> pixels per
+        /// tile. <paramref name="forest"/> says how much forest there is at a world position (0..1, the same noise
+        /// the trees come from) and <paramref name="treeLine"/>/<paramref name="bushLine"/> where the woods start.
+        /// Safe to run on another thread.
+        /// </summary>
+        public static void TintAt(int originX, int originY, int tiles, int detail, uint seed, System.Func<float, float, float> forest,
+            float treeLine, float bushLine, Color32[] pixels)
+        {
+            int n = tiles * detail;
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float tx = originX + (x + 0.5f) / detail, ty = originY + (y + 0.5f) / detail;
+                    float wood = PixelImage.Smooth(bushLine, treeLine + 0.04f, forest(tx - 0.5f, ty - 0.5f));
+                    Patches(tx, ty, seed, out float dryPatch, out float mudPatch);
+                    pixels[y * n + x] = Tint(tx, ty, seed, wood, 0f, dryPatch, mudPatch);
+                }
+        }
+
+        static int Mod(int v, int m) => ((v % m) + m) % m;
+
         // A sharp but smooth step around 0.5, so the GPU's blending between mask pixels
         // still gives smooth edges at the cut-off.
         static byte MaskAlpha(float v) => (byte)Mathf.RoundToInt(Mathf.Clamp01((v - 0.5f) * 4f + 0.5f) * 255f);

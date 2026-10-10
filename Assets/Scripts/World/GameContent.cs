@@ -61,7 +61,7 @@ namespace KingdomGame.World
         public Combat.ArmoryConfig armory;
 
         [Header("Online")]
-        [Tooltip("Hosting and joining games: port, players, map size for hosted worlds.")]
+        [Tooltip("Hosting and joining games: port, players, how far apart kingdoms are.")]
         public Networking.NetworkConfig network;
 
         [Tooltip("Bumped by Build Game Scenes when it updates older settings to new defaults.")]

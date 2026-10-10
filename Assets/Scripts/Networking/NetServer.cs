@@ -36,7 +36,7 @@ namespace KingdomGame.Networking
                 for (int dx = -10; dx <= 10; dx += 2)
                 {
                     var cell = new Vector2Int(x + dx, y + dy);
-                    if (!map.Inside(cell)) return false;
+                    if (!NatureMap.Inside(cell)) return false;
                     all++;
                     if (map.Blocks(cell)) blocked++;
                 }
@@ -46,34 +46,77 @@ namespace KingdomGame.Networking
 
     /// <summary>
     /// The dedicated server in the game: runs <see cref="ServerCore"/> every frame, clears
-    /// the ground for each new kingdom, keeps the clock, and (when it has a window) shows
-    /// who's on and how others can join. Started by KingdomBootstrap when the game runs
-    /// with -server or from the main menu's "Host a server".
+    /// the ground for each new kingdom, keeps the clock, saves the world (its seed, the time,
+    /// every player's kingdom and where they were) every minute and when it stops, and (when
+    /// it has a window) shows who's on and how others can join. Started by KingdomBootstrap
+    /// when the game runs with -server or from the main menu's "Host a server".
     /// </summary>
     public sealed class NetServer : MonoBehaviour
     {
+        const float SaveEvery = 60f;
+
         ServerCore core;
         DayNightCycle dayNight;
         NatureMap nature;
         readonly List<string> log = new List<string>();
         string[] addresses;
+        string worldName;
         GUIStyle box, title, button;
-        bool failed;
+        bool failed, stopped;
+        float saveAt;
 
         public ServerCore Core => core;
 
-        public void Setup(ServerSettings settings, NatureMap natureMap, DayNightCycle clock)
+        /// <summary><paramref name="memory"/>: the world from last time (null for a new one); <paramref name="world"/>: its file's name (null: the usual one).</summary>
+        public void Setup(ServerSettings settings, NatureMap natureMap, DayNightCycle clock, ServerWorldSave memory, string world)
         {
             nature = natureMap;
             dayNight = clock;
+            worldName = world;
             core = new ServerCore(settings);
             core.Log += Write;
             core.Clock = () => dayNight != null ? (dayNight.Day, dayNight.Hour) : (1, 8f);
             core.SpotIsGood = (x, y) => KingdomGround.IsGood(nature, x, y);
             core.KingdomPlaced += k => KingdomGround.Clear(nature, k);
+            // Everyone's kingdoms from before: their spots are taken and their ground cleared again.
+            if (memory != null && memory.others != null)
+            {
+                memory.others.Into(core);
+                foreach (var k in core.Kingdoms) KingdomGround.Clear(nature, k);
+                Write($"Loaded the world from {ServerWorldFile.PathFor(worldName)}: {core.Kingdoms.Count} kingdoms");
+            }
             failed = !core.Start();
             addresses = LocalAddresses();
-            Write($"Server \"{settings.Name}\": map {settings.MapSize} x {settings.MapSize}, seed {settings.Seed}, up to {settings.MaxPlayers} players");
+            saveAt = Time.unscaledTime + SaveEvery;
+            Write($"Server \"{settings.Name}\": endless world, seed {settings.Seed}, up to {settings.MaxPlayers} players");
+        }
+
+        /// <summary>Writes the world file now.</summary>
+        public void Save()
+        {
+            if (core == null) return;
+            try
+            {
+                ServerWorldFile.Write(new ServerWorldSave
+                {
+                    seed = core.Settings.Seed,
+                    day = dayNight != null ? dayNight.Day : 1,
+                    hour = dayNight != null ? dayNight.Hour : 8f,
+                    others = OthersSave.From(core),
+                }, worldName);
+            }
+            catch (System.Exception e)
+            {
+                Write($"Couldn't save the world: {e.Message}");
+            }
+        }
+
+        void Stop()
+        {
+            if (core == null || stopped) return;
+            stopped = true;
+            Save();
+            core.Stop();
         }
 
         void Write(string line)
@@ -83,11 +126,20 @@ namespace KingdomGame.Networking
             if (log.Count > 14) log.RemoveAt(0);
         }
 
-        void Update() => core?.Poll(Time.realtimeSinceStartupAsDouble);
+        void Update()
+        {
+            if (core == null || stopped) return;
+            core.Poll(Time.realtimeSinceStartupAsDouble);
+            if (Time.unscaledTime >= saveAt)
+            {
+                saveAt = Time.unscaledTime + SaveEvery;
+                Save();
+            }
+        }
 
-        void OnDestroy() => core?.Stop();
+        void OnDestroy() => Stop();
 
-        void OnApplicationQuit() => core?.Stop();
+        void OnApplicationQuit() => Stop();
 
         // This computer's addresses on the home network (for players on the same network to join).
         public static string[] LocalAddresses()
@@ -126,7 +178,7 @@ namespace KingdomGame.Networking
 
             var text = new System.Text.StringBuilder();
             if (failed) text.Append($"<color=#ff7060><b>Couldn't open UDP port {s.Port}.</b> Is another server already running? Close it, or start this one with another port (-port 7778).</color>\n\n");
-            else text.Append($"Listening on UDP port <b>{core.Port}</b>. Map {s.MapSize} x {s.MapSize}, seed {s.Seed}.\n");
+            else text.Append($"Listening on UDP port <b>{core.Port}</b>. Endless world, seed {s.Seed}. Saved every minute to {ServerWorldFile.PathFor(worldName)}\n");
             text.Append("Join from this computer: <b>127.0.0.1</b>\n");
             if (addresses != null && addresses.Length > 0)
                 text.Append($"Join from your home network: <b>{string.Join("</b> or <b>", addresses)}</b>\n");
@@ -139,7 +191,7 @@ namespace KingdomGame.Networking
             GUI.Box(new Rect(x, y, w, h), text.ToString(), box);
             if (GUI.Button(new Rect(x, Screen.height - font * 3, font * 14, font * 2.2f), "Stop the server", button))
             {
-                core.Stop();
+                Stop();
                 if (Application.CanStreamedLevelBeLoaded(GameSession.MenuScene))
                 {
                     GameSession.Role = NetRole.Offline;

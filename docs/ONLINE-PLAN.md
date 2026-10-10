@@ -1,6 +1,7 @@
 # Playing online: the plan
 
-What you asked for: host a **dedicated server** on your own PC, a **1024 x 1024** map,
+What you asked for: host a **dedicated server** on your own PC, a big map (since then:
+an **endless, randomly generated world**),
 friends join over the internet, **everyone has their own kingdom**, and **zombie
 hordes come every night** in a world that keeps running.
 
@@ -30,9 +31,10 @@ you can test.
 
 ## Stages
 
-1. **Big map.** Trees, rocks and bushes become data. Only the ones near players and
-   kingdoms are real objects (about 140,000 on a 1024 map would be far too many).
-   The ground is drawn more cheaply on big maps. Also works offline.
+1. **Big map** (done), then **endless worlds** (done, `docs/ENDLESS-WORLD-TEST.md`).
+   Trees, rocks and bushes are data, worked out from the seed wherever someone goes;
+   only the ones near players and kingdoms are real objects, and only changes are saved.
+   The ground is made in squares round the camera. Also works offline.
 2. **Connecting** (done, `docs/ONLINE-TEST.md`). You **host** your own game from the
    main menu and play it while friends **join** with your address. Everyone sees each
    other walk around, chats, and each new player gets a kingdom spot. (A dedicated
@@ -43,9 +45,10 @@ you can test.
 4. **Nights.** Hordes every night at every kingdom, getting harder over the days.
    Zombies, towers, traps and wall damage are synced. Falling means respawning at
    your throne.
-5. **The server keeps the world.** It saves to disk every few minutes and on
-   shutdown, and loads again on start. Then we measure with test players (bots)
-   and tune how much each player is sent.
+5. **The server keeps the world.** Started: a hosted game's save and a dedicated
+   server's world file keep every player's kingdom spot and where they were. Once
+   stage 3 shares kingdoms, their buildings and villagers are saved the same way. Then
+   we measure with test players (bots) and tune how much each player is sent.
 
 Steam, server browsers, PvP raiding, clans and anti-cheat are later phases (see
 `ROADMAP.md`).

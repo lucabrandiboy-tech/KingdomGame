@@ -51,8 +51,9 @@ namespace KingdomGame.Networking
 
         public ServerCore Core => core;
 
+        /// <summary><paramref name="others"/>: the players who joined before, from the saved game (null: nobody yet).</summary>
         public void Setup(ServerSettings settings, Kingdom kingdom, RulerController rulerController, RemotePlayers remotePlayers, ChatBox chatBox,
-            NatureMap nature, DayNightCycle dayNight)
+            NatureMap nature, DayNightCycle dayNight, OthersSave others)
         {
             ruler = rulerController;
             remotes = remotePlayers;
@@ -78,11 +79,22 @@ namespace KingdomGame.Networking
             };
             core.PositionTaken += (p, time) => remotes.Heard(p.Id, time, p.Motion);
             core.Said += (p, text) => chat.Add(p.Name, text);
+            // The players who were here before (a saved game): their kingdoms are where they were, and each
+            // of them gets theirs back (and comes back where they left off) when they join again.
+            if (others != null)
+            {
+                others.Into(core);
+                foreach (var k in core.Kingdoms)
+                {
+                    KingdomGround.Clear(nature, k);
+                    remotes.AddKingdom(k);
+                }
+            }
             failed = !core.Start();
 
-            // You're the first player, with the kingdom that's already here.
+            // You're a player too, with the kingdom that's already here.
             var throne = kingdom != null && kingdom.Throne != null ? kingdom.Throne.Cells.position : Vector2Int.zero;
-            var mine = new KingdomInfo { Id = 1, X = throne.x, Y = throne.y };
+            var mine = new KingdomInfo { X = throne.x, Y = throne.y };
             KingdomGround.Clear(nature, mine);   // as the others' games clear it
             me = core.AddLocalPlayer(GameSession.PlayerKey, GameSession.PlayerName, mine);
             chat.Send = text => core.ChatLocal(me, text);
@@ -125,7 +137,7 @@ namespace KingdomGame.Networking
 
     /// <summary>
     /// Playing in someone else's game: connects (showing "Connecting..." until the host
-    /// answers), hands the world's seed and size to the game to make the same map, then
+    /// answers), hands the world's seed to the game to make the same world, then
     /// sends where your ruler is and shows the others. If the connection goes, it says why.
     /// </summary>
     public sealed class NetClient : MonoBehaviour

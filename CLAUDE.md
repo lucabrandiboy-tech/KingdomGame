@@ -31,6 +31,10 @@ play it) and `NetClient` (you join one); `NetServer` is a dedicated server (`-se
 The role comes from `GameSession.Role`; `KingdomBootstrap` starts each.
 So far joined players see the map, everyone walking (`RemotePlayers`) and chat
 (`UI/ChatBox`); the host's buildings, villagers and zombies aren't shared yet.
+`ServerCore` remembers each player (`PlayerRecord`: key, kingdom, last position);
+hosted saves keep them (`SaveData.others`) and a dedicated server keeps its world in
+`saves/server-world.json` (`ServerWorldFile`). Bump `Protocol.Version` when messages change.
+The tool projects' `.csproj` files are committed (the root `.gitignore` ignores Unity's).
 
 ## Conventions
 
@@ -58,12 +62,18 @@ So far joined players see the map, everyone walking (`RemotePlayers`) and chat
   castle_night/close.png, horde_night.png are mock screenshots lit like URP:
   linear color, URP's falloff, bloom, contrast) and look at the PNGs before
   committing art changes. Keep its lights, colors and layouts in step with the game.
-- Trees, rocks and bushes are data in `Economy/NatureMap.cs` (a 1024 map has
-  over 100,000). `World/NatureStreamer.cs` makes `ResourceNode` objects only near
-  rulers, the camera's view and kingdoms (`Kingdom.ActiveArea`), and they write
-  their state back into the map when they go. `ResourceNode.All` is only the shown
-  ones: anything that must see the whole map (paths, building checks, saving)
-  asks the map.
+- **Worlds are endless** (up to `NatureMap.Limit` = 32,000 tiles from the middle; house
+  insides and mines live beyond that, at `Kingdom.InsideOrigin`/`MineOrigin`). Trees, rocks
+  and bushes are data in `Economy/NatureMap.cs`, worked out from the seed by
+  `WorldGenerator`'s generator in 32-tile squares when first asked about; only changes are
+  kept (and saved), unchanged squares are forgotten when there are too many.
+  `World/NatureStreamer.cs` makes `ResourceNode` objects only near rulers, the camera's view
+  and kingdoms (`Kingdom.ActiveAreas`), and they write their state back into the map when
+  they go. `ResourceNode.All` is only the shown ones: anything that must see more (paths,
+  building checks, saving) asks the map. `World/GroundStreamer.cs` makes the ground in
+  64-tile squares round the camera (maths on a background thread). Each kingdom works in
+  its **lands** (`KingdomConfig.landsSize`, 512, a square round the throne = `Kingdom.Nav.Cells`):
+  building, villagers' paths and gathering, zombie paths. No code may assume a whole map.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.
@@ -91,7 +101,8 @@ build), then ages with real-time research, roofs, and **houses** you go into
 `Kingdom.InsideOrigin`, reached through the door; villagers walk through doors
 in `Villager.Walk`). 2A, 2B and these updates are written and compile-checked but **not yet
 run in Unity**; the user tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
-and `docs/HOUSES-TEST.md` (plus `docs/PHASE-2B-TEST.md` for the details). Don't start 2C before they
+and `docs/HOUSES-TEST.md` (plus `docs/PHASE-2B-TEST.md` for the details; later
+updates: `docs/SAVE-TEST.md`, `WEAPONS-TEST.md`, `ONLINE-TEST.md`, `ENDLESS-WORLD-TEST.md`). Don't start 2C before they
 confirm. See `docs/ROADMAP.md` and `docs/DECISIONS.md` sections 14-15.
 The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 
@@ -103,6 +114,9 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
   waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`) and room finding
   (`Building/RoomFinder.cs`). Keep those files free of `UnityEngine` so the
   tests can compile them.
+- `dotnet run --project tools/world-tests/WorldTests.csproj`: the endless world outside
+  Unity (`Economy/NatureMap.cs` with stand-ins in `tools/world-tests/Stubs.cs` and the art
+  preview's `Shim.cs`; `GroundArt.PatchMasksAt`/`TintAt` squares joining up).
 - `dotnet run --project tools/net-tests/NetTests.csproj`: the online code that
   doesn't need Unity (`Assets/Scripts/Networking/Core`, plain C#: keep `UnityEngine`
   out of it) with LiteNetLib, run as a real server and real players over UDP.

@@ -16,13 +16,17 @@ namespace KingdomGame.World
     [Serializable]
     public sealed class SaveData
     {
-        /// <summary>Goes up when the layout changes (2: nature is saved as changes to the map).</summary>
-        public const int CurrentVersion = 2;
+        /// <summary>
+        /// Goes up when the layout changes (2: nature is saved as changes to the map; 3: endless worlds,
+        /// the kingdom's lands, and the other players on a hosted world).
+        /// </summary>
+        public const int CurrentVersion = 3;
 
         public int version = CurrentVersion;
         public string mode;
         public int seed;
-        public int mapSize;
+        /// <summary>Tiles across the kingdom's lands (round the throne); 0 in saves from before endless worlds.</summary>
+        public int landsSize;
         /// <summary>When it was saved, as local time text (for the menu).</summary>
         public string savedAt;
         public int day = 1;
@@ -40,6 +44,73 @@ namespace KingdomGame.World
         public Combat.Armory.Saved armory = new Combat.Armory.Saved();
         public bool hasSurvival;
         public SurvivalSave survival = new SurvivalSave();
+        /// <summary>A hosted game: the players who joined it (their kingdoms, and where they were).</summary>
+        public OthersSave others = new OthersSave();
+    }
+
+    /// <summary>The players who joined a hosted world or a server: their kingdoms' spots, and each player.</summary>
+    [Serializable]
+    public sealed class OthersSave
+    {
+        public List<KingdomSpotSave> kingdoms = new List<KingdomSpotSave>();
+        public List<PlayerSpotSave> players = new List<PlayerSpotSave>();
+
+        public static OthersSave From(Networking.ServerCore core)
+        {
+            var save = new OthersSave();
+            if (core == null) return save;
+            var (kingdoms, players) = core.Remembered();
+            foreach (var k in kingdoms) save.kingdoms.Add(new KingdomSpotSave { id = k.Id, owner = k.Owner, x = k.X, y = k.Y });
+            foreach (var p in players)
+                save.players.Add(new PlayerSpotSave { key = p.Key, name = p.Name, kingdom = p.KingdomId, placed = p.HasPosition, x = p.X, y = p.Y });
+            return save;
+        }
+
+        /// <summary>Hands what was saved to a server that's just been made (before anyone joins).</summary>
+        public void Into(Networking.ServerCore core)
+        {
+            if (core == null) return;
+            var k = new List<Networking.KingdomInfo>();
+            foreach (var s in kingdoms) if (s != null) k.Add(new Networking.KingdomInfo { Id = s.id, Owner = s.owner, X = s.x, Y = s.y });
+            var p = new List<Networking.PlayerRecord>();
+            foreach (var s in players)
+                if (s != null) p.Add(new Networking.PlayerRecord { Key = s.key, Name = s.name, KingdomId = s.kingdom, HasPosition = s.placed, X = s.x, Y = s.y });
+            core.Remember(k, p);
+        }
+    }
+
+    [Serializable]
+    public sealed class KingdomSpotSave
+    {
+        public int id;
+        public string owner;
+        /// <summary>The throne's bottom-left cell.</summary>
+        public int x, y;
+    }
+
+    [Serializable]
+    public sealed class PlayerSpotSave
+    {
+        /// <summary>Who they are (the code their game keeps, and their name).</summary>
+        public string key;
+        public string name;
+        public int kingdom;
+        /// <summary>Whether x, y is where they were when they left (else they start at their throne).</summary>
+        public bool placed;
+        public float x, y;
+    }
+
+    /// <summary>A dedicated server's world, kept between runs: its seed, the time, and everyone's kingdoms.</summary>
+    [Serializable]
+    public sealed class ServerWorldSave
+    {
+        public const int CurrentVersion = 1;
+        public int version = CurrentVersion;
+        public int seed;
+        public int day = 1;
+        public float hour;
+        public string savedAt;
+        public OthersSave others = new OthersSave();
     }
 
     /// <summary>A tree, rock or bush that isn't as the map made it (planted, partly used, growing back, gone).</summary>
@@ -148,21 +219,23 @@ namespace KingdomGame.World
     {
         public static string Folder => Path.Combine(Application.persistentDataPath, "saves");
 
+        /// <summary>Writes <paramref name="json"/> to a new file, then swaps it in (keeping the old one as .bak).</summary>
+        internal static void WriteSafely(string path, string json)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            string fresh = path + ".new";
+            File.WriteAllText(fresh, json);
+            if (File.Exists(path)) File.Replace(fresh, path, path + ".bak");
+            else File.Move(fresh, path);
+        }
+
         /// <summary>A mode's save file; games you host (open to others) have their own.</summary>
         public static string PathFor(GameMode mode, bool hosted = false) =>
             Path.Combine(Folder, (mode == GameMode.Survival ? "survival" : "freebuild") + (hosted ? "-hosted" : "") + ".json");
 
         public static bool Exists(GameMode mode, bool hosted = false) => File.Exists(PathFor(mode, hosted));
 
-        public static void Write(GameMode mode, SaveData data, bool hosted = false)
-        {
-            Directory.CreateDirectory(Folder);
-            string path = PathFor(mode, hosted), fresh = path + ".new";
-            File.WriteAllText(fresh, JsonUtility.ToJson(data));
-            // Swaps the new file in, keeping the old one as .bak, in one step.
-            if (File.Exists(path)) File.Replace(fresh, path, path + ".bak");
-            else File.Move(fresh, path);
-        }
+        public static void Write(GameMode mode, SaveData data, bool hosted = false) => WriteSafely(PathFor(mode, hosted), JsonUtility.ToJson(data));
 
         /// <summary>
         /// The saved game for a mode, or null (with why in <paramref name="problem"/>) if there's none or it
@@ -210,6 +283,55 @@ namespace KingdomGame.World
             if (data == null) return null;
             string where = data.hasSurvival && data.survival.wave > 0 ? $"Day {data.day}, wave {data.survival.wave}" : $"Day {data.day}";
             return string.IsNullOrEmpty(data.savedAt) ? where : $"{where}. Saved {data.savedAt}";
+        }
+    }
+
+    /// <summary>
+    /// The dedicated server's world file (saves/server-world.json, or another name with
+    /// -world name): read when the server starts, written every minute and when it stops.
+    /// </summary>
+    public static class ServerWorldFile
+    {
+        public static string PathFor(string name = null)
+        {
+            string clean = "";
+            foreach (char c in name ?? "") if (char.IsLetterOrDigit(c) || c == '-' || c == '_') clean += c;
+            return Path.Combine(SaveFiles.Folder, (clean.Length > 0 ? "server-" + clean : "server-world") + ".json");
+        }
+
+        public static void Write(ServerWorldSave data, string name = null)
+        {
+            data.version = ServerWorldSave.CurrentVersion;
+            data.savedAt = DateTime.Now.ToString("d MMM HH:mm");
+            SaveFiles.WriteSafely(PathFor(name), JsonUtility.ToJson(data, true));
+        }
+
+        /// <summary>The server's world from last time, or null: a new world (<paramref name="problem"/> says why if the file was there but broken).</summary>
+        public static ServerWorldSave Read(out string problem, string name = null)
+        {
+            problem = null;
+            string path = PathFor(name);
+            if (!File.Exists(path)) return null;
+            foreach (var file in new[] { path, path + ".bak" })
+            {
+                try
+                {
+                    if (!File.Exists(file)) continue;
+                    var data = JsonUtility.FromJson<ServerWorldSave>(File.ReadAllText(file));
+                    if (data != null && data.seed != 0 && data.version <= ServerWorldSave.CurrentVersion)
+                    {
+                        if (file != path) Debug.LogWarning($"[Server] {path} couldn't be read: using the copy before it ({file}).");
+                        return data;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[Server] Couldn't read {file}: {e.Message}");
+                }
+            }
+            problem = $"The server's world file ({path}) couldn't be read, so this is a new world. The old file is kept as {path}.broken";
+            try { File.Copy(path, path + ".broken", true); } catch (Exception) { }
+            return null;
         }
     }
 }

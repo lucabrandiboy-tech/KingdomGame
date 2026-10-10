@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 11;
+        const int SettingsVersion = 12;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -89,10 +89,10 @@ namespace KingdomGame.EditorTools
             bool roofsUpdate = oldContent != null && oldContent.settingsVersion < 4;
             bool farmingUpdate = oldContent != null && oldContent.settingsVersion < 5;
             bool defensesUpdate = oldContent != null && oldContent.settingsVersion < 7;
-            bool biggerMap = oldContent != null && oldContent.settingsVersion < 8;
             bool minesUpdate = oldContent != null && oldContent.settingsVersion < 9;
             bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
             bool nightHordes = oldContent != null && oldContent.settingsVersion < 11;
+            bool endless = oldContent != null && oldContent.settingsVersion < 12;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -187,12 +187,6 @@ namespace KingdomGame.EditorTools
             // ---- World
             var worldConfig = Asset<WorldConfig>("World/WorldConfig", w => { });
             var dayNight = Asset<DayNightConfig>("World/DayNightConfig", d => { });
-            if (biggerMap && worldConfig.mapSize == 96)
-            {
-                worldConfig.mapSize = 256;
-                EditorUtility.SetDirty(worldConfig);
-                Debug.Log("The map is bigger now: 256 tiles across (World/WorldConfig, Map Size).");
-            }
             if (newLook)
             {
                 StoneLook(stone);
@@ -423,6 +417,14 @@ namespace KingdomGame.EditorTools
                 content.survival.breakSeconds = 120f;
                 EditorUtility.SetDirty(content.survival);
                 Debug.Log("Survival hordes now come at night, 2 minutes apart. Your other settings were kept.");
+            }
+
+            if (endless && content.network != null && content.network.kingdomSpacing < 560)
+            {
+                // Each kingdom has lands 512 tiles across in the endless world: kingdoms go further apart so they don't overlap.
+                content.network.kingdomSpacing = 560;
+                EditorUtility.SetDirty(content.network);
+                Debug.Log("Worlds are endless now, and online kingdoms are 560 tiles apart. Your other settings were kept.");
             }
 
             // The pictures, at full detail (the first time takes a few minutes).

@@ -2,8 +2,8 @@
 
 **What works so far:** you host your own game (survival or free build) and play it as
 normal while friends join. Everyone sees each other walk around, chat with **Enter**,
-and every player who joins gets their own kingdom spot (a throne and storehouse) on
-the same map.
+and every player who joins gets their own kingdom spot (a throne and storehouse) in
+the same endless world.
 
 **What doesn't yet:** players who joined see the map and everyone walking, but not
 yet what you've built, your villagers, the zombies or wall damage. They can't build,
@@ -28,12 +28,18 @@ A game can only join another game that's running separately, so you need a **bui
    address `127.0.0.1` > **Join**.
 5. You should see:
    - "Joining 127.0.0.1..." and then the map.
-   - Your new kingdom (a throne and a storehouse) somewhere near the host's, about 96 tiles away.
+   - Your new kingdom (a throne and a storehouse) near the host's, about 560 tiles away
+     (a few minutes' walk: each kingdom has lands 512 tiles across).
    - The other ruler walking about, with their name over their head, moving smoothly.
    - A throne marker with the host's name at the host's kingdom.
    - Enter, type, Enter: the message shows in both windows.
 6. The host's **Esc** menu shows "Hosting on UDP port 7777" and your home network address.
    The world doesn't pause online.
+7. **Joined players are saved with the host's game.** Walk the joined player somewhere,
+   then in the host window press Esc > Save. Close both. Host again with **Continue** on
+   the online page, and join again with the **same name** from the same game: you should
+   get the same kingdom back and start where you were standing. A new name counts as a
+   new player (your game keeps a code plus your name to know who you are).
 
 Tip: in the Unity Editor, *Edit > Project Settings > Player > Run In Background* lets the
 unfocused window keep going (the game also sets it while online).
@@ -61,14 +67,22 @@ we'll look at the other options.
 
 ## Settings
 
-`Assets/Data/Network/NetworkConfig`: port, most players, server name, map size for
-hosted games (1024 by default), how far apart kingdoms are, how often positions are sent.
+`Assets/Data/Network/NetworkConfig`: port, most players, server name, how far apart
+kingdoms are (560 tiles), how often positions are sent.
 
 Hosted games save to their own files (Continue on the online page), separate from your
-games alone.
+games alone. The save holds the players who joined too: their kingdoms' spots and where
+each one was standing (while they're on, where they are at the save; otherwise where they
+were when they left). Their kingdoms stay in the world while they're away.
 
 ## A server with no player (optional, later)
 
 The game can also run as a dedicated server with no player of its own: start the built
 game with `-server` (plus `-batchmode -nographics` to run without a window). For now
 that's only useful for testing. Hosting from the menu is the way to play.
+
+A dedicated server keeps its world in `saves/server-world.json` (in the game's folder,
+`C:\Users\you\AppData\LocalLow\...\saves`): the seed, the time of day, and every player's
+kingdom and spot. It's written every minute and when the server stops, and read the next
+time it starts, so players come back to the same world. `-world name` uses another file
+(`server-name.json`); `-newworld` starts a new world (the old file is kept as `.bak`).

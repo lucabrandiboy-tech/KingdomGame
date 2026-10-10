@@ -1302,6 +1302,10 @@ namespace KingdomGame.Building
                 if (home != null) v.StartReturn(home);
                 return home != null;
             }
+            // Nothing marked in a mine: miners follow its ore on their own (a tile at a time per miner).
+            int miners = CountOf(Job.Miner);
+            foreach (var m in mines)
+                if (m != null && m.Level != null && m.Level.Marked < miners) m.Level.MarkTowardsOre();
             MineLevel best = null;
             Vector2Int bestCell = default;
             float bestDistance = float.MaxValue;

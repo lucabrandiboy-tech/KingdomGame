@@ -39,3 +39,14 @@ made the map bigger.
 - [ ] They carry stone (or ore) up to the storehouse; storage shows copper/iron/gold
 - [ ] Build a chest and a torch on dug floor; you can't build on rock ("dig it out first")
 - [ ] E at the ladder climbs back up
+
+## Miners go down by themselves (added later)
+
+Miners no longer wait for you to mark rock. When a mine has fewer marked tiles than you have
+miners, they mark the next tile themselves: an ore tile they can reach (nearest the ladder), or,
+if no ore is in reach, the rock that tunnels towards the nearest ore. You'll see the marks appear.
+Your own marks still come first. When a mine has no ore left, miners go back to rocks on the surface.
+
+Test: build a mine, give two villagers the Miner job (V), mark nothing. Within a few seconds they
+should walk to the shaft, disappear down it, and (go down yourself to watch) dig towards the
+copper, iron or gold, bringing it up to storage.

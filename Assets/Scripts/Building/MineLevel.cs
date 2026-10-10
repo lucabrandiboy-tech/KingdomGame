@@ -197,6 +197,47 @@ namespace KingdomGame.Building
             if (diggers.TryGetValue(cell, out var v) && v == miner) diggers.Remove(cell);
         }
 
+        /// <summary>
+        /// For miners with nothing marked to dig: marks the next tile to follow the ore. That's the ore
+        /// tile they can reach that's nearest the ladder, or, when no ore is in reach, the rock they can
+        /// reach that's nearest to some ore (tunnelling towards it). False when there's no ore left to go for.
+        /// </summary>
+        public bool MarkTowardsOre()
+        {
+            var ores = new List<Vector2Int>();
+            for (int y = bounds.yMin + 1; y < bounds.yMax - 1; y++)
+                for (int x = bounds.xMin + 1; x < bounds.xMax - 1; x++)
+                {
+                    int i = Index(new Vector2Int(x, y));
+                    if (ore[i] != Ore.None && !dug[i] && !marked[i]) ores.Add(new Vector2Int(x, y));
+                }
+            if (ores.Count == 0) return false;
+            Vector2Int best = default;
+            float bestScore = float.MaxValue;
+            bool found = false;
+            var exit = (Vector2)ExitCell;
+            for (int y = bounds.yMin + 1; y < bounds.yMax - 1; y++)
+                for (int x = bounds.xMin + 1; x < bounds.xMax - 1; x++)
+                {
+                    var c = new Vector2Int(x, y);
+                    int i = Index(c);
+                    if (dug[i] || marked[i] || !CanMark(c, out _)) continue;
+                    if (unreachable.TryGetValue(c, out float until) && until > Time.time) continue;
+                    if (!(Open(c + Vector2Int.left) || Open(c + Vector2Int.right) || Open(c + Vector2Int.up) || Open(c + Vector2Int.down))) continue;
+                    // Ore in reach first (nearest the ladder); otherwise rock, by how near it gets to ore.
+                    float score;
+                    if (ore[i] != Ore.None) score = ((Vector2)c - exit).sqrMagnitude;
+                    else
+                    {
+                        float near = float.MaxValue;
+                        foreach (var o in ores) near = Mathf.Min(near, ((Vector2)(o - c)).sqrMagnitude);
+                        score = 1e7f + near;
+                    }
+                    if (score < bestScore) { bestScore = score; best = c; found = true; }
+                }
+            return found && Mark(best);
+        }
+
         /// <summary>Digs a marked tile out: it becomes floor. Returns what came out of it (stone, or its ore) and how much.</summary>
         public bool Dig(Vector2Int cell, out ResourceType type, out int amount)
         {

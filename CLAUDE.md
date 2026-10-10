@@ -96,6 +96,9 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
   waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`) and room finding
   (`Building/RoomFinder.cs`). Keep those files free of `UnityEngine` so the
   tests can compile them.
+- `dotnet run --project tools/net-tests/NetTests.csproj`: the online code that
+  doesn't need Unity (`Assets/Scripts/Networking/Core`, plain C#: keep `UnityEngine`
+  out of it) with LiteNetLib, run as a real server and real players over UDP.
 - `python3 tools/check_meta.py`
 - `dotnet build tools/compile-check/CompileCheck.csproj` compiles every script
   in `Assets/` against Unity 2021.3 reference assemblies (NuGet

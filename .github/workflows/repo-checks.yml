@@ -29,3 +29,6 @@ jobs:
 
       - name: Destruction math unit tests
         run: dotnet run --project tools/tests/DestructionTests.csproj
+
+      - name: Network tests (a real server and players over UDP on the runner)
+        run: dotnet run --project tools/net-tests/NetTests.csproj

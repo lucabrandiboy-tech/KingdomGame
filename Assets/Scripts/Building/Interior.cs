@@ -61,6 +61,17 @@ namespace KingdomGame.Building
             built = new GameObject("Inside");
             built.transform.SetParent(transform, false);
 
+            // Behind the room, instead of black: the house's dark timber, all round.
+            var back = new GameObject("Timber all round");
+            back.transform.SetParent(built.transform, false);
+            back.transform.position = (Vector2)origin;
+            var timber = back.AddComponent<SpriteRenderer>();
+            timber.sprite = Backdrop();
+            timber.drawMode = SpriteDrawMode.Tiled;
+            timber.size = new Vector2(SlotSize, SlotSize);
+            timber.color = new Color(0.42f, 0.36f, 0.32f);
+            timber.sortingOrder = SortOrder.Floors - 20;
+
             // The floor.
             for (int y = Inner.yMin; y < Inner.yMax; y++)
                 for (int x = Inner.xMin; x < Inner.xMax; x++)
@@ -100,6 +111,18 @@ namespace KingdomGame.Building
             foreach (var cell in b.allPositionsWithin)
                 if (!Inner.Contains(cell)) Nav.Block(new RectInt(cell, Vector2Int.one));
             if (kingdom != null) kingdom.BlockInside(this);
+        }
+
+        static Sprite backdrop;
+
+        // Wooden boards to fill the space round every house's room (one tile of them, repeated; its pivot is the bottom-left).
+        static Sprite Backdrop()
+        {
+            if (backdrop != null) return backdrop;
+            var boards = FurnitureArt.WoodFloorTile(128, 2);
+            boards.Pivot = Vector2.zero;
+            backdrop = PixelTextures.ToSprite(boards, "House timber", true, 128);
+            return backdrop;
         }
 
         void Part(string partName, Sprite sprite, Vector2 at, int order)

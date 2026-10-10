@@ -25,7 +25,7 @@ Unity: see [`docs/PHASE-2B-TEST.md`](docs/PHASE-2B-TEST.md).
 
 ```
 Assets/
-  Art/            our art (imported at 64 px per tile automatically)
+  Art/            our art (Generated/ holds the baked art: made by Build Game Scenes, not in Git)
   Audio/          music and sound effects
   Data/           ScriptableObject configs: costs, health, damage, rates, era unlocks
   Prefabs/

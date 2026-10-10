@@ -240,8 +240,9 @@ namespace KingdomGame.Building
                 if (!show) continue;
                 var center = (Vector2)placements[i] + (Vector2)b.size * 0.5f;
                 var tint = valid[i] ? Good : Bad;
-                ghosts[i].sprite = kingdom.LookOf(b);
-                ghosts[i].transform.position = center;
+                var look = kingdom.LookOf(b);
+                ghosts[i].sprite = look;
+                ghosts[i].transform.position = look != null ? center - (Vector2)look.bounds.center : center;
                 ghosts[i].color = tint;
                 outlines[i].sprite = kingdom.CellMarker;
                 outlines[i].transform.position = center;

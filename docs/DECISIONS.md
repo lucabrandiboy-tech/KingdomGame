@@ -35,34 +35,71 @@ realistic look instead of crisp pixels.
   facing right and rotated). Nothing is sorted by its height on screen any
   more: the drawing order is fixed per kind of thing (`Core/SortOrder.cs`).
   Tree leaves are above everyone and fade when the ruler walks under them.
-- **One grid tile = one Unity unit = 64 × 64 texture pixels** (set in
-  `Core/PixelArt.cs`). Wall destruction still works on these pixels.
-- **No Pixel Perfect Camera.** Textures use smooth (bilinear) filtering with
+- **One grid tile = one Unity unit.** Wall destruction works on 64 × 64
+  "health pixels" per tile (`Core/PixelArt.cs`); what you see is drawn in
+  much more detail (next point).
+- **High-detail baked art (you asked for about 1000 × 1000 per tile).** The art
+  is drawn by code and *baked* by Build Game Scenes at the View Config's
+  **Art Detail**, 1024 pixels per tile by default, into texture sheets in
+  `Assets/Art/Generated` (not saved to Git: they're made again from the code)
+  with a normal map for each (which way each pixel faces, so torchlight shows
+  bumps). `Assets/Data/Look/ArtLibrary` records where each picture sits;
+  `Core/ArtSprites` cuts the sprites out while the game runs. It only bakes
+  again when the art code (`ArtCatalog.Version`), the detail or the wall colors
+  change. If a picture isn't baked, the game draws it itself at 128 px per tile.
+  - **Cost:** about 0.55 GB of video memory at 1024 (compressed, BC7), about
+    0.15 GB at 512, and the first bake takes several minutes. The screen only
+    shows about 45 pixels per tile at the normal zoom (24 tiles tall on a 1080p
+    screen), so 1024 only looks different from 512 when zoomed in close
+    (the mouse wheel zooms in to 4 tiles tall). Lower Art Detail to 512 if
+    video memory or bake time is a problem.
+  - A damaged wall chunk is redrawn at 128 px per tile (smoothed from its 64
+    health pixels), so walls look a little softer once they're hit.
+- **The ground** is three repeating textures (dark grass, dry khaki grass, mud)
+  shown in big patches through sprite masks, with ragged edges (tufts of grass
+  into the dirt) and a soft tint on top (darker under forests, blotches, and a
+  blend along the patch edges).
+- **No Pixel Perfect Camera.** Textures use smooth (trilinear) filtering with
   mipmaps, so art can rotate, scale and be shown at any zoom without jagged
   edges or shimmering. The camera zooms freely: walking view 24 tiles tall
   (`ViewConfig`, changeable), the throne view much further out.
   This also solved the old Phase 2B problem (pixel-perfect zoom only works in
   whole steps).
-- **Light from the top-left** in all art, and **soft shadows** falling to the
-  bottom-right: blurred shadow sprites under trees, rocks, people and
+- **Light from the top-left** is baked into all art (the shading in the
+  pictures), so trees and rocks aren't turned. People are drawn for 16
+  (ruler) or 8 (villagers) facing directions, each lit from the top-left, and
+  the nearest drawing is turned the last few degrees. **Soft shadows** fall to
+  the bottom-right: blurred shadow sprites under trees, rocks, people and
   buildings; walls cast a shadow of their current shape (holes included).
+- **Lights:** fires (braziers, torches, the storehouse lantern) always burn,
+  much brighter at night, flicker, and use the normal maps. The day and night
+  colors in `DayNightConfig` are as they look on screen: URP takes the global
+  2D light's color as a linear light value without converting it (it converts
+  other lights' colors), so `DayNightCycle` converts it.
 - **Fake 3D debris.** Pieces breaking off walls are flat sprites drawn as real
   3D cubes, with 8 tumbling frames, a shadow that drifts away as they fly up,
   and a slight grow with height. Explosions add a flash of light, a fireball,
   smoke and a scorch mark.
 - **Post-processing** (`Assets/Data/Look/PostProcessing`): vignette, bloom on
   bright things (fire, sparks, shots ignore lighting via the Glow material, so
-  they glow at night), more contrast, less saturation.
-- **Art is drawn in code for now** (`Assets/Scripts/Art`). `tools/art-preview`
-  renders a mock screenshot and a sheet of every sprite so they can be checked
-  without Unity. Real art (hand-made or licensed packs, drawn top-down with
+  they glow at night), a little film grain, slightly less color. Contrast is
+  only +5: URP applies contrast in a way that turns the darkest shades pure
+  black, and this game is dark.
+- **Art is drawn in code for now** (`Assets/Scripts/Art`, the list of every
+  picture in `Art/ArtCatalog.cs`). `tools/art-preview` bakes everything like
+  Unity does and renders mock screenshots (day, night, close-up, the outpost),
+  lighting them the way URP does (linear color, URP's light falloff, bloom,
+  contrast), so they can be checked without Unity. It's still an
+  approximation. Real art (hand-made or licensed packs, drawn top-down with
   light from the top-left) can replace it piece by piece.
-- **Import settings** for files in `Assets/Art` (applied by `PixelArtImporter`):
-  Sprite, 64 pixels per unit, bilinear filter, mipmaps, no compression.
-- **Performance:** many sprites share textures (atlases for nature, buildings
-  and debris) so they draw in a few batches. Shadows double the number of
-  sprites; if that shows up in the stress test, the first thing to try is
-  baking static shadows into the ground.
+- **Import settings:** baked sheets get theirs from `PixelArtImporter`
+  (plain texture or normal map, mipmaps, trilinear, high-quality compression,
+  ground sheets repeat). Other images in `Assets/Art` get: Sprite, 64 pixels
+  per unit, bilinear filter, mipmaps, no compression.
+- **Performance:** sprites of the same kind share a texture sheet, so they
+  draw in a few batches. Shadows double the number of sprites; if that shows
+  up in the stress test, the first thing to try is baking static shadows into
+  the ground.
 
 ## 4. Controls: Input System package (decided)
 

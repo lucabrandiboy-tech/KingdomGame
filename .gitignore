@@ -118,6 +118,11 @@ Desktop.ini
 .idea/
 .vscode/
 
+# Baked art: KingdomGame > Build Game Scenes makes it again from the code
+# (hundreds of MB, so it isn't saved to Git or Git LFS)
+/[Aa]ssets/[Aa]rt/[Gg]enerated/
+/[Aa]ssets/[Aa]rt/[Gg]enerated.meta
+
 # Our own tool projects, not ones Unity generates
 !/tools/compile-check/CompileCheck.csproj
 !/tools/tests/DestructionTests.csproj

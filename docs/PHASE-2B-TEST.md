@@ -2,11 +2,15 @@
 
 What's new since Phase 1:
 
-- **A new look: dark, realistic, seen from straight above.** New ground, trees,
-  rocks, bushes, stone walls (big cut blocks) and wooden palisades (log ends).
-  Soft shadows everywhere. Dark corners, glow on fire and sparks, darker colors.
+- **A new look: dark, realistic, seen from straight above,** drawn in high
+  detail (1024 pixels per tile; the old art had 64). New ground with big
+  patches of dry grass and dirt, trees, rocks, bushes, rough fieldstone walls
+  and wooden palisades (log ends). Soft shadows everywhere. Fires (braziers,
+  torches, a lantern) light up the ground around them, and torchlight shows the
+  bumps of stones and bark. Dark corners, glow on fire and sparks.
 - **A wider view:** you see 24 tiles from top to bottom (it was about 11). The
-  mouse wheel zooms in and out.
+  mouse wheel zooms in and out; zoom right in to see the fine detail.
+- **The day starts in the late afternoon,** so night comes after about a minute.
 - **A top-down king** in a red cape and crown, who turns to face the mouse.
 - **Walls break into little 3D-looking cubes** that tumble, fly up, cast shadows,
   bounce and become rubble. Explosions flash, leave smoke and burn the ground.
@@ -45,15 +49,24 @@ Don't delete anything.
    spinner in the bottom right corner stops).
 2. Menu: **KingdomGame → Build Game Scenes**. If it asks to save the current
    scene, click **Don't Save**.
-3. This makes the new settings files in `Assets/Data` (keeping any you
-   already have), rebuilds the **Kingdom** and **StressTest** scenes in
-   `Assets/Scenes`, and opens **Kingdom**.
+3. **The first time, this takes several minutes** (maybe up to 10 on a slower
+   computer): a progress bar says "Baking the art". It draws every picture in
+   full detail and saves them in `Assets/Art/Generated`. Leave Unity alone
+   until it's done. It only does this again when the art changes.
+4. It also makes the new settings files in `Assets/Data` (keeping any you
+   already have; older look settings get the new look), rebuilds the
+   **Kingdom** and **StressTest** scenes in `Assets/Scenes`, and opens **Kingdom**.
+5. The **Console** (Window > General > Console) should say "Baked the art: 13
+   texture sheets". If it shows a red error instead, send Claude a screenshot of it.
 
 ## Step 3. Walk around
 
-1. Double-click the **Game** tab so it fills the window, then press **▶ Play**.
-   Building the map takes a few seconds.
-2. You start just below the throne. Controls (also in the bottom left;
+1. Click the **Game** tab. In its toolbar, drag **Scale** all the way to the
+   left (**1x**); anything bigger blows the picture up and makes it blurry.
+   In the dropdown that says **Play Focused**, pick **Play Maximized**, so the
+   game fills the Unity window when you press Play.
+2. Press **▶ Play**. Building the map takes a few seconds.
+3. You start just below the throne. Controls (also in the bottom left;
    **H** hides them):
 
 | Input | Does |
@@ -68,9 +81,10 @@ Don't delete anything.
 | F3 | Performance info (FPS) |
 | H | Hide/show the controls |
 
-3. Check these and tell Claude which work:
+4. Check these and tell Claude which work:
 
-- [ ] Dark ground with grass and patches of soil; trees, rocks and bushes with soft shadows
+- [ ] Dark olive grass with big patches of khaki dry grass and dirt; their edges look ragged and natural, not like cut-out shapes
+- [ ] Trees, rocks and bushes with soft shadows; zoomed right in, they're sharp and detailed
 - [ ] The corners of the screen are darker than the middle (that's the "vignette")
 - [ ] The king turns smoothly to face the mouse, and his legs move when he walks
 - [ ] You see a lot of the map (about 24 tiles tall); the wheel zooms
@@ -81,7 +95,7 @@ Don't delete anything.
 - [ ] C4 thrown at a wall sticks, blinks faster and blows a big hole
 - [ ] Wood (the east side of the test outpost) breaks more easily than stone
 - [ ] Hold E at a tree: wood in your backpack (top right); it becomes a stump when empty
-- [ ] Wait for evening (about 7 minutes in): it gets dark; the king has a light, the braziers glow
+- [ ] Wait about a minute: it gets dark (full night after about 2 minutes); the king has a light, the braziers and the outpost's torches glow and light the ground warmly around them
 
 ## Step 4. Build with your villagers
 
@@ -122,6 +136,11 @@ Don't delete anything.
   either way.
 - **Pink or invisible sparks and fire:** send a screenshot of the Console.
 - **Everything is very dark even at noon:** say so; the look settings are easy to change.
+- **The game stutters, or Unity says it's out of memory:** the art uses about
+  0.55 GB of video memory. Click `Assets/Data/Look/ViewConfig`, set **Art
+  Detail** to 512 in the Inspector, run **KingdomGame → Build Game Scenes**
+  again, and tell Claude.
+- **Pictures look blurry:** check the Game tab's **Scale** is at **1x**.
 
 ## Step 6. Tuning (optional)
 
@@ -130,12 +149,12 @@ All the numbers are in `Assets/Data`. Click an asset and change it in the
 
 | Asset | What to try |
 |---|---|
-| `Look/ViewConfig` | **Walk Zoom** (bigger = see more), **Throne Zoom**, **Shadow Opacity** |
+| `Look/ViewConfig` | **Walk Zoom** (bigger = see more), **Throne Zoom**, **Shadow Opacity**, **Art Detail** (then Build Game Scenes again) |
 | `Look/PostProcessing` | Vignette, Bloom and Color Adjustments (contrast, saturation) |
 | `Building/StoneWall`, `WoodWall`, `Storehouse` | Costs and **Build Seconds** |
 | `Building/KingdomConfig` | Starting wood/stone/food and villagers |
 | `Villagers/VillagerConfig` | Villager speed, how much they carry |
-| `World/DayNightConfig` | **Minutes Per Day** (try 2 to see a night quickly) |
+| `World/DayNightConfig` | **Minutes Per Day**, day and night colors and brightness, fire brightness and reach |
 | `Destruction/DestructionSettings` | Cube size and how many cubes fly off (**Cube Density**) |
 | `Destruction/StoneWall`, `WoodPalisade` | How tough walls are |
 

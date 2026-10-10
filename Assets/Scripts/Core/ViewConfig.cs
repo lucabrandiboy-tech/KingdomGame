@@ -9,7 +9,8 @@ namespace KingdomGame
         [Header("Camera zoom (half the screen height, in tiles)")]
         [Tooltip("Zoom while walking around: 12 shows 24 tiles from top to bottom. Bigger = see more.")]
         [Min(1)] public float walkZoom = 12f;
-        [Min(1)] public float walkZoomMin = 6f;
+        [Tooltip("How far the mouse wheel zooms in: 2 shows 4 tiles from top to bottom, close enough to see the fine detail.")]
+        [Min(1)] public float walkZoomMin = 2f;
         [Min(1)] public float walkZoomMax = 18f;
         [Tooltip("Zoom when you sit on the throne.")]
         [Min(1)] public float throneZoom = 24f;
@@ -27,6 +28,12 @@ namespace KingdomGame
         [Min(0.05f)] public float panSpeed = 0.9f;
         [Tooltip("The most the camera can shake, in tiles.")]
         [Min(0)] public float maxShake = 0.35f;
+
+        [Header("Art detail")]
+        [Tooltip("Pixels per tile of the baked art (KingdomGame > Build Game Scenes bakes it again when this changes). " +
+                 "1024 is the most detail; it only shows when zoomed in close and needs about 4 times the video memory of 512. " +
+                 "Use 512 if the game uses too much video memory or baking is too slow.")]
+        [Range(128, 1024)] public int artDetail = 1024;
 
         [Header("Look")]
         [Tooltip("A material that ignores lighting (Sprite-Unlit-Default), for fire, sparks and shots, so they glow at night.")]

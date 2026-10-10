@@ -11,6 +11,15 @@ namespace UnityEngine
         public float x, y;
         public Vector2(float x, float y) { this.x = x; this.y = y; }
         public static Vector2 zero => new Vector2(0, 0);
+        public static Vector2 operator +(Vector2 a, Vector2 b) => new Vector2(a.x + b.x, a.y + b.y);
+        public static Vector2 operator -(Vector2 a, Vector2 b) => new Vector2(a.x - b.x, a.y - b.y);
+        public static Vector2 operator *(Vector2 a, float k) => new Vector2(a.x * k, a.y * k);
+        public static Vector2 operator /(Vector2 a, float k) => new Vector2(a.x / k, a.y / k);
+    }
+    public struct Vector2Int
+    {
+        public int x, y;
+        public Vector2Int(int x, int y) { this.x = x; this.y = y; }
     }
     public struct Vector3
     {
@@ -30,6 +39,8 @@ namespace UnityEngine
         public static int FloorToInt(float v) => (int)System.Math.Floor(v);
         public static int CeilToInt(float v) => (int)System.Math.Ceiling(v);
         public static int RoundToInt(float v) => (int)System.Math.Round(v, System.MidpointRounding.ToEven);
+        public static float Round(float v) => (float)System.Math.Round(v, System.MidpointRounding.ToEven);
+        public static float Pow(float a, float b) => (float)System.Math.Pow(a, b);
         public static int Clamp(int v, int a, int b) => v < a ? a : v > b ? b : v;
         public static float Clamp(float v, float a, float b) => v < a ? a : v > b ? b : v;
         public static float Clamp01(float v) => v < 0 ? 0 : v > 1 ? 1 : v;

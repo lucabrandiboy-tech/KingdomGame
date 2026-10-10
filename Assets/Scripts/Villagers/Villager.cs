@@ -5,11 +5,11 @@ using UnityEngine;
 
 namespace KingdomGame.Villagers
 {
-    /// <summary>The pictures every villager shares.</summary>
+    /// <summary>The pictures every villager shares: [direction, frame], drawn lit from the top-left for each direction.</summary>
     public sealed class VillagerSprites
     {
-        public Sprite[] Walking;
-        public Sprite[] Carrying;
+        public Sprite[,] Walking;
+        public Sprite[,] Carrying;
         public Sprite Shadow;
     }
 
@@ -81,7 +81,7 @@ namespace KingdomGame.Villagers
             body = new GameObject("Body").transform;
             body.SetParent(transform, false);
             bodyRenderer = body.gameObject.AddComponent<SpriteRenderer>();
-            bodyRenderer.sprite = sprites.Walking[0];
+            bodyRenderer.sprite = sprites.Walking[0, 0];
             bodyRenderer.sortingOrder = SortOrder.Characters;
             thinkAt = Time.time + Random.Range(0f, config.thinkSeconds);
         }
@@ -324,10 +324,11 @@ namespace KingdomGame.Villagers
                 stepClock = 0f;
             }
             var frames = carryAmount > 0 ? sprites.Carrying : sprites.Walking;
-            bodyRenderer.sprite = frames[Mathf.FloorToInt(stepClock) % frames.Length];
-            // Turn smoothly towards where it's going.
+            // Turn smoothly towards where it's going, showing the drawing for the nearest direction.
             float wanted = Mathf.Atan2(facing.y, facing.x) * Mathf.Rad2Deg;
             float now = Mathf.MoveTowardsAngle(body.localEulerAngles.z, wanted, 540f * Time.deltaTime);
+            int direction = Character.RulerLook.Direction(now, frames.GetLength(0));
+            bodyRenderer.sprite = frames[direction, Mathf.FloorToInt(stepClock) % frames.GetLength(1)];
             body.localRotation = Quaternion.Euler(0f, 0f, now);
             shadow.transform.localRotation = body.localRotation;
         }

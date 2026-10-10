@@ -328,6 +328,7 @@ namespace KingdomGame.EditorTools
             foreach (string guid in AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/Art" }))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (PixelArtImporter.IsBaked(path)) continue;   // the baked sheets have their own settings
                 if (!(AssetImporter.GetAtPath(path) is TextureImporter importer)) continue;
                 total++;
                 string mismatch = PixelArtImporter.FirstMismatch(importer);

@@ -14,10 +14,15 @@ namespace KingdomGame.EditorTools
     /// file yet), so you can still change one sprite's settings by hand later.
     /// The Phase 0 Setup Check window can re-apply it to everything in Assets/Art.
     /// (The name is from Phase 0, when the game used crisp pixel art.)
+    ///
+    /// The baked art sheets in Assets/Art/Generated (<see cref="ArtBaker"/>) are
+    /// different: they always get <see cref="ApplyBaked"/>, because the game cuts
+    /// its sprites out of them in code.
     /// </summary>
     public sealed class PixelArtImporter : AssetPostprocessor
     {
         public const string ArtFolder = "Assets/Art/";
+        public const string BakedFolder = ArtBaker.Folder + "/";
 
         // Big enough that a sprite sheet is never silently shrunk (Unity's default
         // limit is 2048).
@@ -25,6 +30,11 @@ namespace KingdomGame.EditorTools
 
         void OnPreprocessTexture()
         {
+            if (IsBaked(assetPath))
+            {
+                ApplyBaked((TextureImporter)assetImporter, assetPath);
+                return;
+            }
             if (!IsInArtFolder(assetPath) || !assetImporter.importSettingsMissing)
                 return;
 
@@ -33,6 +43,33 @@ namespace KingdomGame.EditorTools
 
         public static bool IsInArtFolder(string path) =>
             path.StartsWith(ArtFolder, StringComparison.OrdinalIgnoreCase);
+
+        public static bool IsBaked(string path) =>
+            path.StartsWith(BakedFolder, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// A baked sheet: a plain texture (not a sprite) with mipmaps and smooth
+        /// blending between them (so it stays sharp but never shimmers as the view
+        /// zooms), compressed in high quality to save video memory. Sheets ending
+        /// in _n are normal maps (which way each pixel faces, for the lights).
+        /// Ground sheets repeat across the map.
+        /// </summary>
+        public static void ApplyBaked(TextureImporter importer, string path)
+        {
+            bool normals = path.EndsWith("_n.png", StringComparison.OrdinalIgnoreCase);
+            string sheet = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (normals) sheet = sheet.Substring(0, sheet.Length - 2);
+            importer.textureType = normals ? TextureImporterType.NormalMap : TextureImporterType.Default;
+            importer.sRGBTexture = !normals;
+            importer.alphaIsTransparency = !normals;
+            importer.mipmapEnabled = true;
+            importer.filterMode = FilterMode.Trilinear;
+            importer.wrapMode = Art.ArtCatalog.Repeats(sheet) ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+            importer.textureCompression = TextureImporterCompression.CompressedHQ;
+            importer.npotScale = TextureImporterNPOTScale.None;
+            importer.isReadable = false;
+            importer.maxTextureSize = MaxTextureSize;
+        }
 
         public static void Apply(TextureImporter importer)
         {

@@ -28,6 +28,16 @@ namespace KingdomGame.Building
             BuildingLook.MakeSolid(gameObject, cells.size);
         }
 
+        /// <summary>A lantern on the porch (a small fire).</summary>
+        public void AddLantern(Sprite fire)
+        {
+            if (fire == null) return;
+            var go = new GameObject("Lantern");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(Cells.width * 0.18f, -Cells.height * 0.36f, 0f);
+            go.AddComponent<Brazier>().Setup(fire, 0.45f, 0.75f);   // small, but lights the porch
+        }
+
         /// <summary>How much of a resource is here and not yet promised to a builder.</summary>
         public int Available(ResourceType type) => Stock.Get(type) - reserved[(int)type];
 

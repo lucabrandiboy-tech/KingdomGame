@@ -36,6 +36,7 @@ namespace KingdomGame.World
         public void AddNightLight(Light2D light)
         {
             if (light == null) return;
+            FireLight.UseNormalMaps(light, 1f);
             nightLights.Add(light);
             Apply();
         }
@@ -73,11 +74,19 @@ namespace KingdomGame.World
                 var color = Daylight < 0.5f
                     ? Color.Lerp(config.nightColor, config.duskColor, Daylight * 2f)
                     : Color.Lerp(config.duskColor, config.dayColor, (Daylight - 0.5f) * 2f);
-                sun.color = color;
-                sun.intensity = Mathf.Lerp(config.nightBrightness, config.dayBrightness, Daylight);
+                var light = color * Mathf.Lerp(config.nightBrightness, config.dayBrightness, Daylight);
+                light.a = 1f;
+                // The config's colors and brightness are as they look on screen. URP uses the
+                // global 2D light's color as a linear light value without converting it (the
+                // other lights' colors are converted), so convert it here; otherwise night
+                // would look far brighter than set.
+                sun.color = QualitySettings.activeColorSpace == ColorSpace.Linear ? light.linear : light;
+                sun.intensity = 1f;
             }
 
             float dark = 1f - Daylight;
+            FireLight.Darkness = dark;
+            FireLight.DaytimeShare = config.fireDaytimeShare;
             foreach (var light in nightLights)
             {
                 if (light == null) continue;

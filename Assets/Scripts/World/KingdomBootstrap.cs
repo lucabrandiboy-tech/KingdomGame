@@ -31,6 +31,11 @@ namespace KingdomGame.World
                 return;
             }
             Look.Configure(content.view);
+            var walls = new System.Collections.Generic.List<Art.WallLook>();
+            foreach (var material in content.WallMaterials()) walls.Add(WallTiles.LookOf(material));
+            ArtSprites.Configure(content.art, walls);
+            if (content.dayNight != null)
+                FireLight.Configure(content.dayNight.fireColor, content.dayNight.fireRadius, content.dayNight.fireBrightness, content.dayNight.fireDaytimeShare);
 
             int seed = content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
             Debug.Log($"Map seed {seed}. Put this number in WorldConfig's Seed to get the same map again.");
@@ -105,14 +110,24 @@ namespace KingdomGame.World
             return kingdom;
         }
 
+        void OnDestroy() => ArtSprites.Release();
+
         // A small walled yard east of the start: stone on two sides, wood on one,
-        // and a stone tower, for trying bullets, rockets and C4.
+        // and a stone tower, for trying bullets, rockets and C4. Torches in the corners.
         void BuildOutpost(PixelWorld world)
         {
             Wall(world, "Outpost north wall", content.stone, 5, 4, 9, 1);
             Wall(world, "Outpost south wall", content.stone, 5, -4, 9, 1);
             Wall(world, "Outpost east palisade", content.wood, 13, -3, 1, 7);
             Wall(world, "Outpost tower", content.stone, 8, -1, 2, 2);
+            var fire = ArtSprites.Get(Art.ArtKeys.Brazier);
+            foreach (var spot in new[] { new Vector2(5.5f, 3.5f), new Vector2(12.5f, 3.5f), new Vector2(5.5f, -3f), new Vector2(12.5f, -3f) })
+            {
+                var torch = new GameObject("Torch");
+                torch.transform.SetParent(transform, false);
+                torch.transform.localPosition = spot;
+                torch.AddComponent<Building.Brazier>().Setup(fire, 0.75f, 0.9f);
+            }
         }
 
         void Wall(PixelWorld world, string wallName, StructureMaterial material, int x, int y, int width, int height)

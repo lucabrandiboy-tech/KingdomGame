@@ -39,6 +39,10 @@ was tested, so **2A and 2B are tested together**: `docs/PHASE-2B-TEST.md`.
   soft shadows, tree leaves that fade when you walk under them, fake-3D
   tumbling cubes when walls break, explosion flash/smoke/scorch marks,
   post-processing, a free-zooming camera with a much wider view
+- [x] **High-detail look** to match your reference picture: art baked at 1024
+  pixels per tile (you asked for about 1000) with normal maps, fires that light
+  the ground and show bumps, ground patches with ragged natural edges,
+  fieldstone walls, a late-afternoon start (`docs/DECISIONS.md` section 3)
 
 **2B (written, not yet tested in Unity)**
 - [x] Throne view: sit on the throne (E), the camera pulls out, WASD/wheel to look around

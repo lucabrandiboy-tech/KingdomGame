@@ -107,6 +107,20 @@ namespace UnityEngine.Rendering.Universal
         public ClampedFloatParameter smoothness = new ClampedFloatParameter(0.2f, 0.01f, 1f);
     }
 
+    public enum FilmGrainLookup { Thin1, Thin2, Medium1, Medium2, Medium3, Medium4, Medium5, Medium6, Large01, Large02, Custom }
+
+    public sealed class FilmGrainLookupParameter : VolumeParameter<FilmGrainLookup>
+    {
+        public FilmGrainLookupParameter(FilmGrainLookup value, bool overrideState = false) { }
+    }
+
+    public sealed class FilmGrain : VolumeComponent
+    {
+        public FilmGrainLookupParameter type = new FilmGrainLookupParameter(FilmGrainLookup.Thin1);
+        public ClampedFloatParameter intensity = new ClampedFloatParameter(0f, 0f, 1f);
+        public ClampedFloatParameter response = new ClampedFloatParameter(0.8f, 0f, 1f);
+    }
+
     public sealed class ColorAdjustments : VolumeComponent
     {
         public FloatParameter postExposure = new FloatParameter(0f);

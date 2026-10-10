@@ -19,12 +19,21 @@ namespace KingdomGame.EditorTools
     /// Menu: KingdomGame > Build Game Scenes.
     /// Makes the settings assets in Assets/Data (kept if they already exist, so
     /// your tuning survives; settings added later are filled in) and rebuilds
-    /// two scenes: Kingdom (the game) and StressTest. Also removes the old
+    /// two scenes: Kingdom (the game) and StressTest. Also bakes the art
+    /// (<see cref="ArtBaker"/>, only when the art changed) and removes the old
     /// Phase 1 test scenes and assets.
     /// </summary>
     public static class GameSetup
     {
         const string DataRoot = "Assets/Data";
+
+        /// <summary>
+        /// Bumped when settings made by an older version of this menu should get
+        /// new values (it normally keeps them, so your tuning survives).
+        /// 1: the high-detail look (evening start, fires, softer night, wall colors, color grading).
+        /// </summary>
+        const int SettingsVersion = 1;
+
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
         public const string StressScenePath = "Assets/Scenes/StressTest.unity";
 
@@ -51,6 +60,12 @@ namespace KingdomGame.EditorTools
             foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look" })
                 Folder(DataRoot, area);
             Folder("Assets", "Scenes");
+            Folder("Assets", "Art");
+
+            // Settings made by an older version of this menu get the new look
+            // (only how things look: gameplay numbers are kept).
+            var oldContent = AssetDatabase.LoadAssetAtPath<GameContent>(DataRoot + "/GameContent.asset");
+            bool newLook = oldContent != null && oldContent.settingsVersion < SettingsVersion;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -86,24 +101,12 @@ namespace KingdomGame.EditorTools
             var stone = Asset<StructureMaterial>("Destruction/StoneWall", m =>
             {
                 m.pixelHealth = 255; m.bulletPercent = 3; m.meleePercent = 8; m.explosivePercent = 100;
-                m.pattern = WallPattern.Stone;
-                m.gapColor = new Color32(46, 44, 42, 255);
-                m.colors = new[]
-                {
-                    new Color32(112, 110, 104, 255), new Color32(100, 98, 94, 255),
-                    new Color32(122, 118, 110, 255), new Color32(92, 92, 94, 255),
-                };
+                StoneLook(m);
             });
             var wood = Asset<StructureMaterial>("Destruction/WoodPalisade", m =>
             {
                 m.pixelHealth = 140; m.bulletPercent = 8; m.meleePercent = 35; m.explosivePercent = 140;
-                m.pattern = WallPattern.Logs;
-                m.gapColor = new Color32(30, 22, 16, 255);
-                m.colors = new[]
-                {
-                    new Color32(150, 112, 72, 255), new Color32(138, 102, 66, 255),
-                    new Color32(162, 122, 80, 255), new Color32(128, 94, 60, 255),
-                };
+                WoodLook(m);
             });
 
             // ---- Combat
@@ -145,6 +148,16 @@ namespace KingdomGame.EditorTools
             // ---- World
             var worldConfig = Asset<WorldConfig>("World/WorldConfig", w => { });
             var dayNight = Asset<DayNightConfig>("World/DayNightConfig", d => { });
+            if (newLook)
+            {
+                StoneLook(stone);
+                WoodLook(wood);
+                NewDayNightLook(dayNight);
+                EditorUtility.SetDirty(stone);
+                EditorUtility.SetDirty(wood);
+                EditorUtility.SetDirty(dayNight);
+                Debug.Log("Updated your older settings to the new look (day and night light, fires, wall colors, color grading). Gameplay numbers were kept.");
+            }
             var stressConfig = Asset<StressTestConfig>("World/StressTestConfig", c =>
             {
                 c.explosion = c4Blast;
@@ -158,7 +171,12 @@ namespace KingdomGame.EditorTools
                 view.glowMaterial = glow;
                 EditorUtility.SetDirty(view);
             }
-            var postProcessing = PostProcessingProfile();
+            if (newLook && view.walkZoomMin > 2f)
+            {
+                view.walkZoomMin = 2f;   // zoom in close enough to see the detail
+                EditorUtility.SetDirty(view);
+            }
+            var postProcessing = PostProcessingProfile(newLook);
 
             // ---- Kingdom: buildings, villagers
             var stoneWallBuilding = Asset<BuildingConfig>("Building/StoneWall", b =>
@@ -192,6 +210,18 @@ namespace KingdomGame.EditorTools
             if (content.storehouse == null) content.storehouse = storehouse;
             if (content.buildMenu == null || content.buildMenu.Length == 0)
                 content.buildMenu = new[] { stoneWallBuilding, woodWallBuilding, storehouse };
+
+            // The pictures, at full detail (the first time takes a few minutes).
+            try
+            {
+                content.art = ArtBaker.Bake(content, false);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError("Baking the art failed (the error is above), so the game draws its pictures in less detail when you press Play. Please send Claude that error.");
+            }
+            content.settingsVersion = SettingsVersion;
             EditorUtility.SetDirty(content);
             AssetDatabase.SaveAssets();
 
@@ -279,26 +309,76 @@ namespace KingdomGame.EditorTools
             return material;
         }
 
-        // The dark, gritty look: dark corners, glow around bright things, more contrast, less color.
-        static VolumeProfile PostProcessingProfile()
+        static void StoneLook(StructureMaterial m)
+        {
+            m.pattern = WallPattern.Stone;
+            m.gapColor = new Color32(46, 44, 42, 255);
+            m.colors = new[]
+            {
+                new Color32(112, 110, 104, 255), new Color32(100, 98, 94, 255),
+                new Color32(122, 118, 110, 255), new Color32(92, 92, 94, 255),
+            };
+        }
+
+        static void WoodLook(StructureMaterial m)
+        {
+            m.pattern = WallPattern.Logs;
+            m.gapColor = new Color32(30, 22, 16, 255);
+            m.colors = new[]
+            {
+                new Color32(150, 112, 72, 255), new Color32(138, 102, 66, 255),
+                new Color32(162, 122, 80, 255), new Color32(128, 94, 60, 255),
+            };
+        }
+
+        // The light settings of a new DayNightConfig (the times of sunrise, sunset and day length are kept).
+        static void NewDayNightLook(DayNightConfig d)
+        {
+            var fresh = ScriptableObject.CreateInstance<DayNightConfig>();
+            d.startHour = fresh.startHour;
+            d.twilightHours = fresh.twilightHours;
+            d.dayColor = fresh.dayColor;
+            d.duskColor = fresh.duskColor;
+            d.nightColor = fresh.nightColor;
+            d.dayBrightness = fresh.dayBrightness;
+            d.nightBrightness = fresh.nightBrightness;
+            d.torchColor = fresh.torchColor;
+            d.torchBrightness = fresh.torchBrightness;
+            d.torchRadius = fresh.torchRadius;
+            d.fireColor = fresh.fireColor;
+            d.fireBrightness = fresh.fireBrightness;
+            d.fireRadius = fresh.fireRadius;
+            d.fireDaytimeShare = fresh.fireDaytimeShare;
+            UnityEngine.Object.DestroyImmediate(fresh);
+        }
+
+        // The dark, gritty look: dark corners, glow around bright things, more
+        // contrast, less color, a little film grain. Made again when remake is true.
+        static VolumeProfile PostProcessingProfile(bool remake)
         {
             const string path = DataRoot + "/Look/PostProcessing.asset";
             var existing = AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
-            if (existing != null) return existing;
+            if (existing != null && !remake) return existing;
+            if (existing != null) AssetDatabase.DeleteAsset(path);
 
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             AssetDatabase.CreateAsset(profile, path);
             var vignette = profile.Add<Vignette>();
-            vignette.intensity.Override(0.38f);
-            vignette.smoothness.Override(0.45f);
+            vignette.intensity.Override(0.3f);
+            vignette.smoothness.Override(0.4f);
             var bloom = profile.Add<Bloom>();
             bloom.threshold.Override(0.85f);
-            bloom.intensity.Override(0.7f);
+            bloom.intensity.Override(0.9f);
             bloom.scatter.Override(0.65f);
+            // Gentle contrast: URP's contrast turns the darkest shades pure black, and this game is dark.
             var grading = profile.Add<ColorAdjustments>();
-            grading.contrast.Override(15f);
-            grading.saturation.Override(-18f);
+            grading.contrast.Override(5f);
+            grading.saturation.Override(-25f);
             grading.postExposure.Override(-0.1f);
+            var grain = profile.Add<FilmGrain>();
+            grain.type.Override(FilmGrainLookup.Medium1);
+            grain.intensity.Override(0.12f);
+            grain.response.Override(0.8f);
             // The effects are saved inside the profile file.
             foreach (var effect in profile.components)
             {

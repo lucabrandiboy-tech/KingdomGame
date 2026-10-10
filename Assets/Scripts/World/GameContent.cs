@@ -36,6 +36,8 @@ namespace KingdomGame.World
 
         [Header("Camera and look")]
         public ViewConfig view;
+        [Tooltip("The baked art (made by KingdomGame > Build Game Scenes).")]
+        public ArtLibrary art;
 
         [Header("Kingdom")]
         public KingdomConfig kingdom;
@@ -44,5 +46,21 @@ namespace KingdomGame.World
         public BuildingConfig storehouse;
         [Tooltip("What you can build from the throne, in build-bar order (keys 1-5).")]
         public BuildingConfig[] buildMenu = new BuildingConfig[0];
+
+        [Tooltip("Bumped by Build Game Scenes when it updates older settings to new defaults.")]
+        public int settingsVersion;
+
+        /// <summary>Every wall material the game uses (for drawing and baking wall tiles).</summary>
+        public System.Collections.Generic.List<StructureMaterial> WallMaterials()
+        {
+            var list = new System.Collections.Generic.List<StructureMaterial>();
+            void Add(StructureMaterial m) { if (m != null && !list.Contains(m)) list.Add(m); }
+            Add(stone);
+            Add(wood);
+            if (buildMenu != null)
+                foreach (var b in buildMenu)
+                    if (b != null) Add(b.wallMaterial);
+            return list;
+        }
     }
 }

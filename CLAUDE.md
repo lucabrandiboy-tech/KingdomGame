@@ -31,20 +31,29 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
   `Assets/Scripts/Editor/`, namespace `KingdomGame.EditorTools`). No assembly
   definitions yet.
 - **Data-driven:** gameplay numbers live in ScriptableObjects under
-  `Assets/Data`, never hardcoded. The art density is the one exception:
-  `Assets/Scripts/Core/PixelArt.cs` (64 texture pixels per tile). Camera zoom
-  and the look (shadows, glow material) are in `ViewConfig`.
+  `Assets/Data`, never hardcoded. The destruction grid is the one exception:
+  `Assets/Scripts/Core/PixelArt.cs` (64 health pixels per tile). Camera zoom
+  and the look (shadows, glow material, Art Detail) are in `ViewConfig`.
   Starting values for new assets are set in `Assets/Scripts/Editor/GameSetup.cs`
   (menu KingdomGame > Build Game Scenes), which keeps existing assets.
 - Art is drawn in code for now (`Assets/Scripts/Art`, pure C# on `PixelImage`),
-  seen from straight above, facing right, lit from the top-left. Preview it with
-  `dotnet run --project tools/art-preview/ArtPreview.csproj -- <folder>`
-  (scene.png is a mock screenshot) and look at the PNGs before committing art changes.
+  seen from straight above, facing right, lit from the top-left (baked into the
+  pictures, so nature isn't rotated). `Art/ArtCatalog.cs` lists every picture
+  (keys in `ArtKeys`). Build Game Scenes bakes them (`Editor/ArtBaker.cs`) at
+  `ViewConfig.artDetail` pixels per tile (1024 by default, the user's choice:
+  about 0.55 GB of video memory) into sheets with normal maps in
+  `Assets/Art/Generated` (gitignored) plus `Assets/Data/Look/ArtLibrary`; the
+  game gets sprites with `ArtSprites.Get(key)`. **Bump `ArtCatalog.Version`
+  whenever any art changes**, or Unity keeps the old bake. Preview it with
+  `dotnet run -c Release --project tools/art-preview/ArtPreview.csproj -- <folder> [pixels per tile] [--sheet=<name>]`
+  (about 90 s at 1024; game_day/night/close/outpost.png are mock screenshots lit
+  like URP: linear color, URP's falloff, bloom, contrast) and look at the PNGs
+  before committing art changes. Keep its lights and colors in step with the game.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
-- Textures are smooth (bilinear) with mipmaps; no Pixel Perfect Camera.
-  Art in `Assets/Art` gets these import settings automatically
-  (`PixelArtImporter`). Asset packs go in `Assets/ThirdParty` and must be added
+- Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.
+  Art in `Assets/Art` gets its import settings automatically
+  (`PixelArtImporter`; the baked sheets get their own). Asset packs go in `Assets/ThirdParty` and must be added
   to `CREDITS.md` with a commercial-use license.
 - **Every new file or folder under `Assets/` needs a `.meta` file.** When
   creating one outside Unity, write a valid `.meta` with a fresh random GUID

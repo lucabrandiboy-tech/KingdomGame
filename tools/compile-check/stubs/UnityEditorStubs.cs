@@ -34,6 +34,9 @@ namespace UnityEditor
         public TextureWrapMode wrapMode { get; set; }
         public TextureImporterNPOTScale npotScale { get; set; }
         public int maxTextureSize { get; set; }
+        public bool isReadable { get; set; }
+        public bool sRGBTexture { get; set; }
+        public bool alphaIsTransparency { get; set; }
     }
 
     public class AssetPostprocessor
@@ -96,6 +99,8 @@ namespace UnityEditor
     public sealed class EditorUtility
     {
         public static void SetDirty(Object target) { }
+        public static void DisplayProgressBar(string title, string info, float progress) { }
+        public static void ClearProgressBar() { }
     }
 
     public sealed class AssetDatabase
@@ -113,6 +118,7 @@ namespace UnityEditor
         public static void CreateAsset(Object asset, string path) { }
         public static void AddObjectToAsset(Object objectToAdd, Object assetObject) { }
         public static bool DeleteAsset(string path) => false;
+        public static void Refresh() { }
     }
 
     public class EditorBuildSettingsScene

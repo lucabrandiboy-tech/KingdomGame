@@ -40,6 +40,7 @@ namespace KingdomGame.Building
             transform.position = (Vector3)(Vector2)cells.center;
 
             ghost = Part("Ghost", look, SortOrder.Blueprints);
+            if (look != null) ghost.transform.localPosition = -look.bounds.center;   // centered, whatever the picture's pivot
             barBack = Part("Bar", white, SortOrder.Markers);
             barFill = Part("Bar fill", white, SortOrder.Markers + 1);
             barBack.color = new Color(0f, 0f, 0f, 0.6f);

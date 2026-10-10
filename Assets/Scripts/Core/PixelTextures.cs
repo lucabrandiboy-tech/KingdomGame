@@ -25,13 +25,13 @@ namespace KingdomGame
         /// A sprite covering the whole texture at the project's pixel density.
         /// The pivot is 0..1 (0,0 = bottom-left corner).
         /// </summary>
-        public static Sprite NewSprite(Texture2D texture, Vector2 pivot)
+        public static Sprite NewSprite(Texture2D texture, Vector2 pivot, float pixelsPerUnit = PixelArt.PixelsPerUnit)
         {
             var sprite = Sprite.Create(
                 texture,
                 new Rect(0, 0, texture.width, texture.height),
                 pivot,
-                PixelArt.PixelsPerUnit,
+                pixelsPerUnit,
                 0,
                 SpriteMeshType.FullRect);
             sprite.name = texture.name;
@@ -39,14 +39,33 @@ namespace KingdomGame
         }
 
         /// <summary>Turns a picture drawn in code into a sprite (its own texture, pivot from the picture).</summary>
-        public static Sprite ToSprite(Art.PixelImage image, string name, bool repeat = false)
+        /// <summary>
+        /// Like <see cref="NewSprite(Texture2D, Vector2, float)"/>, with a normal map for the
+        /// 2D lights (a linear texture, same size; needs Unity 6, ignored before).
+        /// </summary>
+        public static Sprite NewSprite(Texture2D texture, Vector2 pivot, float pixelsPerUnit, Texture2D normalMap)
+        {
+#if UNITY_6000_0_OR_NEWER
+            if (normalMap != null)
+            {
+                var normals = new[] { new SecondarySpriteTexture { name = "_NormalMap", texture = normalMap } };
+                var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), pivot, pixelsPerUnit, 0,
+                    SpriteMeshType.FullRect, Vector4.zero, false, normals);
+                sprite.name = texture.name;
+                return sprite;
+            }
+#endif
+            return NewSprite(texture, pivot, pixelsPerUnit);
+        }
+
+        public static Sprite ToSprite(Art.PixelImage image, string name, bool repeat = false, float pixelsPerUnit = PixelArt.PixelsPerUnit)
         {
             image.BleedEdges();
             var texture = NewTexture(image.Width, image.Height, name);
             if (repeat) texture.wrapMode = TextureWrapMode.Repeat;
             texture.SetPixels32(image.Pixels);
             texture.Apply(true, true);
-            return NewSprite(texture, image.Pivot);
+            return NewSprite(texture, image.Pivot, pixelsPerUnit);
         }
     }
 

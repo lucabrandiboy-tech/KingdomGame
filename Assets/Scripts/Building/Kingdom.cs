@@ -58,9 +58,12 @@ namespace KingdomGame.Building
         {
             if (Current == this) Current = null;
             Nav?.Dispose();
-            if (madeSprites.Count > 0 && madeSprites[0] != null) Destroy(madeSprites[0].texture); // they all share one texture
             foreach (var sprite in madeSprites)
-                if (sprite != null) Destroy(sprite);
+            {
+                if (sprite == null) continue;
+                Destroy(sprite.texture);
+                Destroy(sprite);
+            }
         }
 
         /// <summary>
@@ -82,65 +85,55 @@ namespace KingdomGame.Building
             MakeSprites(otherBuildings);
         }
 
-        // Every building picture in one texture.
+        // The baked building and villager pictures, plus two small markers drawn here.
         void MakeSprites(BuildingConfig[] otherBuildings)
         {
-            var atlas = new SpriteAtlasBuilder();
-            var throne = BuildingArt.Throne();
-            int throneId = atlas.Add(throne, "Throne");
-            int throneShadowId = atlas.Add(throne.Shadow(4, 1f), "Throne shadow");
-            int brazierId = atlas.Add(BuildingArt.Brazier(), "Brazier");
-            int whiteId = atlas.Add(BuildingArt.White(), "White");
-            int markerId = atlas.Add(BuildingArt.CellMarker(), "Cell marker");
-            var ids = new Dictionary<BuildingConfig, (int look, int shadow)>();
+            throneLook = ArtSprites.Get(ArtKeys.Throne);
+            throneShadow = ArtSprites.Get(ArtKeys.Shadow(ArtKeys.Throne));
+            brazier = ArtSprites.Get(ArtKeys.Brazier);
+            White = Made(PixelTextures.ToSprite(BuildingArt.White(), "White"));
+            CellMarker = Made(PixelTextures.ToSprite(BuildingArt.CellMarker(), "Cell marker"));
+
             var all = new List<BuildingConfig>(menu);
             if (otherBuildings != null) all.AddRange(otherBuildings);
             foreach (var b in all)
             {
-                if (b == null || ids.ContainsKey(b)) continue;
-                var picture = Picture(b);
-                ids[b] = (atlas.Add(picture, b.name), b.kind == BuildingKind.Storage ? atlas.Add(picture.Shadow(6, 1f), b.name + " shadow") : -1);
+                if (b == null || looks.ContainsKey(b)) continue;
+                if (b.kind == BuildingKind.Storage)
+                {
+                    looks[b] = ArtSprites.Get(ArtKeys.Storehouse);
+                    shadows[b] = ArtSprites.Get(ArtKeys.Shadow(ArtKeys.Storehouse));
+                }
+                else if (b.wallMaterial != null)
+                {
+                    looks[b] = ArtSprites.Get(ArtKeys.Wall(b.wallMaterial.name, 0)) ?? WallPicture(b.wallMaterial);
+                }
             }
-            var walking = CharacterArt.VillagerFrames(false);
-            var carrying = CharacterArt.VillagerFrames(true);
-            var walkIds = new int[walking.Length];
-            var carryIds = new int[carrying.Length];
-            for (int i = 0; i < walking.Length; i++) walkIds[i] = atlas.Add(walking[i], $"Villager {i}");
-            for (int i = 0; i < carrying.Length; i++) carryIds[i] = atlas.Add(carrying[i], $"Villager carrying {i}");
-            int villagerShadowId = atlas.Add(walking[0].Shadow(3, 1f), "Villager shadow");
 
-            var sprites = atlas.Build("Buildings and villagers");
-            madeSprites.AddRange(sprites);
-            throneLook = sprites[throneId];
-            throneShadow = sprites[throneShadowId];
-            brazier = sprites[brazierId];
-            White = sprites[whiteId];
-            CellMarker = sprites[markerId];
-            foreach (var pair in ids)
-            {
-                looks[pair.Key] = sprites[pair.Value.look];
-                if (pair.Value.shadow >= 0) shadows[pair.Key] = sprites[pair.Value.shadow];
-            }
-            villagerSprites = new VillagerSprites
-            {
-                Walking = System.Array.ConvertAll(walkIds, i => sprites[i]),
-                Carrying = System.Array.ConvertAll(carryIds, i => sprites[i]),
-                Shadow = sprites[villagerShadowId],
-            };
+            var walking = new Sprite[CharacterArt.VillagerDirections, CharacterArt.WalkFrames];
+            var carrying = new Sprite[CharacterArt.VillagerDirections, CharacterArt.WalkFrames];
+            for (int d = 0; d < CharacterArt.VillagerDirections; d++)
+                for (int f = 0; f < CharacterArt.WalkFrames; f++)
+                {
+                    walking[d, f] = ArtSprites.Get(ArtKeys.Villager(false, d, f));
+                    carrying[d, f] = ArtSprites.Get(ArtKeys.Villager(true, d, f));
+                }
+            villagerSprites = new VillagerSprites { Walking = walking, Carrying = carrying, Shadow = ArtSprites.Get(ArtKeys.VillagerShadow) };
         }
 
-        static PixelImage Picture(BuildingConfig b)
+        Sprite Made(Sprite sprite)
         {
-            if (b.kind == BuildingKind.Storage) return BuildingArt.Storehouse();
-            var material = b.wallMaterial;
-            var colors = material != null ? material.colors : null;
-            var gap = material != null ? material.gapColor : new Color32(40, 38, 36, 255);
-            var pixels = material != null && material.pattern == WallPattern.Logs
-                ? WallArt.Logs(PixelArt.PixelsPerUnit, gap, colors, 0)
-                : WallArt.Stone(PixelArt.PixelsPerUnit, gap, colors, 0);
-            var image = new PixelImage(PixelArt.PixelsPerUnit, PixelArt.PixelsPerUnit);
-            System.Array.Copy(pixels, image.Pixels, pixels.Length);
-            return image;
+            madeSprites.Add(sprite);
+            return sprite;
+        }
+
+        // A wall picture drawn here, for a wall material the baked art doesn't know.
+        Sprite WallPicture(StructureMaterial material)
+        {
+            var look = WallTiles.LookOf(material);
+            var image = look.Logs ? WallArt.Logs(128, look.Gap, look.Colors, 0) : WallArt.Stone(128, look.Gap, look.Colors, 0);
+            image.Pivot = Vector2.zero;
+            return Made(PixelTextures.ToSprite(image, material.name, false, 128));
         }
 
         /// <summary>The picture for a building (its blueprint ghost uses it too).</summary>
@@ -171,6 +164,7 @@ namespace KingdomGame.Building
             Sprite shadow = null;
             if (b != null) shadows.TryGetValue(b, out shadow);
             storage.Setup(b, cells, LookOf(b), shadow);
+            storage.AddLantern(brazier);
             storages.Add(storage);
             Occupy(cells, storage);
             Nav.Block(cells);

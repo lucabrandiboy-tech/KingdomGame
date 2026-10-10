@@ -7,9 +7,11 @@ namespace KingdomGame.Destruction
     /// One 64 x 64-pixel tile of a wall (one grid cell). It owns the pixels'
     /// colors and health, the picture on screen (and its shadow) and the collider.
     ///
-    /// Undamaged, it shares its tile picture with every other undamaged chunk
-    /// of the same material (cheap). The first hit gives it its own copy. After
-    /// damage only this chunk's picture is re-uploaded and only its collider is
+    /// Undamaged, it shares its tile picture (the baked full-detail art) with
+    /// every other undamaged chunk of the same material (cheap). The first hit
+    /// gives it its own, half-as-detailed picture (128 pixels across, twice the
+    /// breakable pixels, so holes have smooth edges). After damage only the
+    /// changed part of this chunk's picture is redrawn and only its collider is
     /// rebuilt, once per frame (<see cref="Flush"/>).
     /// </summary>
     public sealed class PixelChunk
@@ -33,9 +35,11 @@ namespace KingdomGame.Destruction
 
         Color32[] colors;   // null while undamaged (the variant's pixels are used)
         byte[] health;      // null while undamaged
+        Color32[] picture;  // the damaged chunk's picture, WallTiles.DetailSize across; null while undamaged
         Texture2D texture;
         Sprite sprite;
         bool pictureChanged, shapeChanged;
+        int dirtyMinX = int.MaxValue, dirtyMinY = int.MaxValue, dirtyMaxX = -1, dirtyMaxY = -1;
 
         /// <summary>Set by <see cref="PixelWorld"/> while this chunk waits for <see cref="Flush"/>.</summary>
         internal bool Queued;
@@ -94,12 +98,12 @@ namespace KingdomGame.Destruction
             int left = health[i] - amount;
             if (left > 0)
             {
-                // Cracked but standing: darken once it's below half health.
+                // Cracked but standing: darker once it's below half health.
                 int full = variant.Health[i];
                 if (left * 2 < full && health[i] * 2 >= full)
                 {
                     colors[i] = WallTiles.Shade(colors[i], -26);
-                    pictureChanged = true;
+                    MarkDirty(x, y);
                 }
                 health[i] = (byte)left;
                 return false;
@@ -125,11 +129,68 @@ namespace KingdomGame.Destruction
         void RemoveAt(int i)
         {
             health[i] = 0;
-            // Fully transparent, but keeping its color: smooth filtering blends edge
-            // pixels with their neighbors, and black ones would leave dark rims.
             colors[i].a = 0;
             SolidCount--;
-            pictureChanged = shapeChanged = true;
+            shapeChanged = true;
+            MarkDirty(i % Size, i / Size);
+        }
+
+        void MarkDirty(int x, int y)
+        {
+            pictureChanged = true;
+            if (x < dirtyMinX) dirtyMinX = x;
+            if (y < dirtyMinY) dirtyMinY = y;
+            if (x > dirtyMaxX) dirtyMaxX = x;
+            if (y > dirtyMaxY) dirtyMaxY = y;
+        }
+
+        // Redraws the part of the damaged picture around the changed pixels. The
+        // picture is twice as detailed as the breakable pixels, so the edges of
+        // holes are worked out smoothly from the pixels around them; broken edges
+        // and cracked stone are darker.
+        void RedrawPicture()
+        {
+            const int detail = WallTiles.DetailSize / Size;
+            int x0 = Mathf.Max(0, (dirtyMinX - 1) * detail), y0 = Mathf.Max(0, (dirtyMinY - 1) * detail);
+            int x1 = Mathf.Min(WallTiles.DetailSize - 1, (dirtyMaxX + 2) * detail - 1), y1 = Mathf.Min(WallTiles.DetailSize - 1, (dirtyMaxY + 2) * detail - 1);
+            for (int py = y0; py <= y1; py++)
+                for (int px = x0; px <= x1; px++)
+                {
+                    // How solid it is here, blended from the four nearest breakable pixels.
+                    float gx = (px + 0.5f) / detail - 0.5f, gy = (py + 0.5f) / detail - 0.5f;
+                    int ix = Mathf.FloorToInt(gx), iy = Mathf.FloorToInt(gy);
+                    float fx = gx - ix, fy = gy - iy;
+                    float solid = Solid(ix, iy) * (1 - fx) * (1 - fy) + Solid(ix + 1, iy) * fx * (1 - fy)
+                                + Solid(ix, iy + 1) * (1 - fx) * fy + Solid(ix + 1, iy + 1) * fx * fy;
+                    int pi = py * WallTiles.DetailSize + px;
+                    var c = variant.Detail[pi];
+                    float alpha = Smooth01((solid - 0.35f) / 0.3f);
+                    if (alpha > 0f)
+                    {
+                        int gi = Mathf.Clamp(py / detail, 0, Size - 1) * Size + Mathf.Clamp(px / detail, 0, Size - 1);
+                        float shade = 1f;
+                        if (health[gi] > 0 && health[gi] * 2 < variant.Health[gi]) shade *= 0.72f;         // cracked
+                        shade *= Mathf.Lerp(0.55f, 1f, Smooth01((solid - 0.5f) / 0.45f));                 // rough broken edge
+                        c = new Color32((byte)(c.r * shade), (byte)(c.g * shade), (byte)(c.b * shade), 255);
+                    }
+                    c.a = (byte)Mathf.RoundToInt(alpha * 255f);
+                    picture[pi] = c;
+                }
+            dirtyMinX = dirtyMinY = int.MaxValue;
+            dirtyMaxX = dirtyMaxY = -1;
+        }
+
+        float Solid(int x, int y)
+        {
+            x = Mathf.Clamp(x, 0, Size - 1);
+            y = Mathf.Clamp(y, 0, Size - 1);
+            return health[y * Size + x] > 0 ? 1f : 0f;
+        }
+
+        static float Smooth01(float t)
+        {
+            t = Mathf.Clamp01(t);
+            return t * t * (3f - 2f * t);
         }
 
         /// <summary>
@@ -153,7 +214,8 @@ namespace KingdomGame.Destruction
         {
             if (pictureChanged && texture != null)
             {
-                texture.SetPixels32(colors);
+                RedrawPicture();
+                texture.SetPixels32(picture);
                 texture.Apply(true);
             }
             if (shapeChanged)
@@ -177,10 +239,11 @@ namespace KingdomGame.Destruction
             if (health != null) return;
             health = (byte[])variant.Health.Clone();
             colors = (Color32[])variant.Colors.Clone();
-            texture = PixelTextures.NewTexture(Size, Size, GameObject.name);
-            texture.SetPixels32(colors);
+            picture = (Color32[])variant.Detail.Clone();
+            texture = PixelTextures.NewTexture(WallTiles.DetailSize, WallTiles.DetailSize, GameObject.name);
+            texture.SetPixels32(picture);
             texture.Apply(true);
-            sprite = PixelTextures.NewSprite(texture, Vector2.zero);
+            sprite = PixelTextures.NewSprite(texture, Vector2.zero, WallTiles.DetailSize, variant.DetailNormals);
             spriteRenderer.sprite = sprite;
             shadowRenderer.sprite = sprite;
             Owner.World.OnChunkFirstDamaged();

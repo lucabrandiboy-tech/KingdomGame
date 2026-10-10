@@ -18,7 +18,7 @@ namespace KingdomGame.Building
         Furniture,
     }
 
-    /// <summary>The tabs of the build bar.</summary>
+    /// <summary>The tabs of the build bar (new ones go at the end: assets store the number).</summary>
     public enum BuildCategory
     {
         Walls,
@@ -26,6 +26,8 @@ namespace KingdomGame.Building
         Furniture,
         Lights,
         Storage,
+        Traps,
+        Towers,
     }
 
     /// <summary>What a piece of furniture counts as, for naming the room it's in.</summary>

@@ -49,6 +49,10 @@ namespace UnityEngine.InputSystem
         public KeyControl enterKey => null;
         public KeyControl deleteKey => null;
         public KeyControl nKey => null;
+        public KeyControl f8Key => null;
+        public KeyControl f9Key => null;
+        public KeyControl leftBracketKey => null;
+        public KeyControl rightBracketKey => null;
     }
 
     public class Pointer

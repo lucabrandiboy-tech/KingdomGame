@@ -166,6 +166,10 @@ namespace KingdomGame
                 case KeyCode.P: return k.pKey;
                 case KeyCode.Return: return k.enterKey;
                 case KeyCode.N: return k.nKey;
+                case KeyCode.F8: return k.f8Key;
+                case KeyCode.F9: return k.f9Key;
+                case KeyCode.LeftBracket: return k.leftBracketKey;
+                case KeyCode.RightBracket: return k.rightBracketKey;
                 case KeyCode.Delete: return k.deleteKey;
                 case KeyCode.Escape: return k.escapeKey;
                 default:

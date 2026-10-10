@@ -3,6 +3,7 @@ using KingdomGame.Character;
 using KingdomGame.Combat;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
+using KingdomGame.Progression;
 using KingdomGame.UI;
 using KingdomGame.Zombies;
 using UnityEngine;
@@ -80,6 +81,11 @@ namespace KingdomGame.World
                 rig.Bounds = new Rect(-half, -half, half * 2, half * 2);
                 if (content.view != null) view.backgroundColor = content.view.backgroundColor;
             }
+
+            // The ages: survival moves through them wave by wave, free build has them all.
+            var research = gameObject.AddComponent<Research>();
+            research.Setup(content.progression, kingdom, survival ? Research.Unlocking.ByAge : Research.Unlocking.Everything);
+            gameObject.AddComponent<TechScreen>().Setup(research);
 
             var builder = kingdom.gameObject.AddComponent<BuildController>();
             builder.Setup(kingdom, rulerController, rig, canopies, content.view);

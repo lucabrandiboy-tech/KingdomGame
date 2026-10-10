@@ -131,7 +131,12 @@ namespace KingdomGame.Zombies
                 if (joining > 0) news += joining == 1 ? " A survivor joined you." : $" {joining} survivors joined you.";
                 else if (room <= 0 && config.survivorsPerWave > 0) news += " Survivors are out there: build beds so they can join you.";
             }
-            Announce(news, 6f);
+            // Every few waves the kingdom moves into the next age: new walls, traps and towers to build.
+            var research = Progression.Research.Current;
+            if (research != null && research.Mode == Progression.Research.Unlocking.ByAge && research.Config != null
+                && Wave % Mathf.Max(1, research.Config.survivalWavesPerAge) == 0 && research.AdvanceAge())
+                news += $" Your kingdom enters the {research.CurrentAge.displayName}: new walls, traps and towers to build!";
+            Announce(news, 7f);
         }
 
         // Zombies come out of the dark a few a second, from the wave's sides in turn.

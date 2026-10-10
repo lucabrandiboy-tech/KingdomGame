@@ -23,6 +23,9 @@ namespace KingdomGame.Combat
             public float Flown;      // tiles so far
             public float OverWalls;  // flies over walls for this many tiles
             public WeaponConfig Weapon;
+            public int PierceLeft;   // zombies it can still go through
+            public bool Lobbed;      // a shell or a stone that lands where it's aimed (nothing on the way stops it)
+            public System.Action<Vector2> OnLand;
         }
 
         [Tooltip("Most shots in flight at once; extra shots aren't fired.")]
@@ -33,13 +36,21 @@ namespace KingdomGame.Combat
         readonly Dictionary<WeaponConfig, Sprite> sprites = new Dictionary<WeaponConfig, Sprite>();
 
         public int Count => shots.Count;
+        /// <summary>The shots of the game scene (towers fire through it too).</summary>
+        public static Projectiles Current { get; private set; }
+
+        void Awake() => Current = this;
 
         /// <summary>
         /// Fires one shot from <paramref name="from"/> in <paramref name="direction"/> (plus the weapon's spread).
         /// <paramref name="overWalls"/> and <paramref name="range"/> replace the weapon's own when not negative
         /// (shots from up on a wall or a tower fly over the walls below; a mortar shell lands where it's aimed).
+        /// <paramref name="pierce"/>: zombies it goes through before stopping (ballista bolts).
+        /// <paramref name="lobbed"/>: nothing on the way stops it; it lands at the end of its range
+        /// (exploding, if the weapon does) and <paramref name="onLand"/> is told where.
         /// </summary>
-        public bool Fire(WeaponConfig weapon, Vector2 from, Vector2 direction, float overWalls = -1f, float range = -1f)
+        public bool Fire(WeaponConfig weapon, Vector2 from, Vector2 direction, float overWalls = -1f, float range = -1f,
+            int pierce = 0, bool lobbed = false, System.Action<Vector2> onLand = null)
         {
             if (weapon == null || shots.Count >= maxShots) return false;
             float spread = Random.Range(-weapon.spreadDegrees, weapon.spreadDegrees);
@@ -52,6 +63,9 @@ namespace KingdomGame.Combat
                 RangeLeft = range >= 0f ? range : weapon.range,
                 OverWalls = overWalls >= 0f ? overWalls : weapon.overWalls,
                 Weapon = weapon,
+                PierceLeft = pierce,
+                Lobbed = lobbed,
+                OnLand = onLand,
             });
 
             var r = RendererFor(shots.Count - 1);
@@ -90,22 +104,42 @@ namespace KingdomGame.Combat
                         wallAlong = (wallPoint - shot.Position).magnitude / stepLength;
                     }
                 }
-                // A zombie in the way, if it's closer than the wall.
-                if (Health.Raycast(shot.Position, to, Team.Zombie, out var zombie, out float along) && (!hitWall || along <= wallAlong))
+                // A zombie in the way, if it's closer than the wall (lobbed shots fly over everything).
+                if (!shot.Lobbed && Health.Raycast(shot.Position, to, Team.Zombie, out var zombie, out float along) && (!hitWall || along <= wallAlong))
                 {
-                    HitCreature(world, shot.Weapon, zombie, shot.Position + step * along, step / Mathf.Max(stepLength, 1e-6f));
+                    var direction = step / Mathf.Max(stepLength, 1e-6f);
+                    var at = shot.Position + step * along;
+                    HitCreature(world, shot.Weapon, zombie, at, direction);
+                    if (shot.PierceLeft > 0)
+                    {
+                        // Through it and on to the next one.
+                        shot.PierceLeft--;
+                        var past = at + direction * (zombie.Radius * 2f + 0.05f);
+                        float used = (past - shot.Position).magnitude;
+                        shot.Position = past;
+                        shot.RangeLeft -= used;
+                        shot.Flown += used;
+                        if (shot.RangeLeft <= 0f) { RemoveAt(i--); continue; }
+                        shots[i] = shot;
+                        Place(renderers[i], past, shot.Velocity);
+                        continue;
+                    }
+                    shot.OnLand?.Invoke(at);
                     RemoveAt(i--);
                     continue;
                 }
-                if (hitWall)
+                if (hitWall && !shot.Lobbed)
                 {
-                    Detonate(world, shot.Weapon, PixelWorld.PixelCenter(pixel.x, pixel.y));
+                    var at = PixelWorld.PixelCenter(pixel.x, pixel.y);
+                    Detonate(world, shot.Weapon, at);
+                    shot.OnLand?.Invoke(at);
                     RemoveAt(i--);
                     continue;
                 }
                 if (lastStep)
                 {
                     if (shot.Weapon.explodeAtEndOfRange && world != null) Detonate(world, shot.Weapon, to);
+                    shot.OnLand?.Invoke(to);
                     RemoveAt(i--);
                     continue;
                 }

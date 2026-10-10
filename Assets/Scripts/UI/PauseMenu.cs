@@ -31,7 +31,7 @@ namespace KingdomGame.UI
                 if (IsOpen) Close();
                 return;
             }
-            if (!GameInput.Pressed(KeyCode.Escape)) return;
+            if (!GameInput.Pressed(KeyCode.Escape) || UiFocus.TakesEscape) return;
             if (builder != null && (builder.Active || builder.LeftFrame == Time.frameCount)) return;
             if (IsOpen) Close();
             else Open();

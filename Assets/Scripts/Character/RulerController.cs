@@ -155,6 +155,11 @@ namespace KingdomGame.Character
                 if (toMouse.sqrMagnitude > 0.04f) aim = toMouse.normalized;
             }
             if (look != null) look.Show(Velocity, aim, config.moveSpeed, config.stepsPerSecond);
+            if (UiFocus.PanelOpen)
+            {
+                Hint = null;
+                return;
+            }
 
             float now = Time.time;
             if (primaryWeapon != null && (primaryWeapon.automatic ? GameInput.FireHeld : GameInput.FirePressed) && now >= primaryReady)

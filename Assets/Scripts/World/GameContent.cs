@@ -3,6 +3,7 @@ using KingdomGame.Character;
 using KingdomGame.Combat;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
+using KingdomGame.Progression;
 using KingdomGame.Villagers;
 using KingdomGame.Zombies;
 using UnityEngine;
@@ -51,6 +52,10 @@ namespace KingdomGame.World
         [Header("Survival")]
         [Tooltip("The waves of zombies, and the kinds of zombie.")]
         public SurvivalConfig survival;
+
+        [Header("Ages")]
+        [Tooltip("The ages from the Stone Age to World War 2, their research, and what each lets you build.")]
+        public ProgressionConfig progression;
 
         [Tooltip("Bumped by Build Game Scenes when it updates older settings to new defaults.")]
         public int settingsVersion;

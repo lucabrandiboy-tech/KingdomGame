@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KingdomGame.Character;
+using KingdomGame.Progression;
 using KingdomGame.World;
 using UnityEngine;
 
@@ -9,7 +10,9 @@ namespace KingdomGame.Building
     /// The throne view. While the ruler sits on the throne the camera pulls far
     /// out and you plan buildings on the grid:
     /// <list type="bullet">
-    /// <item>The build bar has tabs (walls and doors, floors, furniture, lights, storage): click one, or Tab for the next.</item>
+    /// <item>The build bar has tabs (walls and doors, floors, furniture, lights, storage): click one, or Tab for the next.
+    /// Each age's buildings are on a page of their own: [ and ] (or the arrows) turn the pages. Things not
+    /// researched yet are shown greyed out.</item>
     /// <item>1-9 (or the buttons) pick something on the tab; pick it again to put it away. R turns it.</item>
     /// <item>Left click places it. Walls: hold and drag for a straight line. Floors: drag for a whole area.</item>
     /// <item>Right click: stop placing; with nothing picked, cancel the blueprint under the mouse or tear down what's built there (half its cost back).</item>
@@ -39,6 +42,8 @@ namespace KingdomGame.Building
         BuildCategory category = BuildCategory.Walls;
         readonly List<BuildingConfig> items = new List<BuildingConfig>();
         readonly List<BuildCategory> categories = new List<BuildCategory>();
+        int agePage;
+        int shownAge = -1;
         int selected = -1;
         int rotation;
         bool turnedByHand;   // R was pressed: don't turn doors to fit the walls by themselves
@@ -57,8 +62,14 @@ namespace KingdomGame.Building
         /// <summary>The build bar's tabs: only the ones that have something on them.</summary>
         public IReadOnlyList<BuildCategory> Categories => categories;
         public BuildCategory Category => category;
-        /// <summary>What's on the open tab.</summary>
+        /// <summary>What's on the open tab, on the open age page.</summary>
         public IReadOnlyList<BuildingConfig> Items => items;
+        /// <summary>The age whose buildings the build bar shows.</summary>
+        public int AgePage => agePage;
+        /// <summary>The last age page you can turn to (the kingdom's age; every age in free build).</summary>
+        public int LastAgePage => Research.Current != null ? Research.Current.Age : 0;
+        // The page the bar opens on: the newest age (free build: the first, since every age is open).
+        int OpeningPage => Research.Current != null && Research.Current.Mode == Research.Unlocking.Everything ? 0 : LastAgePage;
         public int SelectedIndex => selected;
         public BuildingConfig Selected => selected >= 0 && selected < items.Count ? items[selected] : null;
         /// <summary>Which way the building being placed faces (R turns it).</summary>
@@ -82,8 +93,19 @@ namespace KingdomGame.Building
             foreach (BuildCategory c in System.Enum.GetValues(typeof(BuildCategory)))
                 foreach (var b in kingdom.BuildMenu)
                     if (b != null && b.category == c) { categories.Add(c); break; }
+            agePage = OpeningPage;
             if (categories.Count > 0) SelectCategory(categories[0]);
         }
+
+        /// <summary>Turns the build bar to an age's page (0 = the first age).</summary>
+        public void SelectAge(int age)
+        {
+            agePage = Mathf.Clamp(age, 0, LastAgePage);
+            SelectCategory(category);
+        }
+
+        /// <summary>Whether a building has been researched (or comes with its age).</summary>
+        public static bool Unlocked(BuildingConfig b) => Research.Current == null || Research.Current.IsUnlocked(b);
 
         /// <summary>Sits the ruler on the throne and pulls the camera out.</summary>
         public void Enter()
@@ -118,8 +140,9 @@ namespace KingdomGame.Building
         {
             category = c;
             items.Clear();
+            var research = Research.Current;
             foreach (var b in kingdom.BuildMenu)
-                if (b != null && b.category == c) items.Add(b);
+                if (b != null && b.category == c && (research == null || research.AgeOf(b) == agePage)) items.Add(b);
             selected = -1;
             dragging = false;
         }
@@ -130,6 +153,11 @@ namespace KingdomGame.Building
             selected = selected == index || index < 0 || index >= items.Count ? -1 : index;
             dragging = false;
             turnedByHand = false;
+            if (selected >= 0 && !Unlocked(items[selected]))
+            {
+                Say(Research.Current.LockedReason(items[selected]));
+                selected = -1;
+            }
             var b = Selected;
             if (b != null) rotation = b.ClampRotation(rotation);
         }
@@ -143,7 +171,14 @@ namespace KingdomGame.Building
         void Update()
         {
             if (Time.unscaledTime > messageUntil) Message = null;
-            if (!Active || kingdom == null || view == null || Time.timeScale <= 0f) return;
+            // A new age: the build bar opens on its page.
+            if (Research.Current != null && Research.Current.Age != shownAge)
+            {
+                shownAge = Research.Current.Age;
+                agePage = OpeningPage;
+                if (kingdom != null) SelectCategory(category);
+            }
+            if (!Active || kingdom == null || view == null || Time.timeScale <= 0f || UiFocus.TakesEscape) return;
 
             bool firstFrame = Time.frameCount == enteredFrame;
             if (!firstFrame && GameInput.Pressed(KeyCode.Escape))
@@ -160,6 +195,8 @@ namespace KingdomGame.Building
             if (rig != null) rig.Pan(GameInput.Move);
             if (GameInput.Pressed(KeyCode.Tab) && categories.Count > 0)
                 SelectCategory(categories[(categories.IndexOf(category) + 1) % categories.Count]);
+            if (GameInput.Pressed(KeyCode.LeftBracket)) SelectAge(agePage - 1);
+            if (GameInput.Pressed(KeyCode.RightBracket)) SelectAge(agePage + 1);
             for (int i = 0; i < NumberKeys.Length && i < items.Count; i++)
                 if (GameInput.Pressed(NumberKeys[i])) Select(i);
             if (GameInput.Pressed(KeyCode.R) && Selected != null)

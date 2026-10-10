@@ -362,6 +362,37 @@ namespace KingdomGame.Building
             get { int total = 0; foreach (var s in storages) total += s.Stock.Capacity; return total; }
         }
 
+        /// <summary>How much of <paramref name="type"/> is in storage and not promised to a builder.</summary>
+        public int Available(ResourceType type)
+        {
+            int total = 0;
+            foreach (var s in storages) total += s.Available(type);
+            return total;
+        }
+
+        /// <summary>
+        /// Takes resources out of storage (research costs), never what builders have been
+        /// promised. Takes nothing and returns false if there isn't enough of everything.
+        /// </summary>
+        public bool TrySpend(int wood, int stone, int food)
+        {
+            if (Available(ResourceType.Wood) < wood || Available(ResourceType.Stone) < stone || Available(ResourceType.Food) < food) return false;
+            Take(ResourceType.Wood, wood);
+            Take(ResourceType.Stone, stone);
+            Take(ResourceType.Food, food);
+            return true;
+        }
+
+        void Take(ResourceType type, int amount)
+        {
+            foreach (var s in storages)
+            {
+                if (amount <= 0) return;
+                int take = Mathf.Min(amount, s.Available(type));
+                if (take > 0 && s.Stock.TryRemove(type, take)) amount -= take;
+            }
+        }
+
         /// <summary>The closest storehouse that has some of <paramref name="type"/> not promised to anyone.</summary>
         public Storage NearestWith(ResourceType type, Vector2 from)
         {

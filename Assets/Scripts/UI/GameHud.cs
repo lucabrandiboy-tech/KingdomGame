@@ -89,7 +89,7 @@ namespace KingdomGame.UI
             {
                 box = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, richText = true, wordWrap = false };
                 hint = new GUIStyle(box) { alignment = TextAnchor.MiddleCenter };
-                button = new GUIStyle(GUI.skin.button) { richText = true, alignment = TextAnchor.MiddleCenter };
+                button = new GUIStyle(GUI.skin.button) { richText = true, alignment = TextAnchor.MiddleCenter, wordWrap = true };
                 selectedButton = new GUIStyle(button);
                 selectedButton.normal.textColor = selectedButton.hover.textColor = new Color(1f, 0.85f, 0.4f);
                 announce = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, richText = true, wordWrap = true };
@@ -170,6 +170,25 @@ namespace KingdomGame.UI
                 GUI.Label(new Rect(x, y, width, height), health.Dead ? "<b>Fallen</b>" : $"<b>Health {Mathf.CeilToInt(health.Current)} / {Mathf.CeilToInt(health.Max)}</b>", barLabel);
                 y += height + 6f;
             }
+            // The age, and what's being researched (T opens the research screen).
+            var research = Progression.Research.Current;
+            if (research != null && research.CurrentAge != null)
+            {
+                text.Clear();
+                text.Append("<b>").Append(research.CurrentAge.displayName).Append("</b>");
+                if (research.Mode == Progression.Research.Unlocking.ByResearch)
+                {
+                    var now = research.Researching;
+                    if (now == null) text.Append("   Nothing researched: press T");
+                    else if (research.Waiting != null) text.Append($"   {now.displayName}: <color=#ff8a80>{research.Waiting}</color>");
+                    else text.Append($"   {now.displayName}: {TechScreen.Duration(research.SecondsLeft)} left");
+                }
+                text.Append("   (T: research)");
+                var ageContent = new GUIContent(text.ToString());
+                var ageSize = box.CalcSize(ageContent) + new Vector2(10, 6);
+                GUI.Box(new Rect(x, y, ageSize.x, ageSize.y), ageContent, box);
+                y += ageSize.y + 6f;
+            }
             if (waves == null) return;
 
             text.Clear();
@@ -247,17 +266,33 @@ namespace KingdomGame.UI
             float gap = font * 0.4f;
             float tabWidth = font * 7.5f, tabHeight = font * 1.9f;
             float width = font * 9.5f, height = font * 3.2f;
-            int perRow = Mathf.Max(1, Mathf.Min(items.Count, Mathf.FloorToInt((Screen.width - font * 4f) / (width + gap))));
+            int perRow = Mathf.Max(1, Mathf.Min(Mathf.Max(1, items.Count), Mathf.FloorToInt((Screen.width - font * 4f) / (width + gap))));
             int rows = Mathf.Max(1, Mathf.CeilToInt(items.Count / (float)perRow));
-            float rowWidth = perRow * width + (perRow - 1) * gap;
+            float rowWidth = Mathf.Max(width * 2f, perRow * width + (perRow - 1) * gap);
             float tabsWidth = tabs.Count * tabWidth + (tabs.Count - 1) * gap;
             float total = Mathf.Max(rowWidth, tabsWidth);
             float bottom = Screen.height - font;
             float itemsTop = bottom - rows * height - (rows - 1) * gap;
             float tabsTop = itemsTop - gap - tabHeight;
+            // Above the tabs: which age's buildings these are, with arrows to the other ages.
+            var research = Progression.Research.Current;
+            bool pages = research != null && builder.LastAgePage > 0;
+            float pagerTop = tabsTop - (pages ? gap + tabHeight : 0f);
             float left = (Screen.width - total) / 2f;
-            buildBar = new Rect(left - gap, tabsTop - gap, total + gap * 2, bottom - tabsTop + gap * 2);
+            buildBar = new Rect(left - gap, pagerTop - gap, total + gap * 2, bottom - pagerTop + gap * 2);
             GUI.Box(buildBar, GUIContent.none);
+            if (pages)
+            {
+                var age = research.AgeAt(builder.AgePage);
+                float pagerWidth = font * 18f, arrow = font * 2.4f;
+                float pagerLeft = (Screen.width - pagerWidth) / 2f;
+                GUI.enabled = builder.AgePage > 0;
+                if (GUI.Button(new Rect(pagerLeft, pagerTop, arrow, tabHeight), "<b>[ <</b>", button)) builder.SelectAge(builder.AgePage - 1);
+                GUI.enabled = builder.AgePage < builder.LastAgePage;
+                if (GUI.Button(new Rect(pagerLeft + pagerWidth - arrow, pagerTop, arrow, tabHeight), "<b>> ]</b>", button)) builder.SelectAge(builder.AgePage + 1);
+                GUI.enabled = true;
+                GUI.Label(new Rect(pagerLeft + arrow, pagerTop, pagerWidth - arrow * 2f, tabHeight), $"<b>{(age != null ? age.displayName : "")}</b>", barLabel);
+            }
 
             float tabsLeft = (Screen.width - tabsWidth) / 2f;
             for (int i = 0; i < tabs.Count; i++)
@@ -267,6 +302,8 @@ namespace KingdomGame.UI
                     builder.SelectCategory(tabs[i]);
             }
             float rowLeft = (Screen.width - rowWidth) / 2f;
+            if (items.Count == 0)
+                GUI.Label(new Rect(rowLeft, itemsTop, rowWidth, height), "<color=#a09888>Nothing on this tab in this age</color>", barLabel);
             for (int i = 0; i < items.Count; i++)
             {
                 var b = items[i];
@@ -274,7 +311,10 @@ namespace KingdomGame.UI
                 int row = i / perRow, column = i % perRow;
                 bool selected = builder.SelectedIndex == i;
                 string key = i < 9 ? $"{i + 1}  " : "";
-                string label = $"<b>{key}{b.displayName}</b>\n{b.CostText()}";
+                // Not researched yet: greyed out, saying what it needs.
+                string locked = research != null ? research.LockedReason(b) : null;
+                string label = locked == null ? $"<b>{key}{b.displayName}</b>\n{b.CostText()}"
+                    : $"<color=#8a8478><b>{key}{b.displayName}</b>\n{locked}</color>";
                 var rect = new Rect(rowLeft + column * (width + gap), itemsTop + row * (height + gap), width, height);
                 if (GUI.Button(rect, label, selected ? selectedButton : button))
                     builder.Select(i);
@@ -289,6 +329,8 @@ namespace KingdomGame.UI
                 case BuildCategory.Floors: return "Floors & rugs";
                 case BuildCategory.Furniture: return "Furniture";
                 case BuildCategory.Lights: return "Lights";
+                case BuildCategory.Traps: return "Traps";
+                case BuildCategory.Towers: return "Towers";
                 default: return "Storage";
             }
         }

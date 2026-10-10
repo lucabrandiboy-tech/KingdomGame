@@ -3,7 +3,10 @@ using UnityEngine;
 
 namespace KingdomGame.Combat
 {
-    /// <summary>A gun: how fast it shoots, how its shots fly and what they do on impact.</summary>
+    /// <summary>
+    /// A weapon: how fast it shoots, how its shots fly and what they do on impact. A melee
+    /// weapon (the club) hits zombies in front of the ruler instead, out to its Range.
+    /// </summary>
     [CreateAssetMenu(menuName = "KingdomGame/Combat/Weapon", fileName = "Weapon")]
     public sealed class WeaponConfig : ScriptableObject
     {
@@ -25,6 +28,14 @@ namespace KingdomGame.Combat
         [Range(0, 45)] public float spreadDegrees = 2f;
         [Tooltip("Rockets explode at the end of their flight even if they hit nothing.")]
         public bool explodeAtEndOfRange;
+        [Tooltip("Hits zombies in front of the ruler (within Range tiles and Melee Arc) instead of shooting.")]
+        public bool melee;
+        [Tooltip("Melee: how wide the swing is, in degrees.")]
+        [Range(10, 180)] public float meleeArc = 110f;
+        [Tooltip("Zombies a shot goes through before it stops (crossbow bolts, rifle bullets).")]
+        [Min(0)] public int pierce;
+        [Tooltip("Shots fired at once (a blunderbuss or shotgun spreads them over Spread Degrees).")]
+        [Min(1)] public int pellets = 1;
 
         [Header("Look")]
         [Min(1)] public int projectileLength = 8;

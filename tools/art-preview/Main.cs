@@ -211,6 +211,30 @@ static class Program
                     Dug(x - 1, y), Dug(x + 1, y), Dug(x, y + 1), Dug(x, y - 1));
             }
         SaveImage(mine, Path.Combine(dir, "mine.png"));
+
+        // The ruler's era weapons (WeaponArt) at 256 pixels per tile, in a column, on grass.
+        var guns = new List<PixelImage>();
+        foreach (var weaponName in WeaponArt.All) guns.Add(WeaponArt.Draw(weaponName, 256));
+        int gw = 0, gh = 16;
+        foreach (var g in guns) { gw = Math.Max(gw, g.Width); gh += g.Height + 16; }
+        var weapons = new PixelImage(gw + 32, gh);
+        for (int i = 0; i < weapons.Pixels.Length; i++) weapons.Pixels[i] = PixelImage.Rgb(70, 84, 52);
+        int wy = weapons.Height - 16;
+        foreach (var g in guns)
+        {
+            wy -= g.Height;
+            int ox = 16 + (gw - g.Width) / 2;
+            for (int y = 0; y < g.Height; y++)
+                for (int x = 0; x < g.Width; x++)
+                {
+                    var c = g.Pixels[y * g.Width + x];
+                    if (c.a == 0) continue;
+                    int k = (wy + y) * weapons.Width + ox + x;
+                    weapons.Pixels[k] = PixelImage.Mix(weapons.Pixels[k], c, c.a / 255f);
+                }
+            wy -= 16;
+        }
+        SaveImage(weapons, Path.Combine(dir, "weapons.png"));
     }
 
     // ------------------------------------------------------------- world --

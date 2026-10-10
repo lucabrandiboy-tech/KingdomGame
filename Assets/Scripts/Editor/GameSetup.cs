@@ -320,6 +320,7 @@ namespace KingdomGame.EditorTools
             if (content.survival == null) content.survival = survival;
             if (content.progression == null) content.progression = Ages(defensesByAge, roofs);
             if (content.network == null) content.network = Asset<Networking.NetworkConfig>("Network/NetworkConfig", n => { });
+            if (content.armory == null) content.armory = Weapons(bullet, rockets, c4);
             // Everything on the build bar, in order (each item shows on its category's tab).
             var menu = new List<BuildingConfig> { stoneWallBuilding, woodWallBuilding };
             menu.AddRange(castle);
@@ -534,6 +535,60 @@ namespace KingdomGame.EditorTools
                 Store("Crates", "Crates", FurnitureArt.Crates, 1, 15, 3f, 250, 0.3f, 180f),
             };
             return list;
+        }
+
+        // The ruler's weapons, one for each age (and dynamite and the bazooka): a club to start with, the rest
+        // made at an anvil by crafters once the kingdom reaches their age. Later ones cost iron and gold from the mines.
+        static Combat.ArmoryConfig Weapons(DamageType bullet, WeaponConfig rockets, ExplosiveConfig c4)
+        {
+            WeaponConfig Gun(string file, float hit, float rate, bool auto, float speed, float range, float spread, int length, int thick, Color32 color,
+                DamageType damage, int pierce = 0, float recoil = 0.006f, float overWalls = 1.2f) =>
+                Asset<WeaponConfig>("Combat/Ruler" + file, w =>
+                {
+                    w.hitDamage = hit; w.fireRate = rate; w.automatic = auto; w.projectileSpeed = speed; w.range = range; w.spreadDegrees = spread;
+                    w.projectileLength = length; w.projectileThickness = thick; w.projectileColor = color; w.damage = damage; w.pierce = pierce;
+                    w.recoilShake = recoil; w.overWalls = overWalls;
+                });
+            var stone = new Color32(130, 124, 112, 255);
+            var wood = new Color32(176, 140, 92, 255);
+            var tracer = new Color32(255, 214, 102, 255);
+            var club = Asset<WeaponConfig>("Combat/RulerClub", w =>
+            {
+                w.melee = true; w.hitDamage = 20f; w.fireRate = 1.8f; w.automatic = true; w.range = 1.15f; w.meleeArc = 110f;
+            });
+            var sling = Gun("Sling", 14f, 1.3f, false, 14f, 7f, 4f, 5, 5, stone, null, 0, 0f, 0.6f);
+            var bow = Gun("Bow", 24f, 1.3f, false, 19f, 9.5f, 2f, 12, 2, wood, null, 0, 0f, 0.8f);
+            var crossbow = Gun("Crossbow", 42f, 0.7f, false, 25f, 10.5f, 1.2f, 10, 2, wood, null, 1, 0.004f, 1f);
+            var handCannon = Gun("HandCannon", 70f, 0.35f, false, 26f, 9f, 5f, 6, 4, tracer, bullet, 0, 0.03f);
+            var musket = Gun("Musket", 65f, 0.5f, false, 32f, 12f, 2.5f, 6, 3, tracer, bullet, 0, 0.02f);
+            var lever = Gun("LeverRifle", 40f, 1.8f, false, 34f, 13f, 1.5f, 8, 2, tracer, bullet, 0, 0.01f);
+            var bolt = Gun("BoltRifle", 80f, 0.9f, false, 40f, 16f, 0.6f, 9, 2, tracer, bullet, 2, 0.015f);
+            var smg = Gun("Smg", 20f, 11f, true, 32f, 11f, 5f, 7, 2, tracer, bullet, 0, 0.006f);
+
+            Combat.ArmsItem Item(string name, string about, string art, int age, WeaponConfig weapon, float seconds,
+                int wood = 0, int food = 0, int copper = 0, int iron = 0, int gold = 0) => new Combat.ArmsItem
+            {
+                displayName = name, description = about, art = art, age = age, weapon = weapon, craftSeconds = seconds,
+                woodCost = wood, foodCost = food, copperCost = copper, ironCost = iron, goldCost = gold,
+            };
+            var items = new[]
+            {
+                Item("Club", "A heavy wooden club: hits everything in front of you.", Art.WeaponArt.Club, 0, club, 1f),
+                Item("Sling", "Throws stones: weak, but it keeps them at a distance.", Art.WeaponArt.Sling, 0, sling, 25f, wood: 30, food: 10),
+                Item("Bow", "Arrows, faster and further than stones.", Art.WeaponArt.Bow, 1, bow, 40f, wood: 80, food: 20, copper: 20),
+                Item("Crossbow", "Slow to load; its bolts go through the first zombie.", Art.WeaponArt.Crossbow, 2, crossbow, 70f, wood: 120, copper: 60, iron: 40),
+                Item("Hand cannon", "A bronze tube on a pole: one huge, wild shot.", Art.WeaponArt.HandCannon, 3, handCannon, 100f, wood: 100, copper: 60, iron: 160),
+                Item("Musket", "Hard-hitting and far-reaching, slow to reload.", Art.WeaponArt.Musket, 4, musket, 130f, wood: 140, iron: 220, gold: 30),
+                Item("Lever-action rifle", "Quick shots, one after another.", Art.WeaponArt.LeverRifle, 5, lever, 160f, wood: 120, iron: 280, gold: 50),
+                Item("Bolt-action rifle", "Long range; each bullet goes through two zombies.", Art.WeaponArt.BoltRifle, 6, bolt, 190f, wood: 140, iron: 360, gold: 70),
+                Item("Submachine gun", "Fires as long as you hold the button.", Art.WeaponArt.Smg, 7, smg, 240f, wood: 100, iron: 450, gold: 110),
+                Item("Dynamite", "Throw it with G: it blows holes in walls and zombies.", Art.WeaponArt.Club, 5, null, 60f, wood: 80, food: 120, copper: 80),
+                Item("Bazooka", "Rockets with the right mouse button, whatever is in your hand.", Art.WeaponArt.Bazooka, 7, rockets, 300f, copper: 60, iron: 600, gold: 160),
+            };
+            items[0].startsOwned = true;
+            items[9].explosive = c4;
+            items[10].heavy = true;
+            return Asset<Combat.ArmoryConfig>("Combat/ArmoryConfig", a => a.items = items);
         }
 
         static readonly string[] AdvanceNames = { "Bronze casting", "Iron smelting", "Feudal lords", "Gunpowder", "Steam power", "Total war", "Blitzkrieg" };

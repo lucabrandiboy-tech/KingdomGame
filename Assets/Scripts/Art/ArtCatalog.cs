@@ -59,6 +59,8 @@ namespace KingdomGame.Art
         public static string Ruler(int direction, int frame) => $"Ruler/{direction}/{frame}";
         public static string RulerShadow(int frame) => $"Ruler/Shadow/{frame}";
         public const string Rifle = "Ruler/Rifle";
+        /// <summary>One of the ruler's era weapons (names in WeaponArt).</summary>
+        public static string Weapon(string name) => $"Ruler/Weapon/{name}";
         public static string Villager(bool carrying, int direction, int frame) => $"Villager/{(carrying ? "Carrying" : "Walking")}/{direction}/{frame}";
         public const string VillagerShadow = "Villager/Shadow";
         public static string Wall(string material, int variant) => $"Wall/{material}/{variant}";
@@ -101,7 +103,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 5;
+        public const int Version = 6;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -142,6 +144,11 @@ namespace KingdomGame.Art
             for (int f = 0; f < CharacterArt.WalkFrames; f++)
                 Shadow(items, ArtKeys.Ruler(0, f), "CharacterShadows", 0.02f, ArtKeys.RulerShadow(f));
             Add(items, ArtKeys.Rifle, "Ruler", CharacterArt.Rifle, false);
+            foreach (var weapon in WeaponArt.All)
+            {
+                string w = weapon;
+                Add(items, ArtKeys.Weapon(w), "Ruler", p => WeaponArt.Draw(w, p), false);
+            }
 
             foreach (bool carrying in new[] { false, true })
                 for (int d = 0; d < CharacterArt.VillagerDirections; d++)

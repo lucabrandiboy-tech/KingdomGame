@@ -1390,10 +1390,44 @@ namespace KingdomGame.Building
             return far != null && !far.Empty ? far : best;
         }
 
+        /// <summary>The ruler's weapons and the order book crafters work on (null if there's no armory).</summary>
+        public Combat.Armory Armory { get; set; }
+
+        /// <summary>The anvils (workshop furniture) crafters work at.</summary>
+        Furniture NearestAnvil(Vector2 from)
+        {
+            Furniture best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var f in furniture)
+            {
+                if (f == null || f.Config.roomTag != RoomTag.Workshop) continue;
+                float d = Travel(from, f.Cells.center);
+                if (d < bestDistance) { bestDistance = d; best = f; }
+            }
+            return best;
+        }
+
+        /// <summary>Why crafters are standing about, for the villagers panel (null if they're fine).</summary>
+        public string CraftProblem()
+        {
+            if (NearestAnvil(Throne != null ? Throne.Center : Vector2.zero) == null) return "no anvil to work at: build one (Furniture tab)";
+            if (Armory == null || !Armory.HasWork) return "nothing ordered: order weapons at an anvil (walk up, E)";
+            return null;
+        }
+
         /// <summary>Gives an idle villager something to do, if there is anything.</summary>
         public void AssignJob(Villager v)
         {
             float now = Time.time;
+            if (v.Job == Job.Crafter && v.CarryAmount == 0)
+            {
+                if (Armory != null && Armory.HasWork)
+                {
+                    var anvil = NearestAnvil(v.Position);
+                    if (anvil != null) v.StartCraft(anvil);
+                }
+                return;
+            }
             if (v.Job == Job.Miner && Dig(v)) return;
             if (Jobs.Gathers(v.Job, out var gathers))
             {

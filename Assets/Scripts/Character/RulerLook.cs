@@ -18,6 +18,8 @@ namespace KingdomGame.Character
         Sprite[] shadows;     // [frame]
         Sprite[] dead;        // [direction]
         float stepClock;
+        float swing;          // seconds left of a club swing
+        const float SwingSeconds = 0.22f;
 
         /// <summary>The turning part (body and gun). The ruler's own transform never turns.</summary>
         public Transform Body => body;
@@ -57,6 +59,15 @@ namespace KingdomGame.Character
             fallen.enabled = false;
             return gun;
         }
+
+        /// <summary>The weapon in hand (null: the rifle's picture stays).</summary>
+        public void SetWeapon(Sprite sprite)
+        {
+            if (gunRenderer != null && sprite != null) gunRenderer.sprite = sprite;
+        }
+
+        /// <summary>A swing of the club: the weapon sweeps across in front.</summary>
+        public void Swing() => swing = SwingSeconds;
 
         /// <summary>The ruler has fallen: lying on their back, head away from <paramref name="facingDegrees"/>.</summary>
         public void ShowDead(float facingDegrees)
@@ -113,6 +124,14 @@ namespace KingdomGame.Character
             body.localRotation = turn;
             shadow.transform.localRotation = turn;
             gunRenderer.enabled = holdingGun;
+            // A club swing sweeps from one side to the other.
+            if (swing > 0f)
+            {
+                swing -= Time.deltaTime;
+                float t = 1f - Mathf.Clamp01(swing / SwingSeconds);
+                gunRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(65f, -65f, t));
+            }
+            else gunRenderer.transform.localRotation = Quaternion.identity;
         }
 
         /// <summary>Which of <paramref name="directions"/> drawings is nearest to <paramref name="degrees"/>.</summary>

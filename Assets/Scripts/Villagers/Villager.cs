@@ -31,7 +31,7 @@ namespace KingdomGame.Villagers
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -58,6 +58,7 @@ namespace KingdomGame.Villagers
         ResourceNode node;       // what it's gathering from
         Defenses.Defense post;   // the tower it guards
         MineLevel mine;          // the mine it's digging in
+        Furniture bench;         // the anvil it's making weapons at
         Vector2Int digCell;
         float digClock;
         bool onPost;             // up on it
@@ -105,6 +106,7 @@ namespace KingdomGame.Villagers
                     case Task.MakeRoom: return "making room";
                     case Task.Flee: return "running from zombies";
                     case Task.Dig: return "digging";
+                    case Task.Craft: return "making weapons";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
                     case Task.Gather: return node != null ? $"gathering {node.Config.resource.ToString().ToLowerInvariant()}" : "gathering";
                     default: return Scared ? "hiding" : "idle";
@@ -172,6 +174,17 @@ namespace KingdomGame.Villagers
             level.Claim(cell, this);
             task = Task.Dig;
             if (Walk(new RectInt(cell, Vector2Int.one), true)) return true;
+            Idle();
+            return false;
+        }
+
+        /// <summary>Go to an anvil and make the weapons on order there (crafters).</summary>
+        public bool StartCraft(Furniture anvil)
+        {
+            if (anvil == null) return false;
+            bench = anvil;
+            task = Task.Craft;
+            if (Walk(anvil.Cells, true)) return true;
             Idle();
             return false;
         }
@@ -346,6 +359,11 @@ namespace KingdomGame.Villagers
                 Idle();   // the mark was taken off, or the mine is gone
                 thinkAt = Time.time;
             }
+            else if (task == Task.Craft && (bench == null || kingdom.Armory == null || !kingdom.Armory.HasWork))
+            {
+                Idle();   // the anvil went, or there's nothing left to make
+                thinkAt = Time.time;
+            }
             else if (task == Task.Guard && post == null)
             {
                 Idle();   // its tower was broken or torn down
@@ -442,6 +460,13 @@ namespace KingdomGame.Villagers
                 case Task.Guard:
                     if (!onPost) Mount();
                     return;
+                case Task.Craft:
+                {
+                    var toBench = bench.Cells.center - Position;
+                    if (toBench.sqrMagnitude > 0.0001f) facing = toBench.normalized;
+                    kingdom.Armory.Work(Time.deltaTime * config.workRate);
+                    return;
+                }
                 case Task.Dig:
                 {
                     var toRock = (Vector2)digCell + new Vector2(0.5f, 0.5f) - Position;
@@ -516,6 +541,7 @@ namespace KingdomGame.Villagers
             post = null;
             if (mine != null) mine.Release(digCell, this);
             mine = null;
+            bench = null;
             CountAsBuilder(null);
             blueprint = null;
             storage = null;

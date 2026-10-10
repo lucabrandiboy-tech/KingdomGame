@@ -79,6 +79,12 @@ namespace KingdomGame.Character
         /// building yet (those aren't shared over the network yet).
         /// </summary>
         public bool Visiting { get; set; }
+        /// <summary>The kingdom's weapons: the one in hand is fired (null: the weapons given in Setup).</summary>
+        public Combat.Armory Armory { get; set; }
+        /// <summary>Opens the weapons screen (E at an anvil).</summary>
+        public System.Action OpenArmory { get; set; }
+        /// <summary>The weapon in hand, for the HUD.</summary>
+        public string WeaponName => Armory != null ? (Armory.Selected != null ? Armory.Selected.displayName : "Bare hands") : "Rifle";
         /// <summary>Which way the ruler aims (a direction).</summary>
         public Vector2 AimDirection => aim;
         public Vector2 CurrentVelocity => Velocity;
@@ -198,21 +204,27 @@ namespace KingdomGame.Character
                 if (now > noticeUntil) Notice = null;
                 return;
             }
-            if (primaryWeapon != null && (primaryWeapon.automatic ? GameInput.FireHeld : GameInput.FirePressed) && now >= primaryReady)
+            // The weapons: from the armory (the one in hand, the heavy one, the explosive), or those given in Setup.
+            SwitchWeapons();
+            var primary = Armory != null ? Armory.Selected?.weapon : primaryWeapon;
+            var secondary = Armory != null ? Armory.Heavy : secondaryWeapon;
+            var thrown = Armory != null ? Armory.Explosive : explosive;
+            if (primary != null && (primary.automatic ? GameInput.FireHeld : GameInput.FirePressed) && now >= primaryReady)
             {
-                Shoot(primaryWeapon);
-                primaryReady = now + 1f / primaryWeapon.fireRate;
+                if (primary.melee) Swing(primary);
+                else Shoot(primary);
+                primaryReady = now + 1f / primary.fireRate;
             }
-            if (secondaryWeapon != null && GameInput.AltFirePressed && now >= secondaryReady)
+            if (secondary != null && GameInput.AltFirePressed && now >= secondaryReady)
             {
-                Shoot(secondaryWeapon);
-                secondaryReady = now + 1f / secondaryWeapon.fireRate;
+                Shoot(secondary);
+                secondaryReady = now + 1f / secondary.fireRate;
             }
-            if (explosive != null && explosives != null && GameInput.Pressed(KeyCode.G) && now >= explosiveReady && view != null)
+            if (thrown != null && explosives != null && GameInput.Pressed(KeyCode.G) && now >= explosiveReady && view != null)
             {
                 Vector2 target = view.ScreenToWorldPoint(GameInput.PointerPosition);
-                explosives.Throw(explosive, Muzzle, target, OnWalls ? OverWallsFromTop * 0.6f : 0f);
-                explosiveReady = now + explosive.cooldown;
+                explosives.Throw(thrown, Muzzle, target, OnWalls ? OverWallsFromTop * 0.6f : 0f);
+                explosiveReady = now + thrown.cooldown;
             }
 
             PickUpLoot();
@@ -452,8 +464,50 @@ namespace KingdomGame.Character
         {
             if (projectiles == null) return;
             // From up on the walls, shots fly over the walls below.
-            if (projectiles.Fire(weapon, Muzzle, aim, OnWalls ? Mathf.Max(weapon.overWalls, OverWallsFromTop) : -1f) && rig != null)
-                rig.AddShake(weapon.recoilShake);
+            bool fired = false;
+            for (int i = 0; i < Mathf.Max(1, weapon.pellets); i++)
+                fired |= projectiles.Fire(weapon, Muzzle, aim, OnWalls ? Mathf.Max(weapon.overWalls, OverWallsFromTop) : -1f, -1f, weapon.pierce);
+            if (fired && rig != null) rig.AddShake(weapon.recoilShake);
+        }
+
+        // A club: hits every zombie in front within reach.
+        void Swing(WeaponConfig weapon)
+        {
+            if (look != null) look.Swing();
+            Vector2 here = transform.position;
+            float halfArc = weapon.meleeArc * 0.5f;
+            var hit = new System.Collections.Generic.List<Health>();
+            foreach (var h in Health.Creatures)
+            {
+                if (h == null || h.Dead || h.Team != Team.Zombie) continue;
+                var to = h.Position - here;
+                if (to.magnitude > weapon.range + h.Radius || Vector2.Angle(aim, to) > halfArc) continue;
+                hit.Add(h);
+            }
+            foreach (var h in hit) h.Damage(weapon.hitDamage, here);
+            if (hit.Count > 0 && rig != null) rig.AddShake(0.02f);
+        }
+
+        // Q takes the next weapon, 1-9 a weapon by its place in the list; the picture in hand follows.
+        void SwitchWeapons()
+        {
+            if (Armory == null) return;
+            if (GameInput.Pressed(KeyCode.Q)) Armory.SelectNext();
+            for (int n = 0; n < 9; n++)
+                if (GameInput.Pressed(KeyCode.Alpha1 + n)) Armory.Select(n);
+            ShowWeapon();
+        }
+
+        Combat.ArmsItem shownWeapon;
+
+        /// <summary>Puts the weapon in hand into the ruler's picture.</summary>
+        public void ShowWeapon()
+        {
+            if (Armory == null || look == null) return;
+            var hand = Armory.Selected;
+            if (hand == shownWeapon) return;
+            shownWeapon = hand;
+            look.SetWeapon(hand != null ? ArtSprites.Get(Art.ArtKeys.Weapon(hand.art)) : null);
         }
 
         // ------------------------------------------------------- interacting --
@@ -476,7 +530,7 @@ namespace KingdomGame.Character
             Storage storage = null;
             Blueprint blueprint = null;
             ResourceNode node = null;
-            Furniture ladder = null;
+            Furniture ladder = null, anvil = null;
             Place door = null;
             if (kingdom != null)
             {
@@ -502,11 +556,16 @@ namespace KingdomGame.Character
                 }
                 if (kingdom.Throne != null && Closer(BuildingLook.Distance(kingdom.Throne.Cells, here), reach, ref best)) throne = kingdom.Throne;
                 foreach (var f in kingdom.AllFurniture)
-                    if (f != null && f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; throne = null; }
+                {
+                    if (f == null) continue;
+                    if (f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; anvil = null; throne = null; }
+                    else if (f.Config.roomTag == RoomTag.Workshop && Armory != null && OpenArmory != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
+                    { anvil = f; ladder = null; throne = null; }
+                }
                 foreach (var s in kingdom.Storages)
-                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; }
+                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; anvil = null; }
                 foreach (var b in kingdom.Blueprints)
-                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; }
+                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; anvil = null; }
             }
             // Trees, rocks and bushes in the cells round the ruler.
             var nature = NatureMap.Current;
@@ -517,7 +576,7 @@ namespace KingdomGame.Character
                     {
                         var n = nature.Live(at + new Vector2Int(dx, dy));
                         if (n == null || n.Empty || n.Config == null) continue;
-                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; }
+                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; }
                     }
 
             if (Visiting)
@@ -526,8 +585,14 @@ namespace KingdomGame.Character
                 node = null;
                 blueprint = null;
                 storage = null;
+                anvil = null;
             }
             if (ladder != null) UseLadder(kingdom, ladder);
+            else if (anvil != null)
+            {
+                Hint = $"E: make weapons at the {anvil.Config.displayName.ToLowerInvariant()}";
+                if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) OpenArmory();
+            }
             else if (throne != null) UseThrone(kingdom);
             else if (storage != null) UseStorage(storage);
             else if (blueprint != null) UseBlueprint(blueprint, now);

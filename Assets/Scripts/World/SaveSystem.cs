@@ -259,6 +259,7 @@ namespace KingdomGame.World
                 for (int i = 0; i < data.ruler.backpack.Length; i++) data.ruler.backpack[i] = ruler.Backpack.Get((ResourceType)i);
 
             if (research != null) data.research = research.Save();
+            if (kingdom.Armory != null) data.armory = kingdom.Armory.Save();
             if (waves != null)
             {
                 data.hasSurvival = true;
@@ -318,6 +319,7 @@ namespace KingdomGame.World
 
             if (dayNight != null) dayNight.SetTime(data.day, data.hour);
             if (research != null && data.research != null) research.Load(data.research);
+            if (kingdom.Armory != null && data.armory != null) kingdom.Armory.Load(data.armory);
 
             // Building configs and wall materials by name.
             var configs = new Dictionary<string, BuildingConfig>();

@@ -37,6 +37,7 @@ namespace KingdomGame.World
         public List<BagSave> bags = new List<BagSave>();
         public RulerSave ruler = new RulerSave();
         public Progression.Research.Saved research = new Progression.Research.Saved();
+        public Combat.Armory.Saved armory = new Combat.Armory.Saved();
         public bool hasSurvival;
         public SurvivalSave survival = new SurvivalSave();
     }

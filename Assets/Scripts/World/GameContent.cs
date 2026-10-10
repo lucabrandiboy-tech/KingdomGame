@@ -57,6 +57,9 @@ namespace KingdomGame.World
         [Tooltip("The ages from the Stone Age to World War 2, their research, and what each lets you build.")]
         public ProgressionConfig progression;
 
+        [Tooltip("The ruler's weapons through the ages, made at an anvil by crafters.")]
+        public Combat.ArmoryConfig armory;
+
         [Header("Online")]
         [Tooltip("Hosting and joining games: port, players, map size for hosted worlds.")]
         public Networking.NetworkConfig network;

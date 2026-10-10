@@ -105,6 +105,19 @@ namespace KingdomGame.World
             gameObject.AddComponent<TechScreen>().Setup(research);
             gameObject.AddComponent<VillagersPanel>().Setup(kingdom);
 
+            // The ruler's weapons: a club to start with, the rest made at an anvil (free build has them all).
+            if (content.armory != null)
+            {
+                var armory = kingdom.gameObject.AddComponent<Armory>();
+                armory.Setup(content.armory, kingdom, unlocking == Research.Unlocking.Everything);
+                kingdom.Armory = armory;
+                rulerController.Armory = armory;
+                var armoryPanel = gameObject.AddComponent<ArmoryPanel>();
+                armoryPanel.Setup(armory, kingdom);
+                rulerController.OpenArmory = armoryPanel.Open;
+            }
+            else Debug.LogWarning("The Game Content has no Armory Config, so the ruler has the old rifle. Run KingdomGame > Build Game Scenes again.", this);
+
             var builder = kingdom.gameObject.AddComponent<BuildController>();
             builder.Setup(kingdom, rulerController, rig, parts.Canopies, content.view);
 
@@ -136,6 +149,7 @@ namespace KingdomGame.World
             // Continuing failed: this new game mustn't save over the save on its own.
             else if (loadProblem != null) saves.KeepOldSave(loadProblem + ": started a new game instead");
             parts.Streamer.ShowNow();
+            rulerController.ShowWeapon();
 
             NetHost host = null;
             if (hosting)

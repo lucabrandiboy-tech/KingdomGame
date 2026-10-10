@@ -28,7 +28,7 @@ namespace KingdomGame.Art
         static readonly Color32 Skin = PixelImage.Rgb(200, 156, 122);
 
         // The rifle was designed on a 64-pixels-per-tile grid; K scales it.
-        const float K = 1.4f;
+        internal const float K = 1.4f;
 
         /// <summary>Hand position (where the gun's grip goes) relative to the middle of the ruler, in tiles.</summary>
         public static Vector2 RulerHand => new Vector2(0.16f, -0.1f);
@@ -542,7 +542,7 @@ namespace KingdomGame.Art
             return img;
         }
 
-        static Color32 Bilinear(PixelImage img, float x, float y)
+        internal static Color32 Bilinear(PixelImage img, float x, float y)
         {
             int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
             float fx = x - x0, fy = y - y0;

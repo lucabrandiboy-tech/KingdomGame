@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 9;
+        const int SettingsVersion = 10;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -91,6 +91,7 @@ namespace KingdomGame.EditorTools
             bool defensesUpdate = oldContent != null && oldContent.settingsVersion < 7;
             bool biggerMap = oldContent != null && oldContent.settingsVersion < 8;
             bool minesUpdate = oldContent != null && oldContent.settingsVersion < 9;
+            bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -394,6 +395,24 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Added roofs to your build bar (the Floors & roofs tab). Your other settings were kept.");
             }
 
+            if (hardAges)
+            {
+                // Each new age takes days of research, ore and villagers now (and survival researches too).
+                for (int i = 0; i < AdvanceNames.Length; i++)
+                {
+                    var tech = AssetDatabase.LoadAssetAtPath<TechConfig>($"{DataRoot}/{AdvancePath(i)}.asset");
+                    if (tech == null) continue;
+                    AgeTech(tech, i);
+                    EditorUtility.SetDirty(tech);
+                }
+                if (content.progression != null)
+                {
+                    content.progression.survivalAgesByWaves = false;
+                    EditorUtility.SetDirty(content.progression);
+                }
+                Debug.Log("Ages now take days of research, with ore and villagers (survival too). Your other settings were kept.");
+            }
+
             // The pictures, at full detail (the first time takes a few minutes).
             try
             {
@@ -516,6 +535,33 @@ namespace KingdomGame.EditorTools
             return list;
         }
 
+        static readonly string[] AdvanceNames = { "Bronze casting", "Iron smelting", "Feudal lords", "Gunpowder", "Steam power", "Total war", "Blitzkrieg" };
+        static string AdvancePath(int i) => $"Progression/{i + 1}_{AdvanceNames[i].Replace(" ", "")}";
+
+        // Reaching each new age is meant to be hard: days of real research (1 day for the Bronze Age up to a week for
+        // World War 2, about four weeks in all at research speed 1), a lot from storage including ore from the mines
+        // (World War 2 alone needs room for about 28 storehouses' worth), and enough villagers (beds give homes).
+        static void AgeTech(TechConfig t, int i)
+        {
+            int[] days = { 1, 2, 3, 4, 5, 6, 7 };
+            int[,] cost =
+            {
+                //  wood  stone  food copper iron gold
+                {  800,   800,   400,  150,    0,    0 },
+                { 1500,  1500,   800,  400,  200,    0 },
+                { 2500,  2500,  1500,  600,  600,   50 },
+                { 3500,  3500,  2000,  800, 1200,  150 },
+                { 5000,  5000,  2500, 1000, 2000,  300 },
+                { 6500,  6500,  3500, 1500, 3000,  500 },
+                { 8000,  8000,  4500, 2000, 4500,  800 },
+            };
+            int[] villagers = { 6, 9, 13, 18, 24, 30, 38 };
+            t.researchHours = days[i] * 24f;
+            t.woodCost = cost[i, 0]; t.stoneCost = cost[i, 1]; t.foodCost = cost[i, 2];
+            t.copperCost = cost[i, 3]; t.ironCost = cost[i, 4]; t.goldCost = cost[i, 5];
+            t.minVillagers = villagers[i];
+        }
+
         // The eight ages: what each one brings (its defences and roof; houses get its level), and the research that leads on.
         // Everything else (walls, furniture, the first house...) comes with the Stone Age.
         static ProgressionConfig Ages(List<BuildingConfig>[] defensesByAge, List<BuildingConfig> roofs)
@@ -537,9 +583,8 @@ namespace KingdomGame.EditorTools
                 new Color(0.72f, 0.62f, 0.48f), new Color(0.8f, 0.58f, 0.32f), new Color(0.6f, 0.62f, 0.66f), new Color(0.62f, 0.5f, 0.78f),
                 new Color(0.86f, 0.72f, 0.36f), new Color(0.7f, 0.46f, 0.36f), new Color(0.56f, 0.62f, 0.44f), new Color(0.48f, 0.56f, 0.5f),
             };
-            // Research to reach the next age, in real hours (about ten days to World War 2 at research speed 1).
-            string[] advances = { "Bronze casting", "Iron smelting", "Feudal lords", "Gunpowder", "Steam power", "Total war", "Blitzkrieg" };
-            float[] hours = { 2f, 6f, 12f, 24f, 36f, 60f, 96f };
+            // Research to reach the next age (AgeTech has its days, costs and villagers).
+            string[] advances = AdvanceNames;
             var ages = new AgeConfig[names.Length];
             for (int i = 0; i < names.Length; i++)
             {
@@ -548,15 +593,12 @@ namespace KingdomGame.EditorTools
                 if (i < roofs.Count) unlocks.Add(roofs[i]);
                 TechConfig advance = null;
                 if (i < advances.Length)
-                    advance = Asset<TechConfig>($"Progression/{i + 1}_{advances[i].Replace(" ", "")}", t =>
+                    advance = Asset<TechConfig>(AdvancePath(i), t =>
                     {
                         t.displayName = advances[index];
                         t.description = $"Leads into the {names[index + 1]}.";
-                        t.researchHours = hours[index];
-                        t.woodCost = 100 * (index + 1);
-                        t.stoneCost = 120 * (index + 1);
-                        t.foodCost = 40 * (index + 1);
                         t.advancesAge = true;
+                        AgeTech(t, index);
                     });
                 ages[i] = Asset<AgeConfig>($"Progression/Age{i + 1}_{names[i].Replace(" ", "")}", a =>
                 {

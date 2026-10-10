@@ -511,6 +511,16 @@ namespace KingdomGame.Building
         /// Takes resources out of storage (research costs), never what builders have been
         /// promised. Takes nothing and returns false if there isn't enough of everything.
         /// </summary>
+        /// <summary>Takes <paramref name="amounts"/> (one per resource type) out of storage, if it's all there.</summary>
+        public bool TrySpend(int[] amounts)
+        {
+            for (int i = 0; i < amounts.Length && i < Inventory.TypeCount; i++)
+                if (Available((ResourceType)i) < amounts[i]) return false;
+            for (int i = 0; i < amounts.Length && i < Inventory.TypeCount; i++)
+                if (amounts[i] > 0) Take((ResourceType)i, amounts[i]);
+            return true;
+        }
+
         public bool TrySpend(int wood, int stone, int food)
         {
             if (Available(ResourceType.Wood) < wood || Available(ResourceType.Stone) < stone || Available(ResourceType.Food) < food) return false;

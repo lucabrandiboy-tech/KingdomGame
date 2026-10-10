@@ -100,9 +100,11 @@ namespace KingdomGame.World
                 if (content.view != null) view.backgroundColor = content.view.backgroundColor;
             }
 
-            // The ages: survival moves through them wave by wave, free build has them all.
+            // The ages: survival researches them (days of real time each), free build has them all.
             var research = gameObject.AddComponent<Research>();
-            research.Setup(content.progression, kingdom, survival ? Research.Unlocking.ByAge : Research.Unlocking.Everything);
+            var unlocking = !survival ? Research.Unlocking.Everything
+                : content.progression != null && content.progression.survivalAgesByWaves ? Research.Unlocking.ByAge : Research.Unlocking.ByResearch;
+            research.Setup(content.progression, kingdom, unlocking);
             gameObject.AddComponent<TechScreen>().Setup(research);
             gameObject.AddComponent<VillagersPanel>().Setup(kingdom);
 

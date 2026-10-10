@@ -179,9 +179,9 @@ namespace KingdomGame.Progression
             if (i < 0) return;
             if (i == 0 && StartedUtc.HasValue && kingdom != null)
             {
-                kingdom.Store(Economy.ResourceType.Wood, t.woodCost, kingdom.Throne != null ? kingdom.Throne.Center : Vector2.zero);
-                kingdom.Store(Economy.ResourceType.Stone, t.stoneCost, kingdom.Throne != null ? kingdom.Throne.Center : Vector2.zero);
-                kingdom.Store(Economy.ResourceType.Food, t.foodCost, kingdom.Throne != null ? kingdom.Throne.Center : Vector2.zero);
+                var at = kingdom.Throne != null ? kingdom.Throne.Center : Vector2.zero;
+                for (int k = 0; k < Economy.Inventory.TypeCount; k++)
+                    kingdom.Store((Economy.ResourceType)k, t.Cost((Economy.ResourceType)k), at);
                 StartedUtc = null;
             }
             queue.RemoveAt(i);
@@ -231,7 +231,14 @@ namespace KingdomGame.Progression
         {
             var t = Researching;
             if (t == null || StartedUtc.HasValue) return false;
-            if (kingdom != null && !kingdom.TrySpend(t.woodCost, t.stoneCost, t.foodCost))
+            if (kingdom != null && kingdom.Villagers.Count < t.minVillagers)
+            {
+                Waiting = $"Needs {t.minVillagers} villagers (you have {kingdom.Villagers.Count}): build beds so more can live here";
+                return false;
+            }
+            var costs = new int[Economy.Inventory.TypeCount];
+            for (int k = 0; k < costs.Length; k++) costs[k] = t.Cost((Economy.ResourceType)k);
+            if (kingdom != null && !kingdom.TrySpend(costs))
             {
                 Waiting = $"Waiting for {Cost(t)} in storage";
                 return false;
@@ -243,11 +250,15 @@ namespace KingdomGame.Progression
 
         public static string Cost(TechConfig t)
         {
-            var parts = new List<string>(3);
-            if (t.woodCost > 0) parts.Add($"{t.woodCost} wood");
-            if (t.stoneCost > 0) parts.Add($"{t.stoneCost} stone");
-            if (t.foodCost > 0) parts.Add($"{t.foodCost} food");
-            return parts.Count > 0 ? string.Join(", ", parts) : "free";
+            var parts = new List<string>(6);
+            for (int k = 0; k < Economy.Inventory.TypeCount; k++)
+            {
+                var type = (Economy.ResourceType)k;
+                int n = t.Cost(type);
+                if (n > 0) parts.Add($"{n} {type.ToString().ToLowerInvariant()}");
+            }
+            string cost = parts.Count > 0 ? string.Join(", ", parts) : "free";
+            return t.minVillagers > 0 ? $"{cost}; {t.minVillagers} villagers" : cost;
         }
 
         void Update()

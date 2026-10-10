@@ -44,16 +44,24 @@ namespace KingdomGame.Economy
         Vector3 restPosition;
         float shakeTime;
         float regrowAt;
+        bool growing;
+        float growStart, growEnd;
 
         public ResourceNodeConfig Config => config;
         public int Left { get; private set; }
         public bool Empty => Left <= 0;
+        /// <summary>A young planted tree or bush, still growing (nothing to gather yet).</summary>
+        public bool Growing => growing;
+        /// <summary>How grown it is, 0..1 (1 when it isn't growing).</summary>
+        public float Grown => growing ? Mathf.Clamp01((Time.time - growStart) / Mathf.Max(0.01f, growEnd - growStart)) : 1f;
         /// <summary>True while it's solid (people bump into it, nothing can be built on its cell).</summary>
         public bool Blocks => solid;
         /// <summary>The grid cell it stands in.</summary>
         public Vector2Int Cell => new Vector2Int(Mathf.FloorToInt(restPosition.x), Mathf.FloorToInt(restPosition.y));
         /// <summary>The leaves (trees only), for fading them when someone walks under.</summary>
         public SpriteRenderer Leaves => leaves;
+        /// <summary>The villager gathering from it (one at a time), or null.</summary>
+        public Component Gatherer { get; set; }
 
         /// <summary>Sets the node up. <paramref name="rotation"/> turns the pictures (seen from above, any angle looks natural).</summary>
         public void Setup(ResourceNodeConfig nodeConfig, NodeSprites nodeSprites, float rotation)
@@ -74,7 +82,8 @@ namespace KingdomGame.Economy
             block = gameObject.AddComponent<CircleCollider2D>();
             block.radius = config.blockRadius;
             solid = true;
-            enabled = false; // only runs while shaking or regrowing
+            BlockingChanged?.Invoke(this);   // planted while playing: walkers must go round it
+            enabled = false; // only runs while shaking, regrowing or growing
         }
 
         SpriteRenderer Part(string partName, Sprite sprite, int order, float rotation)
@@ -119,8 +128,48 @@ namespace KingdomGame.Economy
         /// <summary>Takes it out of the world for good (a building is going up on this spot).</summary>
         public void Clear() => Destroy(gameObject);
 
+        /// <summary>Starts it as a young one that grows to full size in <paramref name="seconds"/> (planted, or replanted after being used up).</summary>
+        public void Grow(float seconds)
+        {
+            Left = 0;
+            growing = true;
+            growStart = Time.time;
+            growEnd = Time.time + Mathf.Max(1f, seconds);
+            look.sprite = sprites.Full;
+            look.enabled = true;
+            if (leaves != null) leaves.enabled = true;
+            if (shadow != null)
+            {
+                shadow.enabled = sprites.Shadow != null;
+                shadow.sprite = sprites.Shadow;
+            }
+            SetSolid(true);
+            ShowGrowth();
+            enabled = true;
+        }
+
+        // A growing one is drawn smaller: a quarter of its size when planted, full size when grown.
+        void ShowGrowth()
+        {
+            float k = Mathf.Lerp(0.25f, 1f, Grown);
+            var scale = new Vector3(k, k, 1f);
+            look.transform.localScale = scale;
+            if (leaves != null) leaves.transform.localScale = scale;
+            if (shadow != null)
+            {
+                shadow.transform.localScale = scale;
+                shadow.transform.localPosition = (Vector3)(Look.ShadowDirection * sprites.ShadowHeight * k);
+            }
+        }
+
         void UseUp()
         {
+            // A planted one: a young one grows in its place.
+            if (config.replant && config.regrowSeconds > 0f)
+            {
+                Grow(config.regrowSeconds);
+                return;
+            }
             if (sprites.Empty != null) look.sprite = sprites.Empty;
             else look.enabled = false;
             if (leaves != null) leaves.enabled = false;
@@ -173,7 +222,18 @@ namespace KingdomGame.Economy
                 busy = shakeTime > 0f;
                 if (!busy) transform.position = restPosition;
             }
-            if (Empty && config.regrowSeconds > 0)
+            if (growing)
+            {
+                busy = true;
+                ShowGrowth();
+                if (Time.time >= growEnd)
+                {
+                    growing = false;
+                    Left = config.amount;
+                    ShowGrowth();
+                }
+            }
+            else if (Empty && config.regrowSeconds > 0)
             {
                 busy = true;
                 if (Time.time >= regrowAt) Regrow();

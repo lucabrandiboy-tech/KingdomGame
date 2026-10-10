@@ -335,7 +335,7 @@ namespace KingdomGame.Building
             }
 
             placements.Clear();
-            if (dragging && b.dragToPlaceLines && (b.kind == BuildingKind.Floor || b.kind == BuildingKind.Roof)) Area(dragStart, origin, MaxArea, placements);
+            if (dragging && b.dragToPlaceLines && (b.kind == BuildingKind.Floor || b.kind == BuildingKind.Roof || b.kind == BuildingKind.Plant)) Area(dragStart, origin, MaxArea, placements);
             else if (dragging && b.dragToPlaceLines) Line(dragStart, origin, size, kingdom.Config.maxLine, placements);
             else placements.Add(dragging ? dragStart : origin);
 
@@ -413,6 +413,12 @@ namespace KingdomGame.Building
                 Hover = $"{storage.name}: {stock.Get(Economy.ResourceType.Wood)} wood, {stock.Get(Economy.ResourceType.Stone)} stone, " +
                         $"{stock.Get(Economy.ResourceType.Food)} food ({stock.Total} / {stock.Capacity}){tearDown}{roomText}";
                 if (rightClick && tearDown.Length > 0) Say(kingdom.TearDown(cell));
+                return;
+            }
+            var growing = kingdom.NodeAt(cell);
+            if (growing != null && growing.Growing)
+            {
+                Hover = $"A young {(growing.Config.look == Economy.NodeLook.Tree ? "tree" : "bush")}: {Mathf.FloorToInt(growing.Grown * 100f)}% grown" + roomText;
                 return;
             }
             string teardown = kingdom.TearDownText(cell);

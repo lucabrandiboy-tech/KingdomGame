@@ -67,6 +67,7 @@ namespace KingdomGame.World
             kingdom.Ruler = ruler.transform;
             kingdom.RulerRadius = content.player != null ? content.player.bodyRadius : 0.15f;
             canopies.Focus = ruler.transform;
+            kingdom.Canopies = canopies;
             if (content.view != null) canopies.NearAlpha = content.view.canopyFadeAlpha;
 
             CameraRig rig = null;
@@ -86,6 +87,7 @@ namespace KingdomGame.World
             var research = gameObject.AddComponent<Research>();
             research.Setup(content.progression, kingdom, survival ? Research.Unlocking.ByAge : Research.Unlocking.Everything);
             gameObject.AddComponent<TechScreen>().Setup(research);
+            gameObject.AddComponent<VillagersPanel>().Setup(kingdom);
 
             var builder = kingdom.gameObject.AddComponent<BuildController>();
             builder.Setup(kingdom, rulerController, rig, canopies, content.view);
@@ -143,7 +145,8 @@ namespace KingdomGame.World
                 float x = (i - (config.startVillagers - 1) * 0.5f) * 0.8f;
                 var spot = throne.Front + new Vector2(x, -1.1f);
                 if (!kingdom.Nav.Walkable(spot)) kingdom.Nav.NearestFreeSpot(spot, new RectInt(0, 0, 0, 0), out spot);
-                kingdom.AddVillager(spot);
+                // Two builders to start with, the rest cutting wood (V changes it).
+                kingdom.AddVillager(spot, i < 2 ? Villagers.Job.Builder : Villagers.Job.Woodcutter);
             }
             return kingdom;
         }

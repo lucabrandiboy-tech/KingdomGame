@@ -103,6 +103,10 @@ namespace KingdomGame.Building
         public int VillagerCapacity => config.startVillagers + Beds;
         /// <summary>Something was built, torn down or broken (rooms and zombie paths change).</summary>
         public event Action Changed;
+        /// <summary>Fades tree leaves near the ruler (planted trees join it).</summary>
+        public World.CanopyFader Canopies { get; set; }
+        NodeSprites[,] natureLooks;
+
         /// <summary>The ruler is on the throne building (roofs turn see-through).</summary>
         public bool ThroneView { get; set; }
         public RoofView Roofs => roofView;
@@ -188,6 +192,10 @@ namespace KingdomGame.Building
                         break;
                     case BuildingKind.House:
                         for (int r = 0; r < turns; r++) look[r] = HouseLook(b, 0, r);
+                        break;
+                    case BuildingKind.Plant:
+                        if (b.plant != null)
+                            look[0] = b.plant.look == NodeLook.Tree ? ArtSprites.Get(ArtKeys.TreeLeaves(0)) : ArtSprites.Get(ArtKeys.BushBerries(0));
                         break;
                     case BuildingKind.Roof:
                         // A sample of the roof (the ghost while placing it); the roofs themselves are drawn for their shape.
@@ -341,13 +349,14 @@ namespace KingdomGame.Building
             return storage;
         }
 
-        public Villager AddVillager(Vector2 position)
+        public Villager AddVillager(Vector2 position, Job job = Job.Builder)
         {
             var go = new GameObject("Villager");
             go.transform.SetParent(transform, false);
             go.transform.position = position;
             var v = go.AddComponent<Villager>();
             v.Setup(villagerConfig, this, Nav, villagerSprites);
+            v.Job = job;
             villagers.Add(v);
             return v;
         }
@@ -1131,10 +1140,101 @@ namespace KingdomGame.Building
 
         // ------------------------------------------------------------- jobs --
 
+        /// <summary>How many villagers have this job.</summary>
+        public int CountOf(Job job)
+        {
+            int n = 0;
+            foreach (var v in villagers) if (v != null && v.Job == job) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Moves one villager from job <paramref name="from"/> to <paramref name="to"/> (the villagers panel's
+        /// + and -). Picks one that isn't busy if it can. False if nobody has job <paramref name="from"/>.
+        /// </summary>
+        public bool ChangeJob(Job from, Job to)
+        {
+            Villager pick = null;
+            foreach (var v in villagers)
+            {
+                if (v == null || v.Job != from) continue;
+                if (pick == null || (v.IsIdle && !pick.IsIdle)) pick = v;
+            }
+            if (pick == null) return false;
+            pick.Job = to;
+            return true;
+        }
+
+        /// <summary>Why gatherers of this kind are standing about, for the villagers panel (null if they're fine).</summary>
+        public string GatherProblem(ResourceType type)
+        {
+            if (NearestWithSpace(Throne != null ? Throne.Center : Vector2.zero) == null) return "storage is full";
+            foreach (var n in ResourceNode.All)
+                if (n != null && !n.Empty && n.Config != null && n.Config.resource == type) return null;
+            return type == ResourceType.Wood ? "no trees left: plant some (Farming tab)" : type == ResourceType.Food ? "no berries left: plant bushes (Farming tab)" : "no rocks left";
+        }
+
+        readonly Dictionary<ResourceNode, float> unreachableNodes = new Dictionary<ResourceNode, float>();
+
+        // Woodcutters, miners and foragers: gather until their hands are full, then take it to storage.
+        void Gather(Villager v, ResourceType type)
+        {
+            int full = villagerConfig.carryAmount;
+            if (v.CarryAmount > 0 && (v.CarryType != type || v.CarryAmount >= full))
+            {
+                var home = NearestWithSpace(v.Position);
+                if (home != null) v.StartReturn(home);
+                return;
+            }
+            float now = Time.time;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                var node = NearestNode(type, v.Position, now);
+                if (node == null) break;
+                if (v.StartGather(node)) return;
+                unreachableNodes[node] = now + 15f;   // no way there (deep in a forest, walled in): try others for a while
+            }
+            if (v.CarryAmount > 0)
+            {
+                var home = NearestWithSpace(v.Position);
+                if (home != null) v.StartReturn(home);
+            }
+        }
+
+        // The closest tree, rock or bush of this kind that nobody else is at; planted ones count as a little closer.
+        ResourceNode NearestNode(ResourceType type, Vector2 from, float now)
+        {
+            ResourceNode best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var n in ResourceNode.All)
+            {
+                if (n == null || n.Empty || n.Config == null || n.Config.resource != type || n.Gatherer != null) continue;
+                if (unreachableNodes.TryGetValue(n, out float until) && until > now) continue;
+                float d = Travel(from, n.transform.position) - (n.Config.replant ? 6f : 0f);
+                if (d < bestDistance) { best = n; bestDistance = d; }
+            }
+            return best;
+        }
+
         /// <summary>Gives an idle villager something to do, if there is anything.</summary>
         public void AssignJob(Villager v)
         {
             float now = Time.time;
+            if (Jobs.Gathers(v.Job, out var gathers))
+            {
+                Gather(v, gathers);
+                return;
+            }
+            if (v.Job != Job.Builder)
+            {
+                // No work: just put back anything in hand.
+                if (v.CarryAmount > 0)
+                {
+                    var store = NearestWithSpace(v.Position);
+                    if (store != null) v.StartReturn(store);
+                }
+                return;
+            }
 
             // Carrying something left over: take it where it's needed, or back to storage.
             if (v.CarryAmount > 0)
@@ -1207,7 +1307,7 @@ namespace KingdomGame.Building
 
         // Walls, storehouses and things you can't walk through can't appear on top of someone.
         static bool NeedsClearSpot(BuildingConfig b) =>
-            b.kind == BuildingKind.Wall || b.kind == BuildingKind.Storage || b.kind == BuildingKind.House
+            b.kind == BuildingKind.Wall || b.kind == BuildingKind.Storage || b.kind == BuildingKind.House || b.kind == BuildingKind.Plant
             || (b.kind == BuildingKind.Furniture && b.blocksMovement && !b.flat);
 
         void TryComplete(Blueprint b)
@@ -1303,6 +1403,14 @@ namespace KingdomGame.Building
                         made = tile;
                     }
                     break;
+                case BuildingKind.Plant:
+                    if (config.plant == null)
+                    {
+                        Debug.LogWarning($"{config.name} has nothing to plant (its Plant is empty).", config);
+                        break;
+                    }
+                    foreach (var c in cells.allPositionsWithin) made = Plant(config.plant, c, config.growSeconds);
+                    break;
                 case BuildingKind.House:
                 {
                     var go = new GameObject(config.displayName);
@@ -1385,6 +1493,22 @@ namespace KingdomGame.Building
             roomsDirty = true;
             Changed?.Invoke();
             return made;
+        }
+
+        /// <summary>A young tree or bush of <paramref name="kind"/> at <paramref name="cell"/>, fully grown in <paramref name="growSeconds"/>.</summary>
+        public ResourceNode Plant(ResourceNodeConfig kind, Vector2Int cell, float growSeconds)
+        {
+            if (natureLooks == null) natureLooks = World.WorldGenerator.NatureSprites();
+            var go = new GameObject(kind.name);
+            go.transform.SetParent(transform, false);
+            go.transform.position = new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
+            var node = go.AddComponent<ResourceNode>();
+            int variant = (int)(DamageShape.Hash(0x7Au, cell.x, cell.y) % (uint)NatureArt.Variants);
+            node.Setup(kind, natureLooks[(int)kind.look, variant], 0f);
+            node.Grow(growSeconds);
+            nodes[cell] = node;
+            if (Canopies != null) Canopies.Add(node);
+            return node;
         }
 
         static bool Overlaps(Rect area, Vector2 point, float radius) =>

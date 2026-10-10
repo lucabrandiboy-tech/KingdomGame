@@ -175,6 +175,7 @@ namespace KingdomGame
                 case KeyCode.RightBracket: return k.rightBracketKey;
                 case KeyCode.Delete: return k.deleteKey;
                 case KeyCode.B: return k.bKey;
+                case KeyCode.V: return k.vKey;
                 case KeyCode.U: return k.uKey;
                 case KeyCode.LeftShift: return k.leftShiftKey;
                 case KeyCode.RightShift: return k.rightShiftKey;

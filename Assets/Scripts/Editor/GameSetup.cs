@@ -37,8 +37,9 @@ namespace KingdomGame.EditorTools
         /// 2: the castle and survival update (furniture on the build bar, zombie numbers for walls and weapons).
         /// 3: houses (a house you go into, bigger inside, upgraded age by age).
         /// 4: roofs on the build bar (one kind per age).
+        /// 5: farming (tree saplings, berry bushes) for the woodcutters and foragers.
         /// </summary>
-        const int SettingsVersion = 4;
+        const int SettingsVersion = 5;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -66,7 +67,7 @@ namespace KingdomGame.EditorTools
             Folder("Assets", "Data");
             foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies" })
                 Folder(DataRoot, area);
-            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses" })
+            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming" })
                 Folder(DataRoot + "/Building", area);
             Folder("Assets", "Scenes");
             Folder("Assets", "Art");
@@ -80,6 +81,7 @@ namespace KingdomGame.EditorTools
             // ...and from before houses.
             bool housesUpdate = oldContent != null && oldContent.settingsVersion < 3;
             bool roofsUpdate = oldContent != null && oldContent.settingsVersion < 4;
+            bool farmingUpdate = oldContent != null && oldContent.settingsVersion < 5;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -223,6 +225,27 @@ namespace KingdomGame.EditorTools
             });
             var castle = CastleBuildings();
             var house = House(stone, wood);
+            // Planted trees grow back after they're cut (a tree farm); a little less wood than a wild one.
+            var plantedTree = Asset<ResourceNodeConfig>("Economy/PlantedTree", n =>
+            {
+                n.look = NodeLook.Tree; n.resource = ResourceType.Wood; n.amount = 45; n.perHit = 5; n.secondsPerHit = 0.5f;
+                n.regrowSeconds = 300f; n.replant = true; n.blockRadius = 0.18f; n.reach = 0.6f; n.chipColor = new Color32(150, 108, 66, 255);
+            });
+            var farming = new List<BuildingConfig>
+            {
+                Asset<BuildingConfig>("Building/Farming/TreeSapling", b =>
+                {
+                    b.displayName = "Tree sapling"; b.kind = BuildingKind.Plant; b.category = BuildCategory.Farming; b.plant = plantedTree;
+                    b.growSeconds = 240f; b.size = Vector2Int.one; b.foodCost = 2; b.buildSeconds = 2f; b.dragToPlaceLines = true;
+                    b.blocksMovement = true; b.health = 0f; b.roomTag = RoomTag.None;
+                }),
+                Asset<BuildingConfig>("Building/Farming/BerryBush", b =>
+                {
+                    b.displayName = "Berry bush"; b.kind = BuildingKind.Plant; b.category = BuildCategory.Farming; b.plant = bush;
+                    b.growSeconds = 150f; b.size = Vector2Int.one; b.woodCost = 1; b.foodCost = 4; b.buildSeconds = 2f; b.dragToPlaceLines = true;
+                    b.blocksMovement = true; b.health = 0f; b.roomTag = RoomTag.None;
+                }),
+            };
             var roofs = Roofs();
             var kingdomConfig = Asset<KingdomConfig>("Building/KingdomConfig", k => { });
             var villagerConfig = Asset<VillagerConfig>("Villagers/VillagerConfig", v => { });
@@ -266,6 +289,7 @@ namespace KingdomGame.EditorTools
             int firstStorage = castle.FindIndex(b => b != null && b.category == BuildCategory.Storage);
             menu.Insert(firstStorage >= 0 ? firstStorage + 2 : menu.Count, storehouse);
             menu.Add(house);
+            menu.AddRange(farming);
             // Roofs go on the Floors & roofs tab after the rugs.
             int afterFloors = menu.FindLastIndex(b => b != null && b.category == BuildCategory.Floors);
             menu.InsertRange(afterFloors >= 0 ? afterFloors + 1 : menu.Count, roofs);
@@ -304,6 +328,13 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Added houses to your build bar (the Houses tab). Your other settings were kept.");
             }
 
+            if (farmingUpdate)
+            {
+                var list = new List<BuildingConfig>(content.buildMenu);
+                foreach (var plant in farming) if (!list.Contains(plant)) list.Add(plant);
+                content.buildMenu = list.ToArray();
+                Debug.Log("Added farming (tree saplings, berry bushes) to your build bar. Your other settings were kept.");
+            }
             if (roofsUpdate)
             {
                 var list = new List<BuildingConfig>(content.buildMenu);

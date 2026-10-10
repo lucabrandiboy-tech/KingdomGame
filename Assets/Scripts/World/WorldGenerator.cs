@@ -85,8 +85,8 @@ namespace KingdomGame.World
         static float Percentile(float[] sorted, float fraction) =>
             sorted[Mathf.Clamp(Mathf.RoundToInt(fraction * (sorted.Length - 1)), 0, sorted.Length - 1)];
 
-        // The baked pictures (and shadows) of every tree, rock and bush.
-        static NodeSprites[,] NatureSprites()
+        /// <summary>The baked pictures (and shadows) of every tree, rock and bush: [look, variant].</summary>
+        public static NodeSprites[,] NatureSprites()
         {
             var looks = new NodeSprites[3, Variants];
             for (int v = 0; v < Variants; v++)

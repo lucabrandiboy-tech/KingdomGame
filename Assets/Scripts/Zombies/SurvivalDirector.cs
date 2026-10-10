@@ -126,9 +126,9 @@ namespace KingdomGame.Zombies
                 {
                     var spot = kingdom.Throne.Front + new Vector2((i - (joining - 1) * 0.5f) * 0.8f, -1.2f);
                     if (!kingdom.Nav.Walkable(spot)) kingdom.Nav.NearestFreeSpot(spot, new RectInt(0, 0, 0, 0), out spot);
-                    kingdom.AddVillager(spot);
+                    kingdom.AddVillager(spot, Villagers.Job.Idle);
                 }
-                if (joining > 0) news += joining == 1 ? " A survivor joined you." : $" {joining} survivors joined you.";
+                if (joining > 0) news += (joining == 1 ? " A survivor joined you" : $" {joining} survivors joined you") + ": give them a job (V).";
                 else if (room <= 0 && config.survivorsPerWave > 0) news += " Survivors are out there: build beds so they can join you.";
             }
             // Every few waves the kingdom moves into the next age: new walls, traps and towers to build.

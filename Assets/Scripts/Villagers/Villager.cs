@@ -17,9 +17,10 @@ namespace KingdomGame.Villagers
     }
 
     /// <summary>
-    /// A builder villager. When idle it asks the <see cref="Kingdom"/> for work:
-    /// fetch resources from a storehouse and carry them to a blueprint, or build
-    /// a blueprint that has everything it needs. It walks along paths from the
+    /// A villager with a <see cref="Job"/>. When idle it asks the <see cref="Kingdom"/> for
+    /// work: builders fetch resources from a storehouse and carry them to a blueprint, or
+    /// build a blueprint that has everything it needs; woodcutters, miners and foragers
+    /// gather from trees, rocks and bushes and carry what they get to storage. It walks along paths from the
     /// <see cref="NavGrid"/> and finds a new way if a wall goes up in front of it.
     ///
     /// Villagers have no physics body: they never get stuck on corners, and the
@@ -30,7 +31,7 @@ namespace KingdomGame.Villagers
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -54,6 +55,9 @@ namespace KingdomGame.Villagers
         Task task;
         Blueprint blueprint, countedOn;
         Storage storage;
+        ResourceNode node;       // what it's gathering from
+        float gatherClock;
+        Job job = Job.Builder;
         ResourceType carryType;
         int carryAmount;         // in hand
         int promised;            // reserved at the storehouse / on its way to the blueprint
@@ -63,6 +67,17 @@ namespace KingdomGame.Villagers
         Vector2 facing = Vector2.down;
 
         public bool IsIdle => task == Task.Idle;
+        /// <summary>Its job (the villagers panel changes it; it drops what it's doing, but keeps what it carries).</summary>
+        public Job Job
+        {
+            get => job;
+            set
+            {
+                if (job == value) return;
+                job = value;
+                Abandon();
+            }
+        }
         /// <summary>Hit points (zombies).</summary>
         public Health Health { get; private set; }
         /// <summary>Running from or hiding from zombies.</summary>
@@ -84,6 +99,7 @@ namespace KingdomGame.Villagers
                     case Task.Return: return "taking things back to storage";
                     case Task.MakeRoom: return "making room";
                     case Task.Flee: return "running from zombies";
+                    case Task.Gather: return node != null ? $"gathering {node.Config.resource.ToString().ToLowerInvariant()}" : "gathering";
                     default: return Scared ? "hiding" : "idle";
                 }
             }
@@ -123,6 +139,19 @@ namespace KingdomGame.Villagers
             if (Walk(from.Cells, true)) return true;
             CancelPromise();
             to.UnreachableUntil = Time.time + 3f;
+            Idle();
+            return false;
+        }
+
+        /// <summary>Go to a tree, rock or bush and gather from it until its hands are full (or it's used up).</summary>
+        public bool StartGather(ResourceNode target)
+        {
+            if (target == null || target.Empty) return false;
+            node = target;
+            node.Gatherer = this;
+            gatherClock = 0f;
+            task = Task.Gather;
+            if (Walk(new RectInt(target.Cell, Vector2Int.one), true)) return true;
             Idle();
             return false;
         }
@@ -245,6 +274,11 @@ namespace KingdomGame.Villagers
             {
                 Abandon();
             }
+            else if (task == Task.Gather && (node == null || node.Empty))
+            {
+                Idle();   // someone else used it up, or it went: find another
+                thinkAt = Time.time;
+            }
             else if (pathIndex < path.Count)
             {
                 FollowPath();
@@ -328,6 +362,24 @@ namespace KingdomGame.Villagers
                     if (toSite.sqrMagnitude > 0.0001f) facing = toSite.normalized;
                     return;
                 }
+                case Task.Gather:
+                {
+                    var toNode = (Vector2)node.transform.position - Position;
+                    if (toNode.sqrMagnitude > 0.0001f) facing = toNode.normalized;
+                    gatherClock += Time.deltaTime * config.workRate;
+                    if (gatherClock < node.Config.secondsPerHit) return;
+                    gatherClock -= node.Config.secondsPerHit;
+                    if (carryAmount > 0 && carryType != node.Config.resource) { Idle(); return; }
+                    carryType = node.Config.resource;
+                    carryAmount += node.Gather(config.carryAmount - carryAmount);
+                    // Full, or nothing left here: off to storage (or the next one).
+                    if (carryAmount >= config.carryAmount || node.Empty)
+                    {
+                        Idle();
+                        thinkAt = Time.time;
+                    }
+                    return;
+                }
                 case Task.Return:
                 {
                     carryAmount -= storage.Deposit(carryType, carryAmount);
@@ -361,6 +413,8 @@ namespace KingdomGame.Villagers
         void Idle()
         {
             task = Task.Idle;
+            if (node != null && node.Gatherer == (Component)this) node.Gatherer = null;
+            node = null;
             CountAsBuilder(null);
             blueprint = null;
             storage = null;

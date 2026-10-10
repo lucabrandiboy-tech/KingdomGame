@@ -32,6 +32,7 @@ namespace KingdomGame.UI
         void Update()
         {
             if (research == null || Time.timeScale <= 0f) return;
+            if (UiFocus.PanelOpen && !IsOpen) return;   // another panel is open
             if (GameInput.Pressed(KeyCode.T) || (IsOpen && GameInput.Pressed(KeyCode.Escape))) Toggle();
         }
 

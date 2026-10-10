@@ -23,6 +23,8 @@ namespace KingdomGame.Economy
         [Min(0.05f)] public float secondsPerHit = 0.5f;
         [Tooltip("Seconds until it's full again after being used up. 0 = never (trees leave a stump, rocks disappear).")]
         [Min(0)] public float regrowSeconds = 0f;
+        [Tooltip("Planted (a tree farm): when it's used up, a young one grows in its place over Regrow Seconds, instead of leaving a stump. Woodcutters go for these first.")]
+        public bool replant;
         [Tooltip("Size of the solid part you bump into, in tiles (the trunk, not the leaves).")]
         [Min(0.05f)] public float blockRadius = 0.2f;
         [Tooltip("How close the ruler must be to gather, in tiles from the solid part's edge.")]

@@ -21,6 +21,8 @@ namespace KingdomGame.Building
         Roof,
         /// <summary>A house you go into: a room inside, bigger than it looks, that grows when it's upgraded.</summary>
         House,
+        /// <summary>A young tree or bush you plant; it grows, and woodcutters or foragers gather from it.</summary>
+        Plant,
     }
 
     /// <summary>The tabs of the build bar (new ones go at the end: assets store the number).</summary>
@@ -34,6 +36,7 @@ namespace KingdomGame.Building
         Traps,
         Towers,
         Houses,
+        Farming,
     }
 
     /// <summary>What a piece of furniture counts as, for naming the room it's in.</summary>
@@ -115,6 +118,12 @@ namespace KingdomGame.Building
         [Header("Houses")]
         [Tooltip("A house's levels, one per age (Houses only).")]
         public HouseConfig house;
+
+        [Header("Planting (tree farms, berry patches)")]
+        [Tooltip("What grows here (a tree or bush kind).")]
+        public ResourceNodeConfig plant;
+        [Tooltip("Seconds until it's fully grown and can be gathered.")]
+        [Min(1)] public float growSeconds = 240f;
 
         [Header("Storage")]
         [Tooltip("How much it holds, all resources together.")]

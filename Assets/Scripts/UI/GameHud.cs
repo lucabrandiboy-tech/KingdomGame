@@ -40,13 +40,14 @@ namespace KingdomGame.UI
             "In a house: B furnish it, U upgrade it (once you reach the next age)\n" +
             "On the walls: walk along them, shoot over them; E climbs down\n" +
             "Walk over loot bags to pick them up\n" +
+            "V  villagers' jobs          T  research\n" +
             "Esc  pause          F3  performance info          H  hide this";
 
         const string SurvivalKeys = "\nN  call the next wave now";
 
         const string ThroneControls =
             "Tab or click a tab  walls, floors & roofs, furniture, lights, storage, traps, towers\n" +
-            "[ and ]  earlier / later ages          T  research\n" +
+            "[ and ]  earlier / later ages          T  research          V  villagers' jobs\n" +
             "1-9 or click  pick something (again = put away)     R  turn it\n" +
             "Left click  place  (walls: drag for a line, floors and roofs: drag for an area)\n" +
             "Right click  stop placing / cancel a blueprint / tear down\n" +
@@ -347,6 +348,7 @@ namespace KingdomGame.UI
                 case BuildCategory.Traps: return "Traps";
                 case BuildCategory.Towers: return "Towers";
                 case BuildCategory.Houses: return "Houses";
+                case BuildCategory.Farming: return "Farming";
                 default: return "Storage";
             }
         }

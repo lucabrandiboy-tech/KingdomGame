@@ -20,6 +20,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- LiteNetLib (Assets/ThirdParty) uses unsafe code; its .asmdef allows it in Unity. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Without DEBUG, LiteNetLib's debug-only fields are never assigned (CS0649): a warning, not an error. -->
+    <WarningsNotAsErrors>CS0649</WarningsNotAsErrors>
     <DefineConstants>UNITY_EDITOR;ENABLE_INPUT_SYSTEM</DefineConstants>
     <BaseOutputPath>$(MSBuildThisFileDirectory)bin/</BaseOutputPath>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/</BaseIntermediateOutputPath>

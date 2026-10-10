@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 13;
+        const int SettingsVersion = 14;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -94,7 +94,8 @@ namespace KingdomGame.EditorTools
             bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
             bool nightHordes = oldContent != null && oldContent.settingsVersion < 11;
             bool endless = oldContent != null && oldContent.settingsVersion < 12;
-            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 13;
+            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 14;
+            bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 14;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -424,6 +425,16 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Survival hordes now come at night, 2 minutes apart. Your other settings were kept.");
             }
 
+            if (gatesUpdate)
+            {
+                // The big gates join the Walls & doors tab, after the doors.
+                var list = new List<BuildingConfig>(content.buildMenu);
+                int at = list.FindLastIndex(b => b != null && b.kind == BuildingKind.Door);
+                foreach (var g in castle)
+                    if (g != null && g.kind == BuildingKind.Door && !list.Contains(g)) list.Insert(at >= 0 ? ++at : list.Count, g);
+                content.buildMenu = list.ToArray();
+                Debug.Log("Added the wooden gate and castle gate (Walls & doors tab). Your other settings were kept.");
+            }
             if (machinesUpdate)
             {
                 // The smelter (Medieval) and the machines (Industrial): on the build bar's Industry tab, unlocked with their age.
@@ -531,6 +542,8 @@ namespace KingdomGame.EditorTools
             {
                 Door("WoodenDoor", "Wooden door", FurnitureArt.WoodDoor, 20, 0, 5f, 250f),
                 Door("HeavyDoor", "Heavy door", FurnitureArt.HeavyDoor, 30, 20, 8f, 700f),
+                Gate("WoodGate", "Wooden gate (3 wide)", FurnitureArt.WoodGate, 3, 90, 20, 25f, 1200f),
+                Gate("CastleGate", "Castle gate (4 wide)", FurnitureArt.CastleGate, 4, 160, 200, 60f, 3000f),
                 Climb("Ladder", "Ladder", FurnitureArt.Ladder, 6, 0, 2f, 60f),
                 Climb("StoneStairs", "Stone stairs", FurnitureArt.StoneStairs, 0, 20, 6f, 400f),
                 Asset<BuildingConfig>("Building/Floors/WoodFloor", b =>
@@ -948,6 +961,15 @@ namespace KingdomGame.EditorTools
                 b.displayName = displayName; b.kind = BuildingKind.Door; b.category = BuildCategory.Walls; b.art = art;
                 b.size = Vector2Int.one; b.rotations = 2; b.woodCost = wood; b.stoneCost = stone; b.buildSeconds = seconds;
                 b.health = health; b.height = 0.2f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None;
+            });
+
+        // A big double gate, `width` tiles across, built into a wall like a door.
+        static BuildingConfig Gate(string file, string displayName, string art, int width, int wood, int stone, float seconds, float health) =>
+            Asset<BuildingConfig>("Building/Doors/" + file, b =>
+            {
+                b.displayName = displayName; b.kind = BuildingKind.Door; b.category = BuildCategory.Walls; b.art = art;
+                b.size = new Vector2Int(width, 1); b.rotations = 2; b.woodCost = wood; b.stoneCost = stone; b.buildSeconds = seconds;
+                b.health = health; b.height = 0.25f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None;
             });
 
         // A ladder or stairs: leans on the wall it faces; the ruler climbs onto the wall there (E).

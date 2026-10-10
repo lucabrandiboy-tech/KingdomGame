@@ -10,7 +10,7 @@ namespace KingdomGame.Building
     /// </summary>
     public sealed class Door : MonoBehaviour, IBuilt
     {
-        const float OpenDistance = 0.85f;   // tiles from the middle of the door
+        const float OpenDistance = 0.85f;   // a friend this near (tiles from the middle of a one-tile door, so 0.35 from its edge) opens it
 
         Sprite closedLook, openLook;
         SpriteRenderer look, shadow;
@@ -55,14 +55,13 @@ namespace KingdomGame.Building
         {
             // Open while a friend is near; shut once they've gone and nothing stands in the doorway.
             bool friendNear = false, doorwayBusy = false;
-            var center = Center;
+            // (Measured from the door's edge, so a wide gate opens for someone at either end of it.)
             foreach (var h in Health.Creatures)
             {
                 if (h == null || h.Dead || h.OutOfReach) continue;
-                float d2 = (h.Position - center).sqrMagnitude;
-                if (h.Team == Team.Friendly && d2 < OpenDistance * OpenDistance) friendNear = true;
-                float r = 0.5f + h.Radius;
-                if (d2 < r * r) doorwayBusy = true;
+                float d = BuildingLook.Distance(Cells, h.Position);
+                if (h.Team == Team.Friendly && d < OpenDistance - 0.5f) friendNear = true;
+                if (d < h.Radius) doorwayBusy = true;
             }
             bool open = friendNear || (IsOpen && doorwayBusy);
             if (open == IsOpen) return;

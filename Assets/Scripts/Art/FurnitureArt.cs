@@ -29,7 +29,7 @@ namespace KingdomGame.Art
             Anvil = "Furniture/Anvil", Crates = "Furniture/Crates", Banner = "Furniture/Banner", Well = "Furniture/Well",
             Ladder = "Furniture/Ladder", StoneStairs = "Furniture/StoneStairs", MineHead = "Building/MineHead";
         public const string WoodFloor = "Floor/Wood", StoneFloor = "Floor/Stone";
-        public const string WoodDoor = "Door/Wood", HeavyDoor = "Door/Heavy";
+        public const string WoodDoor = "Door/Wood", HeavyDoor = "Door/Heavy", WoodGate = "Door/WoodGate", CastleGate = "Door/CastleGate";
 
         /// <summary>Every piece of furniture (the game's building configs refer to these by their art name).</summary>
         public static readonly Piece[] Pieces =
@@ -871,6 +871,48 @@ namespace KingdomGame.Art
                 // Swung in against the left post.
                 Block(img, t, 0.15f, 0.5f, 0.15f + thick * 2f, 0.98f, wood, 0.55f, 0.01f, Surface.Wood, 506u, true, 0.1f);
                 Block(img, t, 0.15f, 0.62f, 0.15f + thick * 2f, 0.66f, Iron, 0.57f, 0.004f, Surface.Metal, 507u);
+            }
+            return Finish(img, t, rotation);
+        }
+
+        /// <summary>
+        /// A big double gate, <paramref name="width"/> tiles across (facing 0: in a wall running left to
+        /// right), with a stone post at each end. Closed: two leaves meeting in the middle, held by iron
+        /// bands (and studs on the castle gate). Open: both leaves swung in against their posts.
+        /// </summary>
+        public static PixelImage Gate(int ppu, int width, bool castle, bool open, int rotation)
+        {
+            float t = ppu, w = width;
+            var img = Canvas(w, 1f, t);
+            var post = castle ? Granite : DarkWood;
+            var surface = castle ? Surface.Stone : Surface.Wood;
+            Block(img, t, 0.3f, 0.34f, w - 0.3f, 0.66f, PixelImage.Rgb(78, 74, 68), 0.02f, 0.01f, Surface.Stone, 511u, true, 0.3f);   // the sill
+            Block(img, t, 0f, 0f, 0.3f, 1f, post, 0.75f, 0.02f, surface, 512u, false);
+            Block(img, t, w - 0.3f, 0f, w, 1f, post, 0.75f, 0.02f, surface, 513u, false);
+            float thick = castle ? 0.16f : 0.12f, leaf = (w - 0.6f) / 2f;
+            var wood = castle ? PixelImage.Rgb(86, 58, 36) : Oak;
+            if (!open)
+            {
+                for (int side = 0; side < 2; side++)
+                {
+                    float x0 = 0.3f + side * leaf, x1 = x0 + leaf;
+                    Block(img, t, x0, 0.5f - thick, x1 - 0.01f, 0.5f + thick, wood, 0.65f, 0.012f, Surface.Wood, 514u + (uint)side, true, 0.16f);
+                    foreach (float f in new[] { 0.2f, 0.8f })
+                    {
+                        float x = x0 + leaf * f;
+                        Block(img, t, x - 0.035f, 0.5f - thick - 0.006f, x + 0.035f, 0.5f + thick + 0.006f, Iron, 0.67f, 0.005f, Surface.Metal, 516u, false);
+                    }
+                    if (castle)
+                        for (float x = x0 + 0.15f; x < x1 - 0.1f; x += 0.2f) Stud(img, t, x, 0.5f, 0.02f, PixelImage.Scale(Iron, 1.3f), 0.67f);
+                }
+                Block(img, t, w / 2f - 0.5f, 0.5f - 0.04f, w / 2f + 0.5f, 0.5f + 0.04f, Iron, 0.7f, 0.006f, Surface.Metal, 517u);   // the crossbar
+            }
+            else
+            {
+                // Each leaf swung in against its post.
+                const float depth = 0.48f;   // (folded back within the doorway's tile, like the small door)
+                Block(img, t, 0.3f, 0.5f, 0.3f + thick * 2f, 0.5f + depth, wood, 0.65f, 0.012f, Surface.Wood, 518u, false, 0.16f);
+                Block(img, t, w - 0.3f - thick * 2f, 0.5f, w - 0.3f, 0.5f + depth, wood, 0.65f, 0.012f, Surface.Wood, 519u, false, 0.16f);
             }
             return Finish(img, t, rotation);
         }

@@ -198,3 +198,10 @@ git push
 
 Then send Claude the ticked lists, screenshots, how far you got in survival,
 and anything that felt wrong or not fun.
+
+## Big gates (added later)
+
+On the **Walls & doors** tab: **Wooden gate (3 wide)** and **Castle gate (4 wide)**. Build them
+into a wall like a door (leave a gap of 3 or 4 tiles in the wall, or place them over single wall
+tiles; R turns them). They open when you or a villager come near either end and shut behind you;
+zombies have to break them down (1,200 and 3,000 hit points). Run Build Game Scenes first.

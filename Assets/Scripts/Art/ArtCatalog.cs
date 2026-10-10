@@ -103,7 +103,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 7;
+        public const int Version = 8;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -187,6 +187,16 @@ namespace KingdomGame.Art
                     int rotation = r;
                     Add(items, ArtKeys.DoorClosed(art, r), "Doors", p => FurnitureArt.Door(p, heavy, false, rotation), true, half);
                     Add(items, ArtKeys.DoorOpen(art, r), "Doors", p => FurnitureArt.Door(p, heavy, true, rotation), true, half);
+                    Shadow(items, ArtKeys.DoorClosed(art, r), "FurnitureShadows", 0.02f);
+                }
+            // Big gates: 3 tiles (wood) and 4 tiles (castle) across.
+            foreach (bool castle in new[] { false, true })
+                for (int r = 0; r < 2; r++)
+                {
+                    string art = castle ? FurnitureArt.CastleGate : FurnitureArt.WoodGate;
+                    int rotation = r, width = castle ? 4 : 3;
+                    Add(items, ArtKeys.DoorClosed(art, r), "Doors", p => FurnitureArt.Gate(p, width, castle, false, rotation), true, half);
+                    Add(items, ArtKeys.DoorOpen(art, r), "Doors", p => FurnitureArt.Gate(p, width, castle, true, rotation), true, half);
                     Shadow(items, ArtKeys.DoorClosed(art, r), "FurnitureShadows", 0.02f);
                 }
             // Traps and towers (their turning heads drawn for each direction).

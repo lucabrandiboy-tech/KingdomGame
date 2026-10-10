@@ -26,5 +26,9 @@ namespace KingdomGame.Building
         [Min(0.1f)] public float reach = 0.9f;
         [Tooltip("Most blueprints placed with one drag.")]
         [Min(1)] public int maxLine = 40;
+        [Tooltip("A roof needs a wall or door at most this many tiles away to hold it up (it caves in when they're gone).")]
+        [Min(1)] public int roofReach = 4;
+        [Tooltip("Pixels per tile of the roof pictures (drawn while playing, for each roof's shape). Lower saves video memory.")]
+        [Range(16, 128)] public int roofDetail = 64;
     }
 }

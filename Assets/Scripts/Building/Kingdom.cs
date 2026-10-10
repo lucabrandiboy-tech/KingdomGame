@@ -52,6 +52,10 @@ namespace KingdomGame.Building
         readonly Dictionary<Vector2Int, Component> occupied = new Dictionary<Vector2Int, Component>();
         readonly Dictionary<Vector2Int, Component> floors = new Dictionary<Vector2Int, Component>();
         readonly Dictionary<Vector2Int, Component> rugs = new Dictionary<Vector2Int, Component>();
+        readonly Dictionary<Vector2Int, Component> roofs = new Dictionary<Vector2Int, Component>();
+        // Walls and doors that went (roofs near them may have lost what held them up).
+        readonly HashSet<Vector2Int> supportLost = new HashSet<Vector2Int>();
+        RoofView roofView;
         readonly Dictionary<Vector2Int, ResourceNode> nodes = new Dictionary<Vector2Int, ResourceNode>();
 
         readonly Dictionary<BuildingConfig, Sprite[]> looks = new Dictionary<BuildingConfig, Sprite[]>();
@@ -89,6 +93,9 @@ namespace KingdomGame.Building
         public int VillagerCapacity => config.startVillagers + Beds;
         /// <summary>Something was built, torn down or broken (rooms and zombie paths change).</summary>
         public event Action Changed;
+        /// <summary>The ruler is on the throne building (roofs turn see-through).</summary>
+        public bool ThroneView { get; set; }
+        public RoofView Roofs => roofView;
 
         void Awake()
         {
@@ -127,11 +134,15 @@ namespace KingdomGame.Building
                 if (node != null) nodes[node.Cell] = node;
             if (world != null) world.CellChanged += OnWallChanged;
             MakeSprites(otherBuildings);
+            roofView = new GameObject("Roofs").AddComponent<RoofView>();
+            roofView.transform.SetParent(transform, false);
+            roofView.Setup(this, config.roofDetail);
         }
 
         void OnWallChanged(Vector2Int cell, bool added)
         {
             roomsDirty = true;
+            if (!added) supportLost.Add(cell);
             Changed?.Invoke();
         }
 
@@ -162,6 +173,10 @@ namespace KingdomGame.Building
                         break;
                     case BuildingKind.Floor:
                         for (int v = 0; v < FloorVariants; v++) look[v] = ArtSprites.Get(ArtKeys.FloorTile(b.art, v));
+                        break;
+                    case BuildingKind.Roof:
+                        // A sample of the roof (the ghost while placing it); the roofs themselves are drawn for their shape.
+                        look[0] = Made(PixelTextures.ToSprite(RoofArt.Swatch(64, b.roofStyle), b.name, false, 64));
                         break;
                     case BuildingKind.Door:
                     {
@@ -304,7 +319,7 @@ namespace KingdomGame.Building
 
         // Which layer a building goes on.
         Dictionary<Vector2Int, Component> LayerOf(BuildingConfig b) =>
-            b.kind == BuildingKind.Floor ? floors : b.kind == BuildingKind.Furniture && b.flat ? rugs : occupied;
+            b.kind == BuildingKind.Floor ? floors : b.kind == BuildingKind.Roof ? roofs : b.kind == BuildingKind.Furniture && b.flat ? rugs : occupied;
 
         // Removes trees, stumps, rocks and bushes standing in these cells.
         void ClearNature(RectInt cells)
@@ -321,6 +336,9 @@ namespace KingdomGame.Building
 
         /// <summary>What stands on the top layer of a cell: the throne, a storehouse, a door, furniture or a blueprint (null = nothing).</summary>
         public Component ThingAt(Vector2Int cell) => occupied.TryGetValue(cell, out var thing) ? thing : null;
+
+        /// <summary>The roof over a cell (built, not planned), or null.</summary>
+        public RoofTile RoofAt(Vector2Int cell) => roofs.TryGetValue(cell, out var r) ? r as RoofTile : null;
 
         /// <summary>A tree, rock or bush that blocks this cell, or null.</summary>
         public ResourceNode NodeAt(Vector2Int cell) => nodes.TryGetValue(cell, out var node) && node != null && node.Blocks ? node : null;
@@ -444,6 +462,7 @@ namespace KingdomGame.Building
         public bool CanPlace(BuildingConfig b, Vector2Int cell, int rotation, out string reason)
         {
             var cells = new RectInt(cell, b.SizeFacing(b.ClampRotation(rotation)));
+            if (b.kind == BuildingKind.Roof) return CanRoof(cells, out reason);
             var map = Nav.Cells;
             var layer = LayerOf(b);
             foreach (var c in cells.allPositionsWithin)
@@ -489,6 +508,55 @@ namespace KingdomGame.Building
             return true;
         }
 
+        // A roof can go over anything but the big storehouse (it has its own) and trees, as long as walls hold it up.
+        bool CanRoof(RectInt cells, out string reason)
+        {
+            var map = Nav.Cells;
+            foreach (var c in cells.allPositionsWithin)
+            {
+                if (c.x < map.xMin + 1 || c.y < map.yMin + 1 || c.x >= map.xMax - 1 || c.y >= map.yMax - 1)
+                {
+                    reason = "Too close to the edge of the map";
+                    return false;
+                }
+                if (roofs.TryGetValue(c, out var thing) && thing != null)
+                {
+                    reason = thing is Blueprint ? "Already planned here" : "There's already a roof here";
+                    return false;
+                }
+                if (occupied.TryGetValue(c, out var top) && top is Storage store && (store.Config == null || string.IsNullOrEmpty(store.Config.art)))
+                {
+                    reason = "The storehouse has its own roof";
+                    return false;
+                }
+                if (nodes.TryGetValue(c, out var node) && node != null && !node.Empty && node.Config != null && node.Config.look == NodeLook.Tree)
+                {
+                    reason = "A tree is in the way (chop it first: hold E)";
+                    return false;
+                }
+                if (!RoofHeld(c, true))
+                {
+                    reason = $"A roof needs a wall or door within {config.roofReach} tiles to hold it up";
+                    return false;
+                }
+            }
+            reason = null;
+            return true;
+        }
+
+        /// <summary>Whether a wall or door (or with <paramref name="planned"/>, one that's planned) is close enough to hold up a roof at <paramref name="cell"/>.</summary>
+        public bool RoofHeld(Vector2Int cell, bool planned)
+        {
+            int reach = Mathf.Max(1, config.roofReach);
+            for (int dy = -reach; dy <= reach; dy++)
+                for (int dx = -reach; dx <= reach; dx++)
+                {
+                    var c = new Vector2Int(cell.x + dx, cell.y + dy);
+                    if (planned ? WallLike(c) : WallTopAt(c)) return true;
+                }
+            return false;
+        }
+
         public Blueprint PlaceBlueprint(BuildingConfig b, Vector2Int cell) => PlaceBlueprint(b, cell, 0);
 
         public Blueprint PlaceBlueprint(BuildingConfig b, Vector2Int cell, int rotation)
@@ -506,12 +574,13 @@ namespace KingdomGame.Building
             return blueprint;
         }
 
-        /// <summary>The blueprint at a cell (top layer first, then rugs, then floors), or null.</summary>
+        /// <summary>The blueprint at a cell (top layer first, then rugs, then floors, then roofs), or null.</summary>
         public Blueprint BlueprintAt(Vector2Int cell)
         {
             if (occupied.TryGetValue(cell, out var top) && top is Blueprint a) return a;
             if (rugs.TryGetValue(cell, out var rug) && rug is Blueprint b) return b;
-            return floors.TryGetValue(cell, out var floor) ? floor as Blueprint : null;
+            if (floors.TryGetValue(cell, out var floor) && floor is Blueprint f) return f;
+            return roofs.TryGetValue(cell, out var roof) ? roof as Blueprint : null;
         }
 
         /// <summary>Removes a blueprint and puts what was already delivered back into storage. Returns a message for the player.</summary>
@@ -579,6 +648,61 @@ namespace KingdomGame.Building
             if (wallConfig != null) Refund(wallConfig, structure.Cells.width * structure.Cells.height, structure.Cells.center);
             structure.Remove();
             return "Tore down the wall";
+        }
+
+        /// <summary>Takes off the whole roof over <paramref name="cell"/> (every touching cell of it) and gives half its cost back.</summary>
+        public string TearDownRoof(Vector2Int cell)
+        {
+            var first = RoofAt(cell);
+            if (first == null) return null;
+            var all = ConnectedRoof(first);
+            foreach (var tile in all)
+            {
+                Forget(tile);
+                tile.Remove();
+            }
+            Refund(first.Config, all.Count, cell + new Vector2(0.5f, 0.5f));
+            return $"Took the {first.Config.displayName.ToLowerInvariant()} off ({all.Count} tiles)";
+        }
+
+        /// <summary>Every roof cell touching <paramref name="first"/> of the same kind (one roof).</summary>
+        public List<RoofTile> ConnectedRoof(RoofTile first)
+        {
+            var result = new List<RoofTile> { first };
+            var seen = new HashSet<Vector2Int> { first.Cell };
+            for (int i = 0; i < result.Count; i++)
+            {
+                var c = result[i].Cell;
+                foreach (var n in new[] { c + Vector2Int.left, c + Vector2Int.right, c + Vector2Int.down, c + Vector2Int.up })
+                {
+                    if (!seen.Add(n)) continue;
+                    var other = RoofAt(n);
+                    if (other != null && other.Config == first.Config) result.Add(other);
+                }
+            }
+            return result;
+        }
+
+        // Roofs that nothing holds up any more (their walls caved in or were torn down) fall in.
+        void CollapseRoofs()
+        {
+            if (supportLost.Count == 0) return;
+            int reach = Mathf.Max(1, config.roofReach);
+            var falling = new List<RoofTile>();
+            foreach (var lost in supportLost)
+                for (int dy = -reach; dy <= reach; dy++)
+                    for (int dx = -reach; dx <= reach; dx++)
+                    {
+                        var roof = RoofAt(new Vector2Int(lost.x + dx, lost.y + dy));
+                        if (roof != null && !falling.Contains(roof) && !RoofHeld(roof.Cell, false)) falling.Add(roof);
+                    }
+            supportLost.Clear();
+            foreach (var roof in falling)
+            {
+                if (world != null) world.Burst(roof.Cells.center, new Color32(110, 96, 74, 255), 6, 2f);
+                Forget(roof);
+                roof.Remove();
+            }
         }
 
         // A wall tile on its own (not part of a bigger structure like the test outpost's): a door can replace it.
@@ -692,6 +816,11 @@ namespace KingdomGame.Building
             else if (thing is Door d)
             {
                 doors.Remove(d);
+                foreach (var c in d.Cells.allPositionsWithin) supportLost.Add(c);
+            }
+            else if (thing is RoofTile roof)
+            {
+                if (roofView != null) roofView.Touch(roof.Cell);
             }
             else if (thing is Furniture f)
             {
@@ -773,6 +902,7 @@ namespace KingdomGame.Building
                 if (b.WorkDone) TryComplete(b);
                 else if (b.UnreachableUntil > Time.time) b.Problem = "Builders can't find a way there";
             }
+            CollapseRoofs();
             UpdateRooms(false);
         }
 
@@ -784,6 +914,15 @@ namespace KingdomGame.Building
 
         void TryComplete(Blueprint b)
         {
+            if (b.Config.kind == BuildingKind.Roof)
+            {
+                foreach (var c in b.Cells.allPositionsWithin)
+                    if (!RoofHeld(c, false))
+                    {
+                        b.Problem = $"Finished, but a roof needs a wall or door within {config.roofReach} tiles to hold it up";
+                        return;
+                    }
+            }
             // Nothing zombies can't walk through may appear on top of them (doors included).
             if (BlocksZombies(b.Config))
             {
@@ -846,6 +985,18 @@ namespace KingdomGame.Building
                         var sprites = looks.TryGetValue(config, out var s) ? s : null;
                         tile.Setup(config, c, sprites != null && sprites[pick] != null ? sprites[pick] : LookOf(config));
                         Occupy(floors, new RectInt(c, Vector2Int.one), tile);
+                        made = tile;
+                    }
+                    break;
+                case BuildingKind.Roof:
+                    foreach (var c in cells.allPositionsWithin)
+                    {
+                        var go = new GameObject(config.displayName);
+                        go.transform.SetParent(transform, false);
+                        var tile = go.AddComponent<RoofTile>();
+                        tile.Setup(config, c);
+                        Occupy(roofs, new RectInt(c, Vector2Int.one), tile);
+                        if (roofView != null) roofView.Touch(c);
                         made = tile;
                     }
                     break;
@@ -971,6 +1122,7 @@ namespace KingdomGame.Building
             int Count(RoomTag tag) => tags.TryGetValue(tag, out int n) ? n : 0;
             if (throne) return "Throne room";
             if (Count(RoomTag.Bed) >= 3) return "Barracks";
+            if (Count(RoomTag.Bed) > 0 && (Count(RoomTag.Cooking) > 0 || Count(RoomTag.Table) > 0) && size <= 30) return "Cottage";
             if (Count(RoomTag.Bed) > 0) return "Bedroom";
             if (Count(RoomTag.Table) > 0 && Count(RoomTag.Seat) > 0) return size >= 24 ? "Great hall" : "Dining hall";
             if (Count(RoomTag.Books) > 0) return "Library";

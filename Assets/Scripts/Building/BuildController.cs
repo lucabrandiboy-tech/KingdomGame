@@ -113,6 +113,7 @@ namespace KingdomGame.Building
             if (Active || kingdom == null || kingdom.Throne == null) return;
             Active = true;
             enteredFrame = Time.frameCount;
+            kingdom.ThroneView = true;
             selected = -1;
             dragging = false;
             ruler.Sit(kingdom.Throne);
@@ -125,6 +126,7 @@ namespace KingdomGame.Building
         {
             if (!Active) return;
             Active = false;
+            kingdom.ThroneView = false;
             LeftFrame = Time.frameCount;
             selected = -1;
             dragging = false;
@@ -234,7 +236,7 @@ namespace KingdomGame.Building
             }
 
             placements.Clear();
-            if (dragging && b.dragToPlaceLines && b.kind == BuildingKind.Floor) Area(dragStart, origin, MaxArea, placements);
+            if (dragging && b.dragToPlaceLines && (b.kind == BuildingKind.Floor || b.kind == BuildingKind.Roof)) Area(dragStart, origin, MaxArea, placements);
             else if (dragging && b.dragToPlaceLines) Line(dragStart, origin, size, kingdom.Config.maxLine, placements);
             else placements.Add(dragging ? dragStart : origin);
 
@@ -272,6 +274,17 @@ namespace KingdomGame.Building
             bool rightClick = !PointerOverHud && (GameInput.AltFirePressed || GameInput.Pressed(KeyCode.Delete));
             var room = kingdom.RoomAt(cell);
             string roomText = room != null ? $"\n{room.Name} ({room.Size} tiles)" : "";
+            // The roof overhead: Shift + right click takes the whole roof off.
+            var roof = kingdom.RoofAt(cell);
+            if (roof != null)
+            {
+                roomText += $"\n{roof.Config.displayName} overhead.  Shift + right click: take the whole roof off (half its cost back)";
+                if (rightClick && GameInput.Shift)
+                {
+                    Say(kingdom.TearDownRoof(cell));
+                    return;
+                }
+            }
 
             var blueprint = kingdom.BlueprintAt(cell);
             if (blueprint != null)
@@ -301,7 +314,7 @@ namespace KingdomGame.Building
                 if (rightClick) Say(kingdom.TearDown(cell));
                 return;
             }
-            Hover = room != null ? roomText.TrimStart('\n') : null;
+            Hover = roomText.Length > 0 ? roomText.TrimStart('\n') : null;
         }
 
         public static string Describe(Blueprint b)

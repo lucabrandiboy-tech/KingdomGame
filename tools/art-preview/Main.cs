@@ -56,6 +56,13 @@ static class Program
         var dump = new HashSet<string>();
         foreach (var a in args) if (a.StartsWith("--sheet=")) dump.Add(a.Substring("--sheet=".Length));
         var sw = Stopwatch.StartNew();
+        // --roofs: only the roofs (each kind on a few house shapes), quickly.
+        if (Array.IndexOf(args, "--roofs") >= 0)
+        {
+            SaveRoofs(dir);
+            Console.WriteLine($"roofs done in {sw.Elapsed.TotalSeconds:0.0}s");
+            return;
+        }
         var walls = new[]
         {
             new WallLook { Name = "StoneWall", Logs = false, Gap = PixelImage.Rgb(46, 44, 42), Variants = 4,
@@ -105,6 +112,40 @@ static class Program
     }
 
     enum Time { Day, Night }
+
+    // Every kind of roof on four house shapes: a cottage, a long hall, an L and a T, side by side.
+    static void SaveRoofs(string dir)
+    {
+        string[] plan =
+        {
+            "..............................",
+            ".###.......#####..............",
+            ".###.......#####....#######...",
+            ".###.......##.......#######...",
+            "...........##..........#......",
+            ".#########.##..........#......",
+            ".#########.............#......",
+            ".#########....................",
+            "..............................",
+        };
+        int w = plan[0].Length, h = plan.Length;
+        var cells = new bool[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                cells[y * w + x] = plan[h - 1 - y][x] == '#';
+        foreach (RoofStyle style in Enum.GetValues(typeof(RoofStyle)))
+        {
+            var roof = RoofArt.Roof(cells, w, h, 64, style, 5u);
+            // On grass-coloured ground, so the edges show.
+            var img = new PixelImage(roof.Width, roof.Height);
+            for (int i = 0; i < img.Pixels.Length; i++)
+            {
+                var c = roof.Pixels[i];
+                img.Pixels[i] = c.a > 0 ? c : PixelImage.Rgb(70, 84, 52);
+            }
+            SaveImage(img, Path.Combine(dir, $"roof_{style}.png"));
+        }
+    }
 
     // ------------------------------------------------------------- world --
 

@@ -1,3 +1,4 @@
+using KingdomGame.Art;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
 using UnityEngine;
@@ -16,6 +17,8 @@ namespace KingdomGame.Building
         Door,
         /// <summary>Tables, chairs, beds, torches and the rest.</summary>
         Furniture,
+        /// <summary>A roof over a cell: placed by dragging an area, drawn as one roof over the whole house.</summary>
+        Roof,
     }
 
     /// <summary>The tabs of the build bar (new ones go at the end: assets store the number).</summary>
@@ -101,6 +104,10 @@ namespace KingdomGame.Building
         public Vector2[] flames = new Vector2[0];
         [Tooltip("Size of each flame picture (1 = a torch's).")]
         [Min(0)] public float flameSize = 1f;
+
+        [Header("Roofs")]
+        [Tooltip("What the roof is covered with (each age has its own).")]
+        public RoofStyle roofStyle = RoofStyle.Thatch;
 
         [Header("Storage")]
         [Tooltip("How much it holds, all resources together.")]

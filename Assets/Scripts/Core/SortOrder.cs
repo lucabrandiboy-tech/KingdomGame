@@ -35,6 +35,8 @@ namespace KingdomGame
         public const int Characters = 1000;
         public const int Charges = 1500;
         public const int Debris = 2000;
+        /// <summary>Roofs: over the people inside, under shots flying past (they fade when the ruler goes in).</summary>
+        public const int Roofs = 2400;
         public const int Projectiles = 2500;
         public const int Sparks = 2600;
         public const int Smoke = 4000;

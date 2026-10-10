@@ -40,6 +40,9 @@ namespace KingdomGame
             }
         }
 
+        /// <summary>Either Shift key is held.</summary>
+        public static bool Shift => Held(KeyCode.LeftShift) || Held(KeyCode.RightShift);
+
         public static bool FireHeld => MouseHeld(0);
         public static bool FirePressed => MousePressed(0);
         public static bool FireReleased => MouseReleased(0);
@@ -171,6 +174,8 @@ namespace KingdomGame
                 case KeyCode.LeftBracket: return k.leftBracketKey;
                 case KeyCode.RightBracket: return k.rightBracketKey;
                 case KeyCode.Delete: return k.deleteKey;
+                case KeyCode.LeftShift: return k.leftShiftKey;
+                case KeyCode.RightShift: return k.rightShiftKey;
                 case KeyCode.Escape: return k.escapeKey;
                 default:
                     Debug.LogWarning($"GameInput doesn't know key {key} yet. Add it to GameInput.Find.");

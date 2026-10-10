@@ -44,11 +44,13 @@ namespace KingdomGame.UI
         const string SurvivalKeys = "\nN  call the next wave now";
 
         const string ThroneControls =
-            "Tab or click a tab  walls, floors, furniture, lights, storage\n" +
+            "Tab or click a tab  walls, floors & roofs, furniture, lights, storage, traps, towers\n" +
+            "[ and ]  earlier / later ages          T  research\n" +
             "1-9 or click  pick something (again = put away)     R  turn it\n" +
-            "Left click  place  (walls: drag for a line, floors: drag for an area)\n" +
+            "Left click  place  (walls: drag for a line, floors and roofs: drag for an area)\n" +
             "Right click  stop placing / cancel a blueprint / tear down\n" +
-            "Rooms: close an area with walls and doors; furniture names it\n" +
+            "Shift + right click  take a roof off\n" +
+            "A house: walls and a door round a room, furniture in it, a roof on top\n" +
             "WASD  move the view          Wheel  zoom\n" +
             "E or Esc  stand up          H  hide this";
 
@@ -326,7 +328,7 @@ namespace KingdomGame.UI
             switch (c)
             {
                 case BuildCategory.Walls: return "Walls & doors";
-                case BuildCategory.Floors: return "Floors & rugs";
+                case BuildCategory.Floors: return "Floors & roofs";
                 case BuildCategory.Furniture: return "Furniture";
                 case BuildCategory.Lights: return "Lights";
                 case BuildCategory.Traps: return "Traps";

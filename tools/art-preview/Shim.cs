@@ -52,6 +52,7 @@ namespace UnityEngine
         public static float Abs(float v) => System.Math.Abs(v);
         public static float Sign(float v) => v >= 0f ? 1f : -1f;
         public static int Max(int a, int b) => a > b ? a : b;
+        public static int Abs(int a) => a < 0 ? -a : a;
         public static int Min(int a, int b) => a < b ? a : b;
         public static float Max(float a, float b) => a > b ? a : b;
         public static float Min(float a, float b) => a < b ? a : b;

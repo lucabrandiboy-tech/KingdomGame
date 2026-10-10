@@ -255,10 +255,10 @@ static class Program
             Person(ArtKeys.Villager(false, 0, 0), 1.6f, 1.6f, 200f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
 
             // The horde: walkers clawing at the gate and the wall, more coming, a brute and a runner, and the dead.
-            Zombie("Walker", 0.3f, -4.35f, 88f, 5);
-            Zombie("Walker", -0.6f, -4.4f, 95f, 4);
-            Zombie("Walker", 1.25f, -4.35f, 80f, 0);
-            Zombie("Brute", -1.6f, -4.55f, 75f, 4);
+            Zombie("Walker", 0.45f, -3.27f, 90f, 5);
+            Zombie("Walker", -0.55f, -3.25f, 92f, 4);
+            Zombie("Walker", 1.3f, -3.27f, 85f, 0);
+            Zombie("Brute", -1.7f, -3.36f, 88f, 4);
             Zombie("Walker", 0.8f, -5.5f, 100f, 1);
             Zombie("Walker", -0.4f, -6.1f, 85f, 3);
             Zombie("Runner", 2.6f, -5.9f, 120f, 2);
@@ -326,6 +326,10 @@ static class Program
             int d = ((int)MathF.Round(facing / step) % CharacterArt.ZombieDirections + CharacterArt.ZombieDirections) % CharacterArt.ZombieDirections;
             Things.Add(new Inst { Key = ArtKeys.ZombieShadow(kind), X = x + 0.55f * 0.1f, Y = y - 0.65f * 0.1f, Rot = facing, Order = -100, Shadow = true });
             Things.Add(new Inst { Key = ArtKeys.Zombie(kind, d, frame), X = x, Y = y, Rot = facing, Order = 999 });
+            // The glowing eyes (Zombie.Setup): unlit, turned with the body.
+            float k = CharacterArt.ZombieScale(kind);
+            var eyes = Rotate(CharacterArt.ZombieEyesAt(kind, frame) * k, facing);
+            Things.Add(new Inst { Key = ArtKeys.ZombieEyes, X = x + eyes.x, Y = y + eyes.y, Rot = facing, Scale = k, Order = 1000, Glow = true, Alpha = 0.85f });
         }
 
         void Dead(string kind, float x, float y, float degrees)

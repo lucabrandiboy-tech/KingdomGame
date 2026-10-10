@@ -129,7 +129,11 @@ namespace KingdomGame.Zombies
                 Frames = new Sprite[CharacterArt.ZombieDirections, CharacterArt.ZombieFrames],
                 Shadow = ArtSprites.Get(ArtKeys.ZombieShadow(art)),
                 Dead = new Sprite[CharacterArt.DeadDirections],
+                Eyes = ArtSprites.Get(ArtKeys.ZombieEyes),
+                EyesAt = new Vector2[CharacterArt.ZombieFrames],
+                Scale = CharacterArt.ZombieScale(art),
             };
+            for (int f = 0; f < CharacterArt.ZombieFrames; f++) s.EyesAt[f] = CharacterArt.ZombieEyesAt(art, f);
             for (int d = 0; d < CharacterArt.ZombieDirections; d++)
                 for (int f = 0; f < CharacterArt.ZombieFrames; f++)
                     s.Frames[d, f] = ArtSprites.Get(ArtKeys.Zombie(art, d, f));
@@ -351,7 +355,10 @@ namespace KingdomGame.Zombies
             return true;
         }
 
-        /// <summary>Whether nothing zombies can't walk through stands between two points (walls, closed doors, tables).</summary>
+        /// <summary>
+        /// Whether nothing zombies can't walk through stands between two points (walls,
+        /// closed doors, tables), including squeezing diagonally between two that touch at a corner.
+        /// </summary>
         public bool ClearLine(Vector2 a, Vector2 b)
         {
             var line = b - a;
@@ -359,12 +366,17 @@ namespace KingdomGame.Zombies
             if (length < 0.3f) return true;
             var start = CellOf(a);
             var end = CellOf(b);
+            var previous = start;
             int samples = Mathf.CeilToInt(length / 0.2f);
-            for (int i = 1; i < samples; i++)
+            for (int i = 1; i <= samples; i++)
             {
                 var cell = CellOf(a + line * (i / (float)samples));
-                if (cell == start || cell == end) continue;
-                if (!Walkable(cell)) return false;
+                if (cell == previous) continue;
+                if (cell != end && !Walkable(cell)) return false;
+                if (cell.x != previous.x && cell.y != previous.y &&
+                    !(Walkable(new Vector2Int(previous.x, cell.y)) && Walkable(new Vector2Int(cell.x, previous.y))))
+                    return false;
+                previous = cell;
             }
             return true;
         }

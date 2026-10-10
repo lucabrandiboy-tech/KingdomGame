@@ -12,6 +12,11 @@ namespace KingdomGame.Zombies
         public Sprite Shadow;
         /// <summary>Lying dead, one per direction (<see cref="CharacterArt.DeadDirections"/>).</summary>
         public Sprite[] Dead;
+        /// <summary>Eyes that glow faintly in the dark, and where they are in each frame (tiles, facing right).</summary>
+        public Sprite Eyes;
+        public Vector2[] EyesAt;
+        /// <summary>How big this kind is drawn compared to a walker (the eyes are drawn at a walker's size).</summary>
+        public float Scale = 1f;
     }
 
     /// <summary>
@@ -32,15 +37,17 @@ namespace KingdomGame.Zombies
 
         ZombieDirector director;
         ZombieSprites sprites;
-        Transform body;
+        Transform body, eyes;
         SpriteRenderer bodyRenderer, shadow;
         Vector2 position, offset;
         float angle, stepClock, hurtFlash, thinkAt;
         float attackClock = -1f;           // seconds into the current blow, or -1
         float lostFor;                     // seconds without a way to anyone
+        float stuckFor, chaseBlockedUntil; // going straight for someone isn't getting anywhere: follow the field
         bool struck;
         Health prey, victim;               // who it's after; who it's hitting
-        Vector2Int smashing;               // the cell it's hitting when victim is null
+        bool hittingPerson;                // hitting victim (true) or the cell smashing (false)
+        Vector2Int smashing;
 
         public ZombieConfig Config { get; private set; }
         public Health Health { get; private set; }
@@ -71,6 +78,18 @@ namespace KingdomGame.Zombies
             body.SetParent(transform, false);
             bodyRenderer = body.gameObject.AddComponent<SpriteRenderer>();
             bodyRenderer.sortingOrder = SortOrder.Characters - 1;   // under the ruler and villagers
+            if (sprites.Eyes != null)
+            {
+                // Eyes glinting in the dark, so you can see them coming at night.
+                eyes = new GameObject("Eyes").transform;
+                eyes.SetParent(body, false);
+                eyes.localScale = Vector3.one * sprites.Scale;
+                var eyeRenderer = eyes.gameObject.AddComponent<SpriteRenderer>();
+                eyeRenderer.sprite = sprites.Eyes;
+                eyeRenderer.sortingOrder = SortOrder.Characters;
+                eyeRenderer.color = new Color(1f, 1f, 1f, 0.85f);
+                Look.MakeGlow(eyeRenderer);
+            }
             Show(Vector2.zero, 0f);
         }
 
@@ -98,14 +117,14 @@ namespace KingdomGame.Zombies
 
             Vector2 want = Vector2.zero;
             bool lost = false;
-            if (prey != null)
+            if (prey != null && director.Gap(prey, position) - Radius <= Config.reach)
             {
-                if (director.Gap(prey, position) - Radius <= Config.reach)
-                {
-                    StartAttack(prey, default);
-                    Show(Vector2.zero, dt);
-                    return;
-                }
+                StartAttack(prey, default);
+                Show(Vector2.zero, dt);
+                return;
+            }
+            if (prey != null && Time.time >= chaseBlockedUntil)
+            {
                 want = director.AimPoint(prey, position) - position;
             }
             else if (director.NextStep(position, out var next, out bool blocked))
@@ -141,12 +160,21 @@ namespace KingdomGame.Zombies
             float speed = Config.moveSpeed * director.SpeedFactor;
             var move = (want.sqrMagnitude > 1e-6f ? want.normalized * speed : Vector2.zero) + Crowding;
             Move(move * dt);
+            // Hardly moving while trying to walk (pressed into a corner, stuck in a crowd): follow the field for a while.
+            bool trying = want.sqrMagnitude > 0.01f;
+            stuckFor = trying && (position - before).sqrMagnitude < speed * dt * speed * dt * 0.04f ? stuckFor + dt : 0f;
+            if (stuckFor > 0.6f)
+            {
+                stuckFor = 0f;
+                chaseBlockedUntil = Time.time + 2f;
+            }
             Show((position - before) / Mathf.Max(dt, 1e-5f), dt);
         }
 
         void StartAttack(Health target, Vector2Int cell)
         {
             victim = target;
+            hittingPerson = target != null;
             smashing = cell;
             attackClock = 0f;
             struck = false;
@@ -155,16 +183,22 @@ namespace KingdomGame.Zombies
         // A blow: winding up for the first half, the strike lands half way, then a moment to recover.
         void Attack(float dt)
         {
+            // Someone else got them first: look for the next one.
+            if (hittingPerson && !struck && (victim == null || victim.Dead))
+            {
+                attackClock = -1f;
+                return;
+            }
             attackClock += dt;
             float length = Config.attackSeconds;
             if (!struck && attackClock >= length * 0.5f)
             {
                 struck = true;
                 float damage = director.DamageFactor;
-                if (victim != null)
+                if (hittingPerson)
                 {
                     // It only lands if they're still within reach (step back in time and it misses).
-                    if (!victim.Dead && director.Gap(victim, position) - Radius <= Config.reach + 0.15f)
+                    if (director.Gap(victim, position) - Radius <= Config.reach + 0.15f)
                         victim.Damage(Config.damage * damage, position);
                 }
                 else
@@ -209,8 +243,8 @@ namespace KingdomGame.Zombies
             {
                 float t = attackClock / Config.attackSeconds;
                 frame = t < 0.5f ? 4 : t < 0.75f ? 5 : 0;
-                var target = victim != null ? director.AimPoint(victim, position) : (Vector2)smashing + new Vector2(0.5f, 0.5f);
-                look = target - position;
+                if (!hittingPerson) look = (Vector2)smashing + new Vector2(0.5f, 0.5f) - position;
+                else if (victim != null && !victim.Dead) look = director.AimPoint(victim, position) - position;
             }
             else if (velocity.sqrMagnitude > 0.0025f)
             {
@@ -223,6 +257,7 @@ namespace KingdomGame.Zombies
 
             int direction = RulerLook.Direction(angle, sprites.Frames.GetLength(0));
             bodyRenderer.sprite = sprites.Frames[direction, frame];
+            if (eyes != null) eyes.localPosition = sprites.EyesAt[frame] * sprites.Scale;
             bodyRenderer.color = hurtFlash > 0f ? new Color(1f, 0.55f, 0.5f) : Color.white;
             var turn = Quaternion.Euler(0f, 0f, angle);
             body.localRotation = turn;

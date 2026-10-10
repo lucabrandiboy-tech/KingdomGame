@@ -3,13 +3,14 @@ using UnityEngine;
 namespace KingdomGame.Building
 {
     /// <summary>
-    /// A door in a wall. It swings open when the ruler or a villager comes close
-    /// and shuts once they've gone and the doorway is clear. It never opens for
+    /// A door in a wall. It swings open when the ruler or a villager walks up to
+    /// it and shuts once they've gone and the doorway is clear (so you can stand
+    /// beside it, behind the wall, without letting zombies in). It never opens for
     /// zombies: they have to break it down (it has hit points).
     /// </summary>
     public sealed class Door : MonoBehaviour, IBuilt
     {
-        const float OpenDistance = 1.15f;   // tiles from the middle of the door
+        const float OpenDistance = 0.85f;   // tiles from the middle of the door
 
         Sprite closedLook, openLook;
         SpriteRenderer look, shadow;

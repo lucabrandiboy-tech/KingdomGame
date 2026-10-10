@@ -25,7 +25,7 @@ namespace KingdomGame.UI
         CameraRig rig;
         SurvivalDirector waves;
         bool showControls = true;
-        GUIStyle box, hint, button, selectedButton, announce, roomLabel;
+        GUIStyle box, hint, button, selectedButton, announce, announceShadow, roomLabel, roomShadow, barLabel;
         Rect buildBar;
         float shownHealth = -1f, flash;
         readonly StringBuilder text = new StringBuilder(256);
@@ -92,12 +92,17 @@ namespace KingdomGame.UI
                 selectedButton = new GUIStyle(button);
                 selectedButton.normal.textColor = selectedButton.hover.textColor = new Color(1f, 0.85f, 0.4f);
                 announce = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, richText = true, wordWrap = true };
+                announceShadow = new GUIStyle(announce);
+                announceShadow.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
                 roomLabel = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, richText = true };
+                roomShadow = new GUIStyle(roomLabel);
+                roomShadow.normal.textColor = new Color(0f, 0f, 0f, 0.8f);
+                barLabel = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, richText = true };
             }
             int font = Mathf.Max(12, Screen.height / 50);
-            box.fontSize = hint.fontSize = button.fontSize = selectedButton.fontSize = font;
-            announce.fontSize = Mathf.RoundToInt(font * 1.6f);
-            roomLabel.fontSize = Mathf.RoundToInt(font * 0.9f);
+            box.fontSize = hint.fontSize = button.fontSize = selectedButton.fontSize = barLabel.fontSize = font;
+            announce.fontSize = announceShadow.fontSize = Mathf.RoundToInt(font * 1.6f);
+            roomLabel.fontSize = roomShadow.fontSize = Mathf.RoundToInt(font * 0.9f);
 
             if (flash > 0f) DrawFlash();
             bool throne = builder != null && builder.Active;
@@ -161,8 +166,7 @@ namespace KingdomGame.UI
                 GUI.color = Color.Lerp(new Color(0.75f, 0.12f, 0.1f), new Color(0.35f, 0.7f, 0.3f), fill);
                 GUI.DrawTexture(new Rect(x + 3, y + 3, (width - 6) * fill, height - 6), Texture2D.whiteTexture);
                 GUI.color = old;
-                var label = new GUIStyle(hint) { normal = { background = null } };
-                GUI.Label(new Rect(x, y, width, height), health.Dead ? "<b>Fallen</b>" : $"<b>Health {Mathf.CeilToInt(health.Current)} / {Mathf.CeilToInt(health.Max)}</b>", label);
+                GUI.Label(new Rect(x, y, width, height), health.Dead ? "<b>Fallen</b>" : $"<b>Health {Mathf.CeilToInt(health.Current)} / {Mathf.CeilToInt(health.Max)}</b>", barLabel);
                 y += height + 6f;
             }
             if (waves == null) return;
@@ -202,11 +206,9 @@ namespace KingdomGame.UI
             float width = Mathf.Min(Screen.width - font * 4f, font * 40f);
             var rect = new Rect((Screen.width - width) / 2f, Screen.height * 0.14f, width, font * 5f);
             // A dark outline so it reads on any background.
-            var shadow = new GUIStyle(announce);
-            shadow.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
             string plain = $"<b>{message}</b>";
             for (int i = 0; i < 4; i++)
-                GUI.Label(new Rect(rect.x + (i % 2 == 0 ? -2 : 2), rect.y + (i < 2 ? -2 : 2), rect.width, rect.height), plain, shadow);
+                GUI.Label(new Rect(rect.x + (i % 2 == 0 ? -2 : 2), rect.y + (i < 2 ? -2 : 2), rect.width, rect.height), plain, announceShadow);
             GUI.Label(rect, $"<b><color=#f0d08a>{message}</color></b>", announce);
         }
 
@@ -230,9 +232,7 @@ namespace KingdomGame.UI
                 if (screen.z < 0f || screen.x < 0f || screen.x > Screen.width || screen.y < 0f || screen.y > Screen.height) continue;
                 var rect = new Rect(screen.x - 150f, Screen.height - screen.y - 12f, 300f, 24f);
                 string label = $"<b>{room.Name}</b>";
-                var shadow = new GUIStyle(roomLabel);
-                shadow.normal.textColor = new Color(0f, 0f, 0f, 0.8f);
-                GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), label, shadow);
+                GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), label, roomShadow);
                 GUI.Label(rect, $"<color=#f2e2b8>{label}</color>", roomLabel);
             }
         }

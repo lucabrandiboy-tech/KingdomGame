@@ -1,5 +1,11 @@
 # Phase 2, steps A + B: how to test them
 
+> **Since then:** the castle and survival update added rooms, furniture and
+> zombies, and changed the build bar (tabs, more buildings). Start with
+> `docs/CASTLE-SURVIVAL-TEST.md`; use this guide for the detailed checks of
+> the look, the walls and the builders. Where the two differ (the build bar's
+> keys, the number of texture sheets), the newer guide is right.
+
 What's new since Phase 1:
 
 - **A new look: dark, realistic, seen from straight above,** drawn in high

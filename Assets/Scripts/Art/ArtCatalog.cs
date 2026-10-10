@@ -82,6 +82,8 @@ namespace KingdomGame.Art
         public static string Zombie(string kind, int direction, int frame) => $"Zombie/{kind}/{direction}/{frame}";
         public static string ZombieDead(string kind, int direction) => $"Zombie/{kind}/Dead/{direction}";
         public static string ZombieShadow(string kind) => $"Zombie/{kind}/Shadow";
+        /// <summary>Faintly glowing eyes, drawn over any zombie.</summary>
+        public const string ZombieEyes = "Zombie/Eyes";
     }
 
     /// <summary>
@@ -196,6 +198,7 @@ namespace KingdomGame.Art
                     }
                 Shadow(items, ArtKeys.Zombie(kind, 0, 0), "CharacterShadows", 0.02f, ArtKeys.ZombieShadow(kind));
             }
+            Add(items, ArtKeys.ZombieEyes, "Effects", CharacterArt.ZombieEyes, false, half);
             for (int d = 0; d < CharacterArt.DeadDirections; d++)
             {
                 float facing = d * 360f / CharacterArt.DeadDirections;

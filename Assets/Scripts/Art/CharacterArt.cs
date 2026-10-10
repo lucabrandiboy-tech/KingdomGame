@@ -57,6 +57,48 @@ namespace KingdomGame.Art
         public static PixelImage ZombieFrame(int ppu, string kind, float facingDegrees, int frame) =>
             Zombie(ppu, ArtLight.For(facingDegrees), kind, frame);
 
+        /// <summary>How big each kind of zombie is drawn, compared to a walker.</summary>
+        public static float ZombieScale(string kind) => ZombieLook(kind).size;
+
+        /// <summary>
+        /// Where a zombie's eyes are in frame <paramref name="frame"/>, in tiles from its middle,
+        /// facing right (at a walker's size: times <see cref="ZombieScale"/>).
+        /// </summary>
+        public static Vector2 ZombieEyesAt(string kind, int frame)
+        {
+            float hunch = (kind == "Runner" ? 0.08f : kind == "Brute" ? 0.03f : 0.05f) + (frame == 5 ? 0.05f : 0f);
+            float headR = kind == "Brute" ? 0.062f : 0.07f;
+            return new Vector2(hunch + 0.07f + headR * 0.62f, 0f);
+        }
+
+        /// <summary>
+        /// A zombie's two pale eyes, which glow faintly in the dark so a horde can be seen
+        /// coming at night (drawn unlit over the zombie, turned with it). The middle between
+        /// the eyes is the pivot.
+        /// </summary>
+        public static PixelImage ZombieEyes(int ppu)
+        {
+            int w = Mathf.Max(4, Mathf.CeilToInt(0.05f * ppu)), h = Mathf.Max(6, Mathf.CeilToInt(0.1f * ppu));
+            var img = new PixelImage(w, h);
+            float r = Mathf.Max(1.2f, 0.012f * ppu), glow = r * 2.2f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                float cx = w / 2f, cy = h / 2f + side * 0.03f * ppu;
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        float d = Mathf.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
+                        if (d >= glow) continue;
+                        float core = Mathf.Clamp01((r - d) + 0.5f);
+                        float a = Mathf.Max(core, Mathf.Pow(1f - d / glow, 2f) * 0.45f);
+                        var c = PixelImage.Mix(PixelImage.Rgb(170, 190, 110), PixelImage.Rgb(236, 240, 190), core);
+                        c.a = (byte)Mathf.RoundToInt(a * 230f);
+                        img.Blend(x, y, c);
+                    }
+            }
+            return img;
+        }
+
         /// <summary>A dead zombie lying on its back, head to the right, lit as if turned to <paramref name="facingDegrees"/>.</summary>
         public static PixelImage ZombieDead(int ppu, string kind, float facingDegrees)
         {

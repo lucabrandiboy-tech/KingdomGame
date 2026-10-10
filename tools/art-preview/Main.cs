@@ -195,6 +195,22 @@ static class Program
                 }
         }
         SaveImage(defenses, Path.Combine(dir, "defenses.png"));
+
+        // A mine underground (MineArt), 20 tiles across: the room at the shaft, a tunnel, a dug-out hall, ore in the rock.
+        const int md = 48, mw = 20;
+        var mine = new PixelImage(mw * md, mw * md);
+        bool Dug(int x, int y) => x >= 0 && y >= 0 && x < mw && y < mw &&
+            ((Math.Abs(x - 10) <= 2 && Math.Abs(y - 10) <= 2) || (y == 10 && x > 12 && x < 17) || (x >= 14 && x <= 17 && y >= 3 && y <= 9) || (x == 6 && y < 8 && y > 2));
+        for (int y = 0; y < mw; y++)
+            for (int x = 0; x < mw; x++)
+            {
+                int ore = 0;
+                float n = Noise.Value(x / 2.5f, y / 2.5f, 9u);
+                if (n > 0.8f) ore = (x + y) % 3 + 1;
+                MineArt.PaintCell(mine.Pixels, mine.Width, md, x * md, y * md, x, y, 5u, Dug(x, y), ore,
+                    Dug(x - 1, y), Dug(x + 1, y), Dug(x, y + 1), Dug(x, y - 1));
+            }
+        SaveImage(mine, Path.Combine(dir, "mine.png"));
     }
 
     // ------------------------------------------------------------- world --

@@ -23,6 +23,10 @@ namespace KingdomGame.Building
         House,
         /// <summary>A young tree or bush you plant; it grows, and woodcutters or foragers gather from it.</summary>
         Plant,
+        /// <summary>A mine's entrance: you go down to an underground level of rock to dig out.</summary>
+        Mine,
+        /// <summary>Marks rock in a mine to be dug out (not a building: miners dig it).</summary>
+        Dig,
     }
 
     /// <summary>The tabs of the build bar (new ones go at the end: assets store the number).</summary>
@@ -37,6 +41,7 @@ namespace KingdomGame.Building
         Towers,
         Houses,
         Farming,
+        Mining,
     }
 
     /// <summary>What a piece of furniture counts as, for naming the room it's in.</summary>
@@ -118,6 +123,10 @@ namespace KingdomGame.Building
         [Header("Traps and towers")]
         [Tooltip("What it does to zombies (a trap, an area, a mine or a tower), or empty for ordinary furniture.")]
         public Defenses.DefenseConfig defense;
+
+        [Header("Mines")]
+        [Tooltip("How the mine underground works (Mine only).")]
+        public MineConfig mine;
 
         [Header("Houses")]
         [Tooltip("A house's levels, one per age (Houses only).")]

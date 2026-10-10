@@ -58,12 +58,12 @@ namespace KingdomGame.Building
         readonly List<SpriteRenderer> ghosts = new List<SpriteRenderer>();
         readonly List<SpriteRenderer> outlines = new List<SpriteRenderer>();
         float messageUntil;
-        House furnishing;          // the house being furnished, or null
+        Place furnishing;          // the house inside or mine being built in, or null
         bool furnishFromThrone;    // ...looked into from the throne (Esc goes back there)
 
         public bool Active { get; private set; }
-        /// <summary>The house whose inside is being furnished, or null.</summary>
-        public House Furnishing => furnishing;
+        /// <summary>The house inside or mine being built in, or null.</summary>
+        public Place Furnishing => furnishing;
         /// <summary>The frame the ruler last stood up (so the Esc that did it doesn't also open the pause menu).</summary>
         public int LeftFrame { get; private set; } = -1;
         /// <summary>The build bar's tabs: only the ones that have something on them.</summary>
@@ -111,15 +111,18 @@ namespace KingdomGame.Building
             SelectCategory(categories.Contains(category) ? category : categories[0]);
         }
 
-        bool Fits(BuildingConfig b) => furnishing == null || Kingdom.BuildsInside(b);
+        // On the map: everything but Dig. In a house: furniture and the like. In a mine: that, and Dig.
+        bool Fits(BuildingConfig b) =>
+            furnishing == null ? b.kind != BuildingKind.Dig
+            : Kingdom.BuildsInside(b) || (b.kind == BuildingKind.Dig && furnishing is MineLevel);
 
         /// <summary>
         /// Opens the build bar on a house's inside: from inside it (B: the ruler stands still meanwhile),
         /// or from the throne (F over the house). Esc goes back.
         /// </summary>
-        public void Furnish(House house, bool fromThrone)
+        public void Furnish(Place house, bool fromThrone)
         {
-            if (house == null || house.Interior == null || kingdom == null) return;
+            if (house == null || kingdom == null) return;
             if (!fromThrone)
             {
                 if (Active) return;
@@ -134,7 +137,7 @@ namespace KingdomGame.Building
             dragging = false;
             ShowPlacements(0);
             Hover = null;
-            var inside = house.Interior;
+            var inside = house;
             if (rig != null)
             {
                 var b = inside.Bounds;
@@ -143,7 +146,8 @@ namespace KingdomGame.Building
                 rig.FreeLook(inside.Center, Mathf.Max(b.height * 0.5f + 1.5f, b.width * 0.5f / aspect + 1f));
             }
             RefreshCategories();
-            Say($"Furnishing the {house.Name.ToLowerInvariant()}: {inside.Inner.width} x {inside.Inner.height} tiles inside");
+            Say(house is Interior room ? $"Furnishing the {house.Name.ToLowerInvariant()}: {room.Inner.width} x {room.Inner.height} tiles inside"
+                : $"Building in the {house.Name.ToLowerInvariant()}: mark rock to dig on the Mining tab");
         }
 
         /// <summary>Turns the build bar to an age's page (0 = the first age).</summary>
@@ -263,7 +267,7 @@ namespace KingdomGame.Building
             }
             if (!Active || kingdom == null || view == null || Time.timeScale <= 0f || UiFocus.TakesEscape) return;
             // The house being furnished was torn down or broken.
-            if ((object)furnishing != null && (furnishing == null || furnishing.Interior == null))
+            if ((object)furnishing != null && furnishing == null)
             {
                 Leave();
                 return;
@@ -272,7 +276,7 @@ namespace KingdomGame.Building
             if (furnishing != null && rig != null)
             {
                 // The room grows when the house is upgraded: the view may go further.
-                var room = furnishing.Interior.Bounds;
+                var room = furnishing.Bounds;
                 rig.Inside = new Rect(room.xMin, room.yMin, room.width, room.height);
             }
 
@@ -335,7 +339,7 @@ namespace KingdomGame.Building
             }
 
             placements.Clear();
-            if (dragging && b.dragToPlaceLines && (b.kind == BuildingKind.Floor || b.kind == BuildingKind.Roof || b.kind == BuildingKind.Plant)) Area(dragStart, origin, MaxArea, placements);
+            if (dragging && b.dragToPlaceLines && (b.kind == BuildingKind.Floor || b.kind == BuildingKind.Roof || b.kind == BuildingKind.Plant || b.kind == BuildingKind.Dig)) Area(dragStart, origin, MaxArea, placements);
             else if (dragging && b.dragToPlaceLines) Line(dragStart, origin, size, kingdom.Config.maxLine, placements);
             else placements.Add(dragging ? dragStart : origin);
 
@@ -360,7 +364,16 @@ namespace KingdomGame.Building
                 dragging = false;
                 int placed = 0;
                 for (int i = 0; i < placements.Count; i++)
-                    if (valid[i] && kingdom.PlaceBlueprint(b, placements[i], rotation) != null) placed++;
+                {
+                    if (!valid[i]) continue;
+                    // Dig marks rock for the miners; everything else is a blueprint for the builders.
+                    if (b.kind == BuildingKind.Dig ? kingdom.MarkDig(placements[i], out _) : kingdom.PlaceBlueprint(b, placements[i], rotation) != null) placed++;
+                }
+                if (b.kind == BuildingKind.Dig && placed > 0)
+                {
+                    Say($"Marked {placed} tile{(placed == 1 ? "" : "s")} to dig: villagers with the Miner job dig them out (V)");
+                    return;
+                }
                 if (placed > 0) Say(placed == 1 ? $"Planned: {b.displayName}" : $"Planned {placed} x {b.displayName}");
                 else if (firstProblem != null) Say(firstProblem);
             }
@@ -384,13 +397,27 @@ namespace KingdomGame.Building
                 rightClick = false;
             }
 
+            // In a mine: rock (what's in it), and taking a dig mark off.
+            if (furnishing is MineLevel mine && !mine.IsDug(cell) && mine.Bounds.Contains(cell))
+            {
+                var ore = mine.OreAt(cell);
+                string what = ore == Ore.None ? "Rock (stone)" : $"Rock with {ore.ToString().ToLowerInvariant()} in it";
+                if (mine.IsMarked(cell))
+                {
+                    Hover = what + "\nMarked to dig.  Right click: take the mark off";
+                    if (rightClick) mine.Unmark(cell);
+                }
+                else Hover = what + "\nMining tab: Dig, then drag over rock to mark it";
+                return;
+            }
+
             var house = kingdom.HouseAt(cell);
             if (house != null)
             {
                 Hover = AboutHouse(house, cell) + roomText;
                 if (GameInput.Pressed(KeyCode.F))
                 {
-                    Furnish(house, true);
+                    Furnish(house.Interior, true);
                     return;
                 }
                 if (GameInput.Pressed(KeyCode.U)) Say(kingdom.StartUpgrade(house));

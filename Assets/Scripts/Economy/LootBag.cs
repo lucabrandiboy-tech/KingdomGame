@@ -44,11 +44,17 @@ namespace KingdomGame.Economy
         public static LootBag DropAll(Vector2 at, Inventory from)
         {
             if (from == null || from.Total <= 0) return null;
-            int wood = from.Get(ResourceType.Wood), stone = from.Get(ResourceType.Stone), food = from.Get(ResourceType.Food);
-            from.TryRemove(ResourceType.Wood, wood);
-            from.TryRemove(ResourceType.Stone, stone);
-            from.TryRemove(ResourceType.Food, food);
-            return Drop(at, wood, stone, food);
+            var go = new GameObject("Loot");
+            go.transform.position = at;
+            var bag = go.AddComponent<LootBag>();
+            for (int i = 0; i < Inventory.TypeCount; i++)
+            {
+                var type = (ResourceType)i;
+                int n = from.Get(type);
+                from.TryRemove(type, n);
+                bag.amounts[i] = n;
+            }
+            return bag;
         }
 
         void Awake()

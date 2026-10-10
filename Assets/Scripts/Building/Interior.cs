@@ -12,7 +12,7 @@ namespace KingdomGame.Building
     /// grows left, right and up, and everything inside stays where it was.
     /// Furniture inside is built like anywhere else; villagers walk in through the door.
     /// </summary>
-    public sealed class Interior : MonoBehaviour
+    public sealed class Interior : Place
     {
         /// <summary>Each house's inside gets a square of this many tiles (the biggest room inside must fit).</summary>
         public const int SlotSize = 40;
@@ -25,18 +25,23 @@ namespace KingdomGame.Building
         /// <summary>The floor: where things can be built.</summary>
         public RectInt Inner { get; private set; }
         /// <summary>The floor and the walls round it.</summary>
-        public RectInt Bounds => new RectInt(Inner.x - 1, Inner.y - 1, Inner.width + 2, Inner.height + 2);
+        public override RectInt Bounds => new RectInt(Inner.x - 1, Inner.y - 1, Inner.width + 2, Inner.height + 2);
+        public override string Name => House != null ? House.Name : "House";
+        public override Vector2Int ExitCell => DoorCell;
+        public override Vector2 Outside => House.Outside;
+        public override Vector2Int OutsideCell => House.OutsideCell;
+        public override Vector2 DoorPoint => House.DoorPoint;
+        public override IBuilt Building => House;
+        public override Health BuildingHealth => House != null ? House.Health : null;
+        public override bool CanBuildAt(Vector2Int cell) => Inner.Contains(cell);
         /// <summary>The door, in the middle of the bottom wall.</summary>
         public Vector2Int DoorCell => new Vector2Int(origin.x + SlotSize / 2, origin.y + 1);
         /// <summary>The cell just inside the door (kept clear so you can always get in and out).</summary>
-        public Vector2Int EntranceCell => DoorCell + Vector2Int.up;
-        /// <summary>Where you stand when you've just come in.</summary>
-        public Vector2 Entrance => new Vector2(EntranceCell.x + 0.5f, EntranceCell.y + 0.45f);
+        public override Vector2Int EntranceCell => DoorCell + Vector2Int.up;
         /// <summary>Where the walking paths inside are found (made again when the room grows).</summary>
-        public NavGrid Nav { get; private set; }
-        public Vector2 Center => Inner.center;
-
-        public bool Contains(Vector2Int cell) => Bounds.Contains(cell);
+        public override NavGrid Nav => nav;
+        NavGrid nav;
+        public override Vector2 Center => Inner.center;
 
         public void Setup(House house, Vector2Int slotOrigin, Kingdom owner)
         {
@@ -90,8 +95,8 @@ namespace KingdomGame.Building
             Box(solid, new Rect(b.xMin, b.yMin, b.width, 1));                        // bottom, door and all (go out with E)
 
             // Walking paths inside, with what's already built here in the way again.
-            Nav?.Dispose();
-            Nav = new NavGrid(b, null);
+            nav?.Dispose();
+            nav = new NavGrid(b, null);
             foreach (var cell in b.allPositionsWithin)
                 if (!Inner.Contains(cell)) Nav.Block(new RectInt(cell, Vector2Int.one));
             if (kingdom != null) kingdom.BlockInside(this);
@@ -115,6 +120,6 @@ namespace KingdomGame.Building
             box.size = r.size;
         }
 
-        void OnDestroy() => Nav?.Dispose();
+        void OnDestroy() => nav?.Dispose();
     }
 }

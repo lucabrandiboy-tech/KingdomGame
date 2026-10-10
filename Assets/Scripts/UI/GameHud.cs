@@ -59,12 +59,13 @@ namespace KingdomGame.UI
             "E or Esc  stand up          H  hide this";
 
         const string FurnishControls =
-            "Furnishing a house: furniture, lights, chests, floors and rugs\n" +
+            "Building inside a house or mine: furniture, lights, chests, floors and rugs\n" +
             "Tab or click a tab  the tabs          [ and ]  earlier / later ages\n" +
             "1-9 or click  pick something (again = put away)     R  turn it\n" +
             "Left click  place  (floors: drag for an area)\n" +
             "Right click  stop placing / cancel a blueprint / take something out\n" +
             "Builders come in through the door to build it\n" +
+            "In a mine: Mining tab, Dig, drag over rock: miners dig it out (stone, copper, iron, gold)\n" +
             "WASD  move the view          Wheel  zoom\n" +
             "Esc (or B, or E)  done          H  hide this";
 
@@ -159,11 +160,18 @@ namespace KingdomGame.UI
             if (ruler != null && ruler.Backpack != null)
             {
                 var pack = ruler.Backpack;
-                text.Append($"Backpack: wood {pack.Get(ResourceType.Wood)}, stone {pack.Get(ResourceType.Stone)}, food {pack.Get(ResourceType.Food)}  ({pack.Total}/{pack.Capacity})\n");
+                text.Append($"Backpack: {Economy.ResourceText.Describe(pack)}  ({pack.Total}/{pack.Capacity})\n");
             }
             if (kingdom != null)
             {
-                text.Append($"Storage: wood {kingdom.Stock(ResourceType.Wood)}, stone {kingdom.Stock(ResourceType.Stone)}, food {kingdom.Stock(ResourceType.Food)}  ({kingdom.StorageUsed}/{kingdom.StorageCapacity})\n");
+                text.Append($"Storage: wood {kingdom.Stock(ResourceType.Wood)}, stone {kingdom.Stock(ResourceType.Stone)}, food {kingdom.Stock(ResourceType.Food)}");
+                // Ores once you've dug some up.
+                foreach (var ore in new[] { ResourceType.Copper, ResourceType.Iron, ResourceType.Gold })
+                {
+                    int n = kingdom.Stock(ore);
+                    if (n > 0) text.Append($", {ore.ToString().ToLowerInvariant()} {n}");
+                }
+                text.Append($"  ({kingdom.StorageUsed}/{kingdom.StorageCapacity})\n");
                 int busy = 0;
                 foreach (var v in kingdom.Villagers) if (v != null && !v.IsIdle) busy++;
                 text.Append($"Villagers: {kingdom.Villagers.Count} (homes for {kingdom.VillagerCapacity}), {busy} busy   Blueprints: {kingdom.Blueprints.Count}");
@@ -350,6 +358,7 @@ namespace KingdomGame.UI
                 case BuildCategory.Towers: return "Towers";
                 case BuildCategory.Houses: return "Houses";
                 case BuildCategory.Farming: return "Farming";
+                case BuildCategory.Mining: return "Mining";
                 default: return "Storage";
             }
         }

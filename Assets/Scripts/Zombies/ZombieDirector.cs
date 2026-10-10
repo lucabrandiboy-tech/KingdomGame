@@ -60,7 +60,7 @@ namespace KingdomGame.Zombies
         readonly Dictionary<ZombieConfig, ZombieSprites> sprites = new Dictionary<ZombieConfig, ZombieSprites>();
         readonly List<int> targets = new List<int>();
         readonly List<float> headStarts = new List<float>();
-        readonly HashSet<House> housesWithPeople = new HashSet<House>();
+        readonly HashSet<Place> housesWithPeople = new HashSet<Place>();
 
         public static ZombieDirector Current { get; private set; }
 
@@ -290,11 +290,11 @@ namespace KingdomGame.Zombies
             {
                 if (h == null || h.Dead || h.Team != Team.Friendly) continue;
                 // Hiding in a house: they go for the house, and break it down to get in.
-                var inside = kingdom != null ? kingdom.InteriorAt(h.Position) : null;
+                var inside = kingdom != null ? kingdom.PlaceAt(h.Position) : null;
                 if (inside != null)
                 {
-                    if (inside.House != null && housesWithPeople.Add(inside.House))
-                        foreach (var houseCell in inside.House.Cells.allPositionsWithin) AddTarget(houseCell, h == rulerHealth ? 0f : VillagerHeadStart);
+                    if (inside.Building != null && (Component)inside.Building != null && housesWithPeople.Add(inside))
+                        foreach (var houseCell in inside.Building.Cells.allPositionsWithin) AddTarget(houseCell, h == rulerHealth ? 0f : VillagerHeadStart);
                     continue;
                 }
                 if (SeatedRuler(h))
@@ -348,6 +348,8 @@ namespace KingdomGame.Zombies
                 if (d != null) SetArea(d.Cells, d.IsOpen || d.Health == null ? 1f : 1.5f + d.Health.Current / HealthPerTile);
             foreach (var house in kingdom.Houses)
                 if (house != null && house.Health != null) SetArea(house.Cells, 1.5f + house.Health.Current / (HealthPerTile * house.Cells.width * house.Cells.height));
+            foreach (var m in kingdom.Mines)
+                if (m != null && m.Health != null) SetArea(m.Cells, 1.5f + m.Health.Current / (HealthPerTile * m.Cells.width * m.Cells.height));
             foreach (var f in kingdom.AllFurniture)
             {
                 if (f == null || !f.Config.blocksMovement || f.Config.flat) continue;
@@ -389,6 +391,7 @@ namespace KingdomGame.Zombies
                 case Throne _:
                 case Storage _:
                 case House _:
+                case MineShaft _:
                     return false;
                 case Furniture piece: return !piece.Config.blocksMovement || piece.Config.flat;
                 default: return true;
@@ -533,7 +536,7 @@ namespace KingdomGame.Zombies
             if (kingdom == null) return;
             var thing = kingdom.ThingAt(cell);
             var target = thing is Door door ? door.Health : thing is Furniture piece ? piece.Health : thing is House house ? house.Health
-                : thing is Storage store ? store.Health : null;
+                : thing is Storage store ? store.Health : thing is MineShaft shaft ? shaft.Health : null;
             if (target == null) return;
             target.Damage(z.Config.structureDamage * damage, z.Position);
             if (!target.Dead) ShowBar(target, null, target);

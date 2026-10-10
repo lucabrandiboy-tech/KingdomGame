@@ -2,12 +2,30 @@ using System;
 
 namespace KingdomGame.Economy
 {
-    /// <summary>The basic resources (metals, coal, oil and electricity come with later eras).</summary>
+    /// <summary>The resources (new ones go at the end: saves store the number). Ores are dug in mines.</summary>
     public enum ResourceType
     {
         Wood,
         Stone,
         Food,
+        Copper,
+        Iron,
+        Gold,
+    }
+
+    public static class ResourceText
+    {
+        /// <summary>Like "120 wood, 4 iron" for everything there's some of, or "nothing".</summary>
+        public static string Describe(Inventory inventory)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < Inventory.TypeCount; i++)
+            {
+                int n = inventory.Get((ResourceType)i);
+                if (n > 0 || i < 3) parts.Add($"{n} {((ResourceType)i).ToString().ToLowerInvariant()}");
+            }
+            return parts.Count > 0 ? string.Join(", ", parts) : "nothing";
+        }
     }
 
     /// <summary>

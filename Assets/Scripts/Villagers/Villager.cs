@@ -31,7 +31,7 @@ namespace KingdomGame.Villagers
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -39,8 +39,8 @@ namespace KingdomGame.Villagers
         VillagerConfig config;
         Kingdom kingdom;
         NavGrid mapNav;
-        Interior space;          // the house it's inside, or null on the map
-        Interior portal;         // the house door it's walking to, to go in or out of
+        Place space;             // the house or mine it's inside, or null on the map
+        Place portal;            // the door it's walking to, to go in or out of
         // Where it finds its way: inside the house it's in, or on the map.
         NavGrid nav => space != null && space.Nav != null ? space.Nav : mapNav;
         VillagerSprites sprites;
@@ -57,6 +57,9 @@ namespace KingdomGame.Villagers
         Storage storage;
         ResourceNode node;       // what it's gathering from
         Defenses.Defense post;   // the tower it guards
+        MineLevel mine;          // the mine it's digging in
+        Vector2Int digCell;
+        float digClock;
         bool onPost;             // up on it
         float gatherClock;
         Job job = Job.Builder;
@@ -101,6 +104,7 @@ namespace KingdomGame.Villagers
                     case Task.Return: return "taking things back to storage";
                     case Task.MakeRoom: return "making room";
                     case Task.Flee: return "running from zombies";
+                    case Task.Dig: return "digging";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
                     case Task.Gather: return node != null ? $"gathering {node.Config.resource.ToString().ToLowerInvariant()}" : "gathering";
                     default: return Scared ? "hiding" : "idle";
@@ -155,6 +159,19 @@ namespace KingdomGame.Villagers
             gatherClock = 0f;
             task = Task.Gather;
             if (Walk(new RectInt(target.Cell, Vector2Int.one), true)) return true;
+            Idle();
+            return false;
+        }
+
+        /// <summary>Go down a mine and dig out a marked tile of rock; what comes out is carried to storage.</summary>
+        public bool StartDig(MineLevel level, Vector2Int cell)
+        {
+            mine = level;
+            digCell = cell;
+            digClock = 0f;
+            level.Claim(cell, this);
+            task = Task.Dig;
+            if (Walk(new RectInt(cell, Vector2Int.one), true)) return true;
             Idle();
             return false;
         }
@@ -321,6 +338,11 @@ namespace KingdomGame.Villagers
             {
                 Abandon();
             }
+            else if (task == Task.Dig && (mine == null || !mine.IsMarked(digCell)))
+            {
+                Idle();   // the mark was taken off, or the mine is gone
+                thinkAt = Time.time;
+            }
             else if (task == Task.Guard && post == null)
             {
                 Idle();   // its tower was broken or torn down
@@ -417,6 +439,22 @@ namespace KingdomGame.Villagers
                 case Task.Guard:
                     if (!onPost) Mount();
                     return;
+                case Task.Dig:
+                {
+                    var toRock = (Vector2)digCell + new Vector2(0.5f, 0.5f) - Position;
+                    if (toRock.sqrMagnitude > 0.0001f) facing = toRock.normalized;
+                    digClock += Time.deltaTime * config.workRate;
+                    if (digClock < mine.Config.digSeconds) return;
+                    if (mine.Dig(digCell, out var type, out int amount))
+                    {
+                        if (carryAmount > 0 && carryType != type) carryAmount = 0;   // (the kingdom sends it to storage first; just in case)
+                        carryType = type;
+                        carryAmount = Mathf.Min(config.carryAmount, carryAmount + amount);
+                    }
+                    Idle();
+                    thinkAt = Time.time;
+                    return;
+                }
                 case Task.Gather:
                 {
                     var toNode = (Vector2)node.transform.position - Position;
@@ -473,6 +511,8 @@ namespace KingdomGame.Villagers
             Dismount();
             if (post != null && post.Guard == this) post.Guard = null;
             post = null;
+            if (mine != null) mine.Release(digCell, this);
+            mine = null;
             CountAsBuilder(null);
             blueprint = null;
             storage = null;
@@ -493,7 +533,7 @@ namespace KingdomGame.Villagers
             goalBeside = beside;
             pathIndex = 0;
             portal = null;
-            var there = kingdom.InteriorAt(target.position);
+            var there = kingdom.PlaceAt(target.position);
             if (there == space) return nav.FindPath(Position, target, beside, path);
             if (space != null)
             {
@@ -503,7 +543,7 @@ namespace KingdomGame.Villagers
             }
             // On the map, going into a house: to its door.
             portal = there;
-            return mapNav.FindPath(Position, new RectInt(there.House.OutsideCell, Vector2Int.one), false, path);
+            return mapNav.FindPath(Position, new RectInt(there.OutsideCell, Vector2Int.one), false, path);
         }
 
         // At a house's door: in (or out), then on towards the goal.
@@ -511,7 +551,7 @@ namespace KingdomGame.Villagers
         {
             var through = portal;
             portal = null;
-            if (through == null || through.House == null)
+            if (through == null)
             {
                 // The house went while it was on its way.
                 Abandon();
@@ -520,7 +560,7 @@ namespace KingdomGame.Villagers
             if (space == through)
             {
                 space = null;
-                transform.position = through.House.Outside;
+                transform.position = through.Outside;
             }
             else
             {

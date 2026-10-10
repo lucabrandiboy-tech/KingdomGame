@@ -27,7 +27,7 @@ namespace KingdomGame.Art
             Cauldron = "Furniture/Cauldron", Fireplace = "Furniture/Fireplace", Rug = "Furniture/Rug",
             Candelabra = "Furniture/Candelabra", Torch = "Furniture/Torch", Brazier = "Furniture/Brazier",
             Anvil = "Furniture/Anvil", Crates = "Furniture/Crates", Banner = "Furniture/Banner", Well = "Furniture/Well",
-            Ladder = "Furniture/Ladder", StoneStairs = "Furniture/StoneStairs";
+            Ladder = "Furniture/Ladder", StoneStairs = "Furniture/StoneStairs", MineHead = "Building/MineHead";
         public const string WoodFloor = "Floor/Wood", StoneFloor = "Floor/Stone";
         public const string WoodDoor = "Door/Wood", HeavyDoor = "Door/Heavy";
 
@@ -56,6 +56,7 @@ namespace KingdomGame.Art
             new Piece { Art = Well, Rotations = 1, Draw = DrawWell },
             new Piece { Art = Ladder, Rotations = 4, Draw = DrawLadder },
             new Piece { Art = StoneStairs, Rotations = 4, Draw = DrawStoneStairs },
+            new Piece { Art = MineHead, Rotations = 1, Draw = DrawMineHead },
         };
 
         /// <summary>Where the candelabra's three candles are, in tiles from its middle.</summary>
@@ -731,6 +732,28 @@ namespace KingdomGame.Art
         }
 
         // Stone steps rising towards the wall at the top of the tile, between two low side walls.
+        // A mine's entrance from above: a timber headframe over a dark shaft, a winch drum with its rope, the ladder going down.
+        static PixelImage DrawMineHead(int ppu, int rotation)
+        {
+            float t = ppu;
+            var img = Canvas(2f, 2f, t);
+            Block(img, t, 0.05f, 0.05f, 1.95f, 1.95f, PixelImage.Rgb(84, 70, 54), 0.04f, 0.03f, Surface.Stone, 1401u);   // trodden earth and spoil
+            Block(img, t, 0.45f, 0.45f, 1.55f, 1.55f, PixelImage.Rgb(10, 8, 7), 0.01f, 0.02f, Surface.Stone, 1402u);     // the shaft
+            for (int i = 0; i < 6; i++)
+                Rod(img, t, 0.62f, 0.5f + i * 0.17f, 0.88f, 0.5f + i * 0.17f, 0.018f, PaleWood, 0.03f, 0.03f);            // the ladder's rungs
+            Rod(img, t, 0.62f, 0.45f, 0.62f, 1.55f, 0.025f, Oak, 0.04f, 0.04f);
+            Rod(img, t, 0.88f, 0.45f, 0.88f, 1.55f, 0.025f, Oak, 0.04f, 0.04f);
+            // The frame: a timber square round the shaft and four legs leaning in to a crossbeam.
+            foreach (var (x0, y0, x1, y1) in new[] { (0.35f, 0.4f, 1.65f, 0.4f), (0.35f, 1.6f, 1.65f, 1.6f), (0.4f, 0.35f, 0.4f, 1.65f), (1.6f, 0.35f, 1.6f, 1.65f) })
+                Rod(img, t, x0, y0, x1, y1, 0.07f, DarkWood, 0.12f, 0.12f);
+            foreach (var (x, y) in new[] { (0.25f, 0.25f), (1.75f, 0.25f), (0.25f, 1.75f), (1.75f, 1.75f) })
+                Rod(img, t, x, y, 1f + (x - 1f) * 0.35f, 1f + (y - 1f) * 0.35f, 0.06f, Oak, 0.15f, 1.1f);
+            Rod(img, t, 0.6f, 1f, 1.4f, 1f, 0.12f, PixelImage.Rgb(96, 72, 46), 1.15f, 1.15f);                                // the winch drum
+            Rod(img, t, 1.05f, 1f, 1.05f, 0.7f, 0.012f, PixelImage.Rgb(170, 150, 110), 1.1f, 0.4f);                          // its rope
+            Round(img, t, 1.05f, 0.68f, 0.07f, PixelImage.Rgb(80, 64, 44), 0.42f, 0.02f, Surface.Wood, 1403u);               // the bucket
+            return Finish(img, t, rotation);
+        }
+
         static PixelImage DrawStoneStairs(int ppu, int rotation)
         {
             float t = ppu;

@@ -1,6 +1,7 @@
 using KingdomGame.Building;
 using KingdomGame.Combat;
 using KingdomGame.Economy;
+using KingdomGame.Villagers;
 using UnityEngine;
 
 namespace KingdomGame.Character
@@ -67,8 +68,8 @@ namespace KingdomGame.Character
         public bool RespawnOnDeath { get; set; } = true;
         /// <summary>Up on the walls (climbed a ladder or stairs).</summary>
         public bool OnWalls { get; private set; }
-        /// <summary>The house the ruler is inside, or null.</summary>
-        public House Inside { get; private set; }
+        /// <summary>The house or mine the ruler is inside, or null.</summary>
+        public Place Inside { get; private set; }
         /// <summary>Furnishing a house (standing still while the build bar is open).</summary>
         public bool Busy { get; private set; }
         Vector2 cameOutAt;   // where to come out if the house goes while the ruler is inside
@@ -146,14 +147,14 @@ namespace KingdomGame.Character
                 Say("The wall gave way under you!");
                 if (Dead) return;
             }
-            // The house they were in was torn down or broken: out they come.
-            if ((object)Inside != null && (Inside == null || Inside.Interior == null))
+            // The house or mine they were in was torn down or broken: out they come.
+            if ((object)Inside != null && Inside == null)
             {
                 LeaveHouse();
-                Say("The house you were in is gone!");
+                Say("The place you were in is gone!");
             }
             // The room grows when the house is upgraded: the camera may go further.
-            if (Inside != null && Inside.Interior != null && rig != null && !Busy) rig.Inside = RoomRect(Inside.Interior);
+            if (Inside != null && rig != null && !Busy) rig.Inside = RoomRect(Inside);
             if (Seated || Busy)
             {
                 if (look != null) look.Show(Vector2.zero, Vector2.down, config.moveSpeed, config.stepsPerSecond, holdingGun: false);
@@ -203,6 +204,7 @@ namespace KingdomGame.Character
             if (config == null || Seated || Busy || Dead) return;
             Velocity = Vector2.MoveTowards(Velocity, wantedVelocity, config.acceleration * Time.fixedDeltaTime);
             if (OnWalls) StayOnWalls();
+            else if (Inside is MineLevel) StayOnFloor();
             else KeepOutOfZombies();
         }
 
@@ -222,6 +224,26 @@ namespace KingdomGame.Character
             if (!OnTop(kingdom, p + new Vector2(v.x * dt, 0f))) v.x = 0f;
             if (!OnTop(kingdom, p + new Vector2(v.x * dt, v.y * dt))) v.y = 0f;
             Velocity = v;
+        }
+
+        // In a mine the rock has no colliders: no step that would take any part of the body into rock.
+        void StayOnFloor()
+        {
+            var nav = Inside.Nav;
+            if (nav == null) return;
+            float dt = Time.fixedDeltaTime;
+            var p = body.position;
+            var v = Velocity;
+            if (!OnFloor(nav, p + new Vector2(v.x * dt, 0f))) v.x = 0f;
+            if (!OnFloor(nav, p + new Vector2(v.x * dt, v.y * dt))) v.y = 0f;
+            Velocity = v;
+        }
+
+        bool OnFloor(NavGrid nav, Vector2 p)
+        {
+            float r = config.bodyRadius * 0.9f;
+            return nav.Walkable(NavCell(p + new Vector2(-r, -r))) && nav.Walkable(NavCell(p + new Vector2(r, -r))) &&
+                   nav.Walkable(NavCell(p + new Vector2(-r, r))) && nav.Walkable(NavCell(p + new Vector2(r, r)));
         }
 
         bool OnTop(Kingdom kingdom, Vector2 p)
@@ -433,22 +455,22 @@ namespace KingdomGame.Character
             Blueprint blueprint = null;
             ResourceNode node = null;
             Furniture ladder = null;
-            House door = null;
+            Place door = null;
             if (kingdom != null)
             {
-                // A house's door: in from outside, out from inside (the door wins over anything else in reach).
-                if (Inside != null && Inside.Interior != null)
+                // A house's door or a mine's shaft: in from outside, out from inside (the door wins over anything else in reach).
+                if (Inside != null)
                 {
-                    if (BuildingLook.Distance(new RectInt(Inside.Interior.DoorCell, Vector2Int.one), here) <= reach) door = Inside;
+                    if (BuildingLook.Distance(new RectInt(Inside.ExitCell, Vector2Int.one), here) <= reach) door = Inside;
                 }
                 else
                 {
                     float nearest = reach;
-                    foreach (var h in kingdom.Houses)
+                    foreach (var p in kingdom.Places)
                     {
-                        if (h == null) continue;
-                        float d = (h.DoorPoint - here).magnitude;
-                        if (d <= nearest) { nearest = d; door = h; }
+                        if (p == null) continue;
+                        float d = (p.DoorPoint - here).magnitude;
+                        if (d <= nearest) { nearest = d; door = p; }
                     }
                 }
                 if (door != null)
@@ -480,34 +502,34 @@ namespace KingdomGame.Character
 
         // ------------------------------------------------------------ houses --
 
-        void UseHouseDoor(House house)
+        void UseHouseDoor(Place place)
         {
-            if (Inside == house)
+            if (Inside == place)
             {
-                Hint = $"E: go outside";
+                Hint = place is Interior ? "E: go outside" : "E: climb back up";
                 if (GameInput.Pressed(KeyCode.E)) LeaveHouse();
                 return;
             }
-            string upgrading = house.Upgrade != null ? " (being upgraded)" : "";
-            Hint = $"E: go into the {house.Name.ToLowerInvariant()}{upgrading}";
-            if (GameInput.Pressed(KeyCode.E)) EnterHouse(house);
+            string upgrading = place is Interior room && room.House.Upgrade != null ? " (being upgraded)" : "";
+            Hint = place is Interior ? $"E: go into the {place.Name.ToLowerInvariant()}{upgrading}" : $"E: climb down into the {place.Name.ToLowerInvariant()}";
+            if (GameInput.Pressed(KeyCode.E)) EnterHouse(place);
         }
 
-        /// <summary>Goes in through a house's door: the view moves to the room inside.</summary>
-        public void EnterHouse(House house)
+        /// <summary>Goes in through a house's door or down a mine: the view moves inside.</summary>
+        public void EnterHouse(Place place)
         {
-            if (house == null || house.Interior == null) return;
-            cameOutAt = house.Outside;
-            Inside = house;
-            MoveTo(house.Interior.Entrance);
+            if (place == null) return;
+            cameOutAt = place.Outside;
+            Inside = place;
+            MoveTo(place.Entrance);
             if (rig != null)
             {
-                rig.Inside = RoomRect(house.Interior);
+                rig.Inside = RoomRect(place);
                 rig.Follow(transform, true);
             }
         }
 
-        static Rect RoomRect(Interior inside)
+        static Rect RoomRect(Place inside)
         {
             var b = inside.Bounds;
             return new Rect(b.xMin, b.yMin, b.width, b.height);
@@ -536,9 +558,9 @@ namespace KingdomGame.Character
                 if (builder != null) builder.Furnish(Inside, false);
                 return true;
             }
-            if (GameInput.Pressed(KeyCode.U))
+            if (GameInput.Pressed(KeyCode.U) && Inside is Interior room)
             {
-                Say(kingdom.StartUpgrade(Inside));
+                Say(kingdom.StartUpgrade(room.House));
                 return true;
             }
             return false;
@@ -546,11 +568,13 @@ namespace KingdomGame.Character
 
         string InsideHint(Kingdom kingdom)
         {
-            var next = Inside.Next;
-            string upgrade = Inside.Upgrade != null ? BuildController.Describe(Inside.Upgrade)
+            if (!(Inside is Interior room)) return $"B: dig and build in the {Inside.Name.ToLowerInvariant()}";
+            var house = room.House;
+            var next = house.Next;
+            string upgrade = house.Upgrade != null ? BuildController.Describe(house.Upgrade)
                 : next == null ? "it's as good as it gets"
-                : kingdom.UpgradeLockedReason(Inside) ?? $"U: upgrade to a {next.displayName.ToLowerInvariant()} ({next.inside.x} x {next.inside.y} inside)";
-            return $"B: furnish the {Inside.Name.ToLowerInvariant()}          {upgrade}";
+                : kingdom.UpgradeLockedReason(house) ?? $"U: upgrade to a {next.displayName.ToLowerInvariant()} ({next.inside.x} x {next.inside.y} inside)";
+            return $"B: furnish the {house.Name.ToLowerInvariant()}          {upgrade}";
         }
 
         /// <summary>Stands still while the build bar is open inside a house (or walks again).</summary>
@@ -594,7 +618,7 @@ namespace KingdomGame.Character
         {
             Hint = Backpack.Total > 0
                 ? "E: put your backpack in the storehouse"
-                : $"Storehouse: {storage.Stock.Get(ResourceType.Wood)} wood, {storage.Stock.Get(ResourceType.Stone)} stone, {storage.Stock.Get(ResourceType.Food)} food";
+                : $"Storehouse: {Economy.ResourceText.Describe(storage.Stock)}";
             if (!GameInput.Pressed(KeyCode.E) || Backpack.Total <= 0) return;
 
             int stored = 0, kept = 0;

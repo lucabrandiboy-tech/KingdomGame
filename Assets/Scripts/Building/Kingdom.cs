@@ -50,6 +50,9 @@ namespace KingdomGame.Building
         readonly List<Door> doors = new List<Door>();
         readonly List<Furniture> furniture = new List<Furniture>();
         readonly List<House> houses = new List<House>();
+        readonly List<MineShaft> mines = new List<MineShaft>();
+        readonly HashSet<int> usedMineSlots = new HashSet<int>();
+        readonly List<Place> places = new List<Place>();
         readonly HashSet<int> usedSlots = new HashSet<int>();
         readonly Dictionary<(BuildingConfig, int, int), Sprite> houseLooks = new Dictionary<(BuildingConfig, int, int), Sprite>();
         readonly Dictionary<(BuildingConfig, int), Sprite> houseShadows = new Dictionary<(BuildingConfig, int), Sprite>();
@@ -86,8 +89,14 @@ namespace KingdomGame.Building
         public IReadOnlyList<Door> Doors => doors;
         public IReadOnlyList<Furniture> AllFurniture => furniture;
         public IReadOnlyList<House> Houses => houses;
+        /// <summary>Every place you go into: houses' insides and mines.</summary>
+        public IReadOnlyList<Place> Places => places;
         /// <summary>Where the insides of houses are: far off the map, one square each.</summary>
         public static readonly Vector2Int InsideOrigin = new Vector2Int(4000, 4000);
+        /// <summary>Where the mines are (further off), one square of <see cref="MineSlot"/> tiles each.</summary>
+        public static readonly Vector2Int MineOrigin = new Vector2Int(4000, 12000);
+        public const int MineSlot = 100;
+        public IReadOnlyList<MineShaft> Mines => mines;
         public IReadOnlyList<BuildingConfig> BuildMenu => menu;
         public IReadOnlyList<Room> Rooms => rooms;
         /// <summary>A plain white square sprite (for markers and bars).</summary>
@@ -395,16 +404,31 @@ namespace KingdomGame.Building
         /// <summary>What stands on the top layer of a cell: the throne, a storehouse, a door, furniture or a blueprint (null = nothing).</summary>
         public Component ThingAt(Vector2Int cell) => occupied.TryGetValue(cell, out var thing) ? thing : null;
 
-        /// <summary>The inside of a house that this cell is in (its floor or walls), or null on the map.</summary>
-        public Interior InteriorAt(Vector2Int cell)
+        /// <summary>The house inside or mine that this cell is in, or null on the map.</summary>
+        public Place PlaceAt(Vector2Int cell)
         {
             if (cell.x < InsideOrigin.x || cell.y < InsideOrigin.y) return null;
-            foreach (var h in houses)
-                if (h != null && h.Interior != null && h.Interior.Contains(cell)) return h.Interior;
+            foreach (var s in places)
+                if (s != null && s.Contains(cell)) return s;
             return null;
         }
 
-        public Interior InteriorAt(Vector2 position) => InteriorAt(NavGrid.CellAt(position));
+        public Place PlaceAt(Vector2 position) => PlaceAt(NavGrid.CellAt(position));
+
+        /// <summary>A house inside or mine joins (or leaves) the kingdom's places.</summary>
+        public void AddPlace(Place space) { if (space != null && !places.Contains(space)) places.Add(space); }
+        public void RemovePlace(Place space) => places.Remove(space);
+
+        /// <summary>A free square far off the map for a new inside or mine (they're all the same size).</summary>
+        public Vector2Int TakeSlot(out int slot)
+        {
+            slot = 0;
+            while (usedSlots.Contains(slot)) slot++;
+            usedSlots.Add(slot);
+            return InsideOrigin + new Vector2Int(slot % 64, slot / 64) * Interior.SlotSize;
+        }
+
+        public void FreeSlot(int slot) => usedSlots.Remove(slot);
 
         /// <summary>The house standing on this cell of the map, or null.</summary>
         public House HouseAt(Vector2Int cell) => occupied.TryGetValue(cell, out var thing) ? thing as House : null;
@@ -412,12 +436,12 @@ namespace KingdomGame.Building
         /// <summary>Where walkers find their way in these cells: inside a house, or the map.</summary>
         public NavGrid NavFor(RectInt cells)
         {
-            var inside = InteriorAt(cells.position);
-            return inside != null ? inside.Nav : Nav;
+            var inside = PlaceAt(cells.position);
+            return inside != null && inside.Nav != null ? inside.Nav : Nav;
         }
 
         /// <summary>A house's room was made (again): what's built in it stands in the way of walkers there.</summary>
-        public void BlockInside(Interior inside)
+        public void BlockInside(Place inside)
         {
             if (inside == null || inside.Nav == null) return;
             foreach (var f in furniture)
@@ -510,12 +534,12 @@ namespace KingdomGame.Building
         /// </summary>
         public float Travel(Vector2 a, Vector2 b)
         {
-            var ia = InteriorAt(a);
-            var ib = InteriorAt(b);
+            var ia = PlaceAt(a);
+            var ib = PlaceAt(b);
             if (ia == ib) return (a - b).magnitude;
             float d = 0f;
-            if (ia != null) { d += (a - ia.Entrance).magnitude; a = ia.House.Outside; }
-            if (ib != null) { d += (b - ib.Entrance).magnitude; b = ib.House.Outside; }
+            if (ia != null) { d += (a - ia.Entrance).magnitude; a = ia.Outside; }
+            if (ib != null) { d += (b - ib.Entrance).magnitude; b = ib.Outside; }
             return d + (a - b).magnitude;
         }
 
@@ -570,14 +594,20 @@ namespace KingdomGame.Building
         public bool CanPlace(BuildingConfig b, Vector2Int cell, int rotation, out string reason)
         {
             var cells = new RectInt(cell, b.SizeFacing(b.ClampRotation(rotation)));
-            var inside = InteriorAt(cell);
+            var inside = PlaceAt(cell);
+            if (b.kind == BuildingKind.Dig)
+            {
+                if (inside is MineLevel mine) return mine.CanMark(cell, out reason);
+                reason = "Dig inside a mine: climb down and press B";
+                return false;
+            }
             if (inside != null) return CanPlaceInside(b, cells, inside, out reason);
             if (b.kind == BuildingKind.Roof) return CanRoof(cells, out reason);
             var map = Nav.Cells;
             var layer = LayerOf(b);
-            if (b.kind == BuildingKind.House)
+            if (b.kind == BuildingKind.House || b.kind == BuildingKind.Mine)
             {
-                var front = House.FrontCell(cells, b.ClampRotation(rotation));
+                var front = b.kind == BuildingKind.Mine ? MineShaft.FrontCell(cells) : House.FrontCell(cells, b.ClampRotation(rotation));
                 if (!Nav.Walkable(front) || occupied.ContainsKey(front))
                 {
                     reason = "The door would open onto something (R turns it)";
@@ -637,18 +667,23 @@ namespace KingdomGame.Building
         {
             foreach (var h in houses)
                 if (h != null && h.OutsideCell == cell) return true;
+            foreach (var m in mines)
+                if (m != null && m.OutsideCell == cell) return true;
             foreach (var b in blueprints)
-                if (b != null && !b.Cancelled && b.Upgrades == null && b.Config.kind == BuildingKind.House
-                    && House.FrontCell(b.Cells, b.Rotation) == cell) return true;
+            {
+                if (b == null || b.Cancelled || b.Upgrades != null) continue;
+                if (b.Config.kind == BuildingKind.House && House.FrontCell(b.Cells, b.Rotation) == cell) return true;
+                if (b.Config.kind == BuildingKind.Mine && MineShaft.FrontCell(b.Cells) == cell) return true;
+            }
             return false;
         }
 
         /// <summary>Whether something can be built inside a house (furniture, lights, chests, floors and rugs can).</summary>
         public static bool BuildsInside(BuildingConfig b) =>
-            b != null && !b.climb && (b.kind == BuildingKind.Furniture || b.kind == BuildingKind.Floor
+            b != null && !b.climb && b.defense == null && (b.kind == BuildingKind.Furniture || b.kind == BuildingKind.Floor
                 || (b.kind == BuildingKind.Storage && !string.IsNullOrEmpty(b.art)));
 
-        bool CanPlaceInside(BuildingConfig b, RectInt cells, Interior inside, out string reason)
+        bool CanPlaceInside(BuildingConfig b, RectInt cells, Place inside, out string reason)
         {
             if (!BuildsInside(b))
             {
@@ -658,9 +693,9 @@ namespace KingdomGame.Building
             var layer = LayerOf(b);
             foreach (var c in cells.allPositionsWithin)
             {
-                if (!inside.Inner.Contains(c))
+                if (!inside.CanBuildAt(c))
                 {
-                    reason = "That's the wall";
+                    reason = inside.CantBuildReason(c);
                     return false;
                 }
                 if (layer.TryGetValue(c, out var thing) && thing != null)
@@ -811,6 +846,14 @@ namespace KingdomGame.Building
                     if (LootBag.Drop(storage.Center, left[(int)ResourceType.Wood], left[(int)ResourceType.Stone], left[(int)ResourceType.Food]) != null)
                         spilled = ". The other storehouses are full: the rest is in a bag on the ground";
                 }
+                if (thing is MineShaft mineShaft)
+                {
+                    int dugUp = ClearInside(mineShaft.Level, mineShaft.Outside, true);
+                    Forget(mineShaft);
+                    Refund(mineShaft.Config, 1, mineShaft.Center);
+                    mineShaft.Remove();
+                    return "Filled in the mine" + (dugUp > 0 ? $" and took out the {dugUp} things in it (half their cost back)" : "");
+                }
                 if (thing is House house)
                 {
                     int things = ClearInside(house, true);
@@ -857,12 +900,17 @@ namespace KingdomGame.Building
         /// </summary>
         int ClearInside(House house, bool refund)
         {
-            var inside = house.Interior;
             if (house.Upgrade != null) Cancel(house.Upgrade);
+            return ClearInside(house.Interior, house.Outside, refund);
+        }
+
+        /// <summary>Empties a house inside or a mine (see the house version): people out, plans cancelled, what's built gone.</summary>
+        public int ClearInside(Place inside, Vector2 outside, bool refund)
+        {
             if (inside == null) return 0;
             var bounds = inside.Bounds;
             foreach (var v in villagers)
-                if (v != null && bounds.Contains(NavGrid.CellAt(v.Position))) v.PutOutside(house.Outside);
+                if (v != null && bounds.Contains(NavGrid.CellAt(v.Position))) v.PutOutside(outside);
             foreach (var b in blueprints.ToArray())
                 if (b != null && bounds.Contains(b.Cells.position)) Cancel(b);
             var things = new List<IBuilt>();
@@ -881,10 +929,10 @@ namespace KingdomGame.Building
                     food += chest.Stock.Get(ResourceType.Food);
                 }
                 Forget(thing);
-                if (refund) Refund(thing.Config, 1, house.Outside);
+                if (refund) Refund(thing.Config, 1, outside);
                 thing.Remove();
             }
-            if (wood + stone + food > 0) LootBag.Drop(house.Outside, wood, stone, food);
+            if (wood + stone + food > 0) LootBag.Drop(outside, wood, stone, food);
             return things.Count;
         }
 
@@ -1091,6 +1139,14 @@ namespace KingdomGame.Building
         public void Broke(IBuilt thing)
         {
             if (thing == null) return;
+            if (thing is MineShaft caved)
+            {
+                ClearInside(caved.Level, caved.Outside, false);
+                if (world != null) world.Burst(caved.Center, new Color32(110, 92, 70, 255), 40, 4f);
+                Forget(caved);
+                caved.Remove();
+                return;
+            }
             if (thing is House house)
             {
                 ClearInside(house, false);
@@ -1125,9 +1181,17 @@ namespace KingdomGame.Building
                 storages.Remove(s);
                 NavFor(thing.Cells).Unblock(thing.Cells);
             }
+            else if (thing is MineShaft shaft)
+            {
+                mines.Remove(shaft);
+                RemovePlace(shaft.Level);
+                usedMineSlots.Remove(shaft.Slot);
+                Nav.Unblock(thing.Cells);
+            }
             else if (thing is House h)
             {
                 houses.Remove(h);
+                RemovePlace(h.Interior);
                 usedSlots.Remove(h.Slot);
                 Nav.Unblock(thing.Cells);
             }
@@ -1198,6 +1262,54 @@ namespace KingdomGame.Building
 
         readonly Dictionary<ResourceNode, float> unreachableNodes = new Dictionary<ResourceNode, float>();
 
+        /// <summary>Marks rock in a mine to be dug out. False if it can't be (with why in <paramref name="reason"/>).</summary>
+        public bool MarkDig(Vector2Int cell, out string reason)
+        {
+            if (PlaceAt(cell) is MineLevel mine)
+            {
+                if (!mine.CanMark(cell, out reason)) return false;
+                mine.Mark(cell);
+                return true;
+            }
+            reason = "Dig inside a mine";
+            return false;
+        }
+
+        // Miners: dig out marked rock in the mines first (carrying the stone or ore to storage when their hands are full).
+        bool Dig(Villager v)
+        {
+            int full = villagerConfig.carryAmount;
+            if (v.CarryAmount >= full)
+            {
+                var home = NearestWithSpace(v.Position);
+                if (home != null) v.StartReturn(home);
+                return home != null;
+            }
+            MineLevel best = null;
+            Vector2Int bestCell = default;
+            float bestDistance = float.MaxValue;
+            foreach (var m in mines)
+            {
+                if (m == null || m.Level == null || m.Level.Marked <= 0) continue;
+                var level = m.Level;
+                var from = PlaceAt(v.Position) == level ? v.Position : level.Entrance;
+                if (!level.NextToDig(from, v, out var cell)) continue;
+                float d = Travel(v.Position, (Vector2)cell + new Vector2(0.5f, 0.5f));
+                if (d < bestDistance) { bestDistance = d; best = level; bestCell = cell; }
+            }
+            if (best == null) return false;
+            // Carrying something else (or a full load soon): take it to storage first.
+            var ore = best.OreAt(bestCell);
+            var comes = ore == Ore.Copper ? ResourceType.Copper : ore == Ore.Iron ? ResourceType.Iron : ore == Ore.Gold ? ResourceType.Gold : ResourceType.Stone;
+            int amount = ore == Ore.None ? best.Config.stonePerTile : best.Config.orePerTile;
+            if (v.CarryAmount > 0 && (v.CarryType != comes || v.CarryAmount + amount > full))
+            {
+                var home = NearestWithSpace(v.Position);
+                if (home != null) { v.StartReturn(home); return true; }
+            }
+            return v.StartDig(best, bestCell);
+        }
+
         // Woodcutters, miners and foragers: gather until their hands are full, then take it to storage.
         void Gather(Villager v, ResourceType type)
         {
@@ -1242,6 +1354,7 @@ namespace KingdomGame.Building
         public void AssignJob(Villager v)
         {
             float now = Time.time;
+            if (v.Job == Job.Miner && Dig(v)) return;
             if (Jobs.Gathers(v.Job, out var gathers))
             {
                 Gather(v, gathers);
@@ -1344,6 +1457,7 @@ namespace KingdomGame.Building
         // Walls, storehouses and things you can't walk through can't appear on top of someone.
         static bool NeedsClearSpot(BuildingConfig b) =>
             b.kind == BuildingKind.Wall || b.kind == BuildingKind.Storage || b.kind == BuildingKind.House || b.kind == BuildingKind.Plant
+            || b.kind == BuildingKind.Mine
             || (b.kind == BuildingKind.Furniture && b.blocksMovement && !b.flat);
 
         void TryComplete(Blueprint b)
@@ -1439,6 +1553,23 @@ namespace KingdomGame.Building
                         made = tile;
                     }
                     break;
+                case BuildingKind.Mine:
+                {
+                    var go = new GameObject(config.displayName);
+                    go.transform.SetParent(transform, false);
+                    var shaft = go.AddComponent<MineShaft>();
+                    int slot = 0;
+                    while (usedMineSlots.Contains(slot)) slot++;
+                    usedMineSlots.Add(slot);
+                    var origin = MineOrigin + new Vector2Int(slot % 32, slot / 32) * MineSlot;
+                    mines.Add(shaft);
+                    shaft.Setup(config, cells, LookOf(config), ShadowOf(config, 0), slot, origin, this);
+                    AddPlace(shaft.Level);
+                    Occupy(occupied, cells, shaft);
+                    Nav.Block(cells);
+                    made = shaft;
+                    break;
+                }
                 case BuildingKind.Plant:
                     if (config.plant == null)
                     {
@@ -1452,13 +1583,11 @@ namespace KingdomGame.Building
                     var go = new GameObject(config.displayName);
                     go.transform.SetParent(transform, false);
                     var house = go.AddComponent<House>();
-                    int slot = 0;
-                    while (usedSlots.Contains(slot)) slot++;
-                    usedSlots.Add(slot);
-                    var origin = InsideOrigin + new Vector2Int(slot % 64, slot / 64) * Interior.SlotSize;
+                    var origin = TakeSlot(out int slot);
                     // On the books before its room is made, so the room finds its own floor.
                     houses.Add(house);
                     house.Setup(config, cells, rotation, slot, origin, this);
+                    AddPlace(house.Interior);
                     Occupy(occupied, cells, house);
                     Nav.Block(cells);
                     made = house;

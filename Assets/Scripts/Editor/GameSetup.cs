@@ -43,8 +43,9 @@ namespace KingdomGame.EditorTools
         /// 6: traps and towers.
         /// 7: the full set of defences (31, by age) and the ages themselves.
         /// 8: a bigger map (256 tiles across instead of 96).
+        /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 8;
+        const int SettingsVersion = 9;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -72,7 +73,7 @@ namespace KingdomGame.EditorTools
             Folder("Assets", "Data");
             foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies", "Defenses", "Progression" })
                 Folder(DataRoot, area);
-            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming", "Traps", "Towers" })
+            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming", "Traps", "Towers", "Mining" })
                 Folder(DataRoot + "/Building", area);
             Folder("Assets", "Scenes");
             Folder("Assets", "Art");
@@ -89,6 +90,7 @@ namespace KingdomGame.EditorTools
             bool farmingUpdate = oldContent != null && oldContent.settingsVersion < 5;
             bool defensesUpdate = oldContent != null && oldContent.settingsVersion < 7;
             bool biggerMap = oldContent != null && oldContent.settingsVersion < 8;
+            bool minesUpdate = oldContent != null && oldContent.settingsVersion < 9;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -238,6 +240,21 @@ namespace KingdomGame.EditorTools
             });
             var castle = CastleBuildings();
             var house = House(stone, wood);
+            var mineConfig = Asset<MineConfig>("Building/Mining/MineConfig", m => { });
+            var mining = new List<BuildingConfig>
+            {
+                Asset<BuildingConfig>("Building/Mining/MineEntrance", b =>
+                {
+                    b.displayName = "Mine entrance"; b.kind = BuildingKind.Mine; b.category = BuildCategory.Mining; b.art = FurnitureArt.MineHead;
+                    b.mine = mineConfig; b.size = new Vector2Int(2, 2); b.rotations = 1; b.woodCost = 80; b.stoneCost = 20; b.buildSeconds = 40f;
+                    b.health = 2500f; b.height = 0.9f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None;
+                }),
+                Asset<BuildingConfig>("Building/Mining/Dig", b =>
+                {
+                    b.displayName = "Dig"; b.kind = BuildingKind.Dig; b.category = BuildCategory.Mining; b.size = Vector2Int.one;
+                    b.rotations = 1; b.buildSeconds = 1f; b.health = 0f; b.blocksMovement = false; b.dragToPlaceLines = true; b.roomTag = RoomTag.None;
+                }),
+            };
             var blasts = new List<DamageType>();
             var defensesByAge = Defenses(blasts);
             var defenses = new List<BuildingConfig>();
@@ -307,6 +324,7 @@ namespace KingdomGame.EditorTools
             int firstStorage = castle.FindIndex(b => b != null && b.category == BuildCategory.Storage);
             menu.Insert(firstStorage >= 0 ? firstStorage + 2 : menu.Count, storehouse);
             menu.Add(house);
+            menu.AddRange(mining);
             menu.AddRange(farming);
             menu.AddRange(defenses);
             // Roofs go on the Floors & roofs tab after the rugs.
@@ -347,6 +365,13 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Added houses to your build bar (the Houses tab). Your other settings were kept.");
             }
 
+            if (minesUpdate)
+            {
+                var list = new List<BuildingConfig>(content.buildMenu);
+                foreach (var m in mining) if (!list.Contains(m)) list.Add(m);
+                content.buildMenu = list.ToArray();
+                Debug.Log("Added mines to your build bar (the Mining tab). Your other settings were kept.");
+            }
             if (defensesUpdate)
             {
                 var list = new List<BuildingConfig>(content.buildMenu);

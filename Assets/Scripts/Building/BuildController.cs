@@ -258,7 +258,8 @@ namespace KingdomGame.Building
                 var built = kingdom.BuiltAt(cell);
                 string health = built is Door door ? $" ({Mathf.CeilToInt(door.Health.Current)}/{Mathf.CeilToInt(door.Health.Max)})"
                     : built is Furniture f && f.Health != null ? $" ({Mathf.CeilToInt(f.Health.Current)}/{Mathf.CeilToInt(f.Health.Max)})" : "";
-                Hover = (built != null ? built.Config.displayName + health + "\n" : "") + teardown + roomText;
+                string about = built != null ? built.Config.displayName + health : kingdom.WallInfo(cell);
+                Hover = (about != null ? about + "\n" : "") + teardown + roomText;
                 if (rightClick) Say(kingdom.TearDown(cell));
                 return;
             }

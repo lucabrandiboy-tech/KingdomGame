@@ -42,6 +42,19 @@ namespace KingdomGame.Zombies
         int[] bucketHead;
         int[] bucketNext = new int[256];
 
+        // A bar over a wall or door that zombies are hitting, for a few seconds after each blow.
+        sealed class Bar
+        {
+            public SpriteRenderer Back, Fill;
+            public Component Of;
+            public DestructibleStructure Wall;
+            public Health Health;
+            public float Until;
+            public bool Active;
+        }
+        const float BarSeconds = 4f;
+        readonly List<Bar> bars = new List<Bar>();
+
         readonly List<Zombie> zombies = new List<Zombie>();
         readonly Dictionary<ZombieConfig, ZombieSprites> sprites = new Dictionary<ZombieConfig, ZombieSprites>();
         readonly List<int> targets = new List<int>();
@@ -104,6 +117,7 @@ namespace KingdomGame.Zombies
                 if (z == null) { zombies.RemoveAt(i); continue; }
                 z.Tick(dt);
             }
+            UpdateBars();
         }
 
         // ------------------------------------------------------------ spawning --
@@ -445,13 +459,94 @@ namespace KingdomGame.Zombies
                     && world.TryMakeEvent(z.Config.wallScratch, PixelWorld.PixelCenter(pixel.x, pixel.y), out var scratch))
                     world.ApplyDamage(scratch);
                 // ...and the wall wears down until it caves in.
-                chunk.Owner.Batter(z.Config.wallDamage * damage);
+                var wall = chunk.Owner;
+                wall.Batter(z.Config.wallDamage * damage);
+                if (!wall.Collapsed) ShowBar(wall, wall, null);
                 return;
             }
             if (kingdom == null) return;
             var thing = kingdom.ThingAt(cell);
             var target = thing is Door door ? door.Health : thing is Furniture piece ? piece.Health : null;
-            if (target != null) target.Damage(z.Config.structureDamage * damage, z.Position);
+            if (target == null) return;
+            target.Damage(z.Config.structureDamage * damage, z.Position);
+            if (!target.Dead) ShowBar(target, null, target);
+        }
+
+        // ---------------------------------------------------------- bars --
+
+        void ShowBar(Component of, DestructibleStructure wall, Health health)
+        {
+            var white = kingdom != null ? kingdom.White : null;
+            if (white == null) return;
+            var bar = bars.Find(b => b.Active && b.Of == of);
+            if (bar == null)
+            {
+                bar = bars.Find(b => !b.Active);   // a spare one
+                if (bar == null)
+                {
+                    bar = new Bar { Back = BarPart("Damage bar", SortOrder.Markers, white), Fill = BarPart("Damage bar fill", SortOrder.Markers + 1, white) };
+                    bar.Back.color = new Color(0f, 0f, 0f, 0.65f);
+                    bars.Add(bar);
+                }
+                bar.Active = true;
+                bar.Of = of;
+                bar.Wall = wall;
+                bar.Health = health;
+            }
+            bar.Until = Time.time + BarSeconds;
+        }
+
+        SpriteRenderer BarPart(string partName, int order, Sprite white)
+        {
+            var go = new GameObject(partName);
+            go.transform.SetParent(transform, false);
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sprite = white;
+            r.sortingOrder = order;
+            return r;
+        }
+
+        // Keeps each bar over what it belongs to, showing how much is left; hides it a few seconds after the last blow.
+        void UpdateBars()
+        {
+            foreach (var bar in bars)
+            {
+                if (!bar.Active) continue;
+                bool gone = bar.Of == null || Time.time > bar.Until || (bar.Wall != null && bar.Wall.Collapsed) || (bar.Health != null && bar.Health.Dead);
+                float fraction = 0f;
+                RectInt cells = default;
+                if (!gone && bar.Wall != null)
+                {
+                    float full = bar.Wall.Material != null ? bar.Wall.Material.siegeHealth * bar.Wall.Cells.width * bar.Wall.Cells.height : 1f;
+                    fraction = bar.Wall.SiegeHealthLeft / Mathf.Max(1f, full);
+                    cells = bar.Wall.Cells;
+                }
+                else if (!gone && bar.Health != null && bar.Health.GetComponent<IBuilt>() is IBuilt built)
+                {
+                    fraction = bar.Health.Fraction;
+                    cells = built.Cells;
+                }
+                else gone = true;
+                bar.Back.enabled = bar.Fill.enabled = !gone;
+                if (gone)
+                {
+                    bar.Active = false;
+                    bar.Of = null;
+                    bar.Wall = null;
+                    bar.Health = null;
+                    continue;
+                }
+                // The white sprite is 4 x 4 pixels: scale it to the bar's size in tiles (like the blueprints' bars).
+                float unit = PixelArt.PixelsPerUnit / 4f;
+                float width = Mathf.Min(1.2f, cells.width * 0.8f), height = 0.09f;
+                var at = new Vector2(cells.center.x, cells.yMax + 0.12f);
+                fraction = Mathf.Clamp01(fraction);
+                bar.Back.transform.position = at;
+                bar.Back.transform.localScale = new Vector3(width * unit, height * unit, 1f);
+                bar.Fill.transform.position = at - new Vector2(width * 0.5f * (1f - fraction), 0f);
+                bar.Fill.transform.localScale = new Vector3(width * fraction * unit, height * 0.7f * unit, 1f);
+                bar.Fill.color = Color.Lerp(new Color(0.85f, 0.15f, 0.1f), new Color(0.95f, 0.75f, 0.3f), fraction);
+            }
         }
 
         // Pushes zombies that stand too close apart (only neighbours are compared: they're sorted by cell first).

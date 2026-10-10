@@ -136,7 +136,8 @@ Don't delete anything.
 
 - [ ] "Wave 1: 6 zombies are coming from the ..." appears, and zombies come from that side of the map
 - [ ] Zombies walk round trees and rocks, and head for you or a villager
-- [ ] Zombies at a wall or door hit it: wood splinters, stone gets scratched; after a while the wall caves in or the door breaks
+- [ ] Zombies at a wall or door hit it: wood splinters, stone gets scratched, a bar over it shows how much is left; after a while the wall caves in or the door breaks
+- [ ] On the throne, hovering a wall says how much it can take ("Stone wall: 600 / 600 against zombies")
 - [ ] Zombies go for the weakest way in (a gap, a door or a wooden wall) rather than straight through stone
 - [ ] Standing right behind your wall, your rifle shots fly over it and hit the zombies outside
 - [ ] Zombies flash red when hit, leave blood, and fall down dead; the bodies fade after a while

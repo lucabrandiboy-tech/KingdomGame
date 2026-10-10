@@ -555,6 +555,17 @@ namespace KingdomGame.Building
             return null;
         }
 
+        /// <summary>About the wall at <paramref name="cell"/> for the info box, like "Stone wall: 420 / 600 against zombies", or null.</summary>
+        public string WallInfo(Vector2Int cell)
+        {
+            var chunk = world != null ? world.ChunkAt(cell) : null;
+            var wall = chunk != null ? chunk.Owner : null;
+            if (wall == null || wall.Material == null) return null;
+            var config = WallConfigOf(wall.Material);
+            float full = wall.Material.siegeHealth * wall.Cells.width * wall.Cells.height;
+            return $"{(config != null ? config.displayName : "Wall")}: {Mathf.CeilToInt(wall.SiegeHealthLeft)} / {Mathf.CeilToInt(full)} against zombies";
+        }
+
         /// <summary>
         /// Which way a door at <paramref name="cell"/> should face to fit the walls (or wall
         /// blueprints) beside it: 0 in a wall running left to right, 1 up and down, or

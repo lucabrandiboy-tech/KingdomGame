@@ -117,12 +117,10 @@ namespace KingdomGame.Zombies
         void Update()
         {
             if (field == null) return;
-            if (Time.time >= fieldAt || (fieldDirty && Time.time >= fieldAt - FieldSeconds + 0.1f))
-            {
-                fieldAt = Time.time + FieldSeconds;
-                fieldDirty = false;
-                UpdateField();
-            }
+            // The paths are only worked out while there are zombies to follow them (finding a
+            // spawn point works them out first): on a big map it's a lot of work.
+            if (zombies.Count > 0 && (Time.time >= fieldAt || (fieldDirty && Time.time >= fieldAt - FieldSeconds + 0.1f)))
+                RefreshField();
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
             if (TestHordeKey && GameInput.Pressed(KeyCode.F9)) TestHorde();
@@ -191,10 +189,14 @@ namespace KingdomGame.Zombies
         /// </summary>
         public bool FindSpawnPoint(float along, float minDistance, out Vector2 spot)
         {
+            if (Time.time >= fieldAt || (fieldDirty && Time.time >= fieldAt - FieldSeconds + 0.1f)) RefreshField();
             var center = kingdom != null && kingdom.Throne != null ? kingdom.Throne.Center : map.center;
             float radius = SpawnRadius(center, minDistance);
+            // Past everything built (when the kingdom is too big for the ring to fit on the map,
+            // the ring is pushed to the map's edge: only the spots on it past the kingdom will do).
+            float beyond2 = (builtExtent + 2f) * (builtExtent + 2f);
             int steps = Mathf.Max(64, Mathf.CeilToInt(radius * Mathf.PI * 2f));
-            for (int pass = 0; pass < 2; pass++)
+            for (int pass = 0; pass < 3; pass++)
                 for (int i = 0; i < steps; i++)
                 {
                     // Look outwards from the chosen spot, alternating sides.
@@ -204,6 +206,8 @@ namespace KingdomGame.Zombies
                     p = new Vector2(Mathf.Clamp(p.x, map.xMin + 3, map.xMax - 3), Mathf.Clamp(p.y, map.yMin + 3, map.yMax - 3));
                     var cell = CellOf(p);
                     if (!Walkable(cell) || !FarFromEveryone(cell, minDistance)) continue;
+                    // Pass 0: past the kingdom and able to reach someone; pass 1: past the kingdom; pass 2: anywhere out here.
+                    if (pass < 2 && ((Vector2)cell + new Vector2(0.5f, 0.5f) - center).sqrMagnitude < beyond2) continue;
                     if (pass == 0 && float.IsPositiveInfinity(field.Distance(cell.x - map.xMin, cell.y - map.yMin))) continue;
                     spot = (Vector2)cell + new Vector2(UnityEngine.Random.Range(0.3f, 0.7f), UnityEngine.Random.Range(0.3f, 0.7f));
                     return true;
@@ -212,9 +216,16 @@ namespace KingdomGame.Zombies
             return false;
         }
 
-        float spawnRadius, spawnRadiusAt = -999f;
+        float spawnRadius, spawnRadiusAt = -999f, builtExtent;
 
-        // How far out zombies appear: past the outermost wall or building, worked out every few seconds.
+        void RefreshField()
+        {
+            fieldAt = Time.time + FieldSeconds;
+            fieldDirty = false;
+            UpdateField();
+        }
+
+        // How far out zombies appear: past the outermost wall, building, trap or tower, worked out every few seconds.
         float SpawnRadius(Vector2 center, float minDistance)
         {
             if (Time.time - spawnRadiusAt > 5f)
@@ -228,7 +239,12 @@ namespace KingdomGame.Zombies
                 {
                     foreach (var s in kingdom.Storages) if (s != null && map.Contains(s.Cells.position)) extent = Mathf.Max(extent, (s.Center - center).magnitude);
                     foreach (var h in kingdom.Houses) if (h != null) extent = Mathf.Max(extent, (h.Center - center).magnitude);
+                    foreach (var m in kingdom.Mines) if (m != null) extent = Mathf.Max(extent, (m.Center - center).magnitude);
+                    // Furniture out on the map: traps, towers, barriers.
+                    foreach (var f in kingdom.AllFurniture)
+                        if (f != null && map.Contains(f.Cells.position)) extent = Mathf.Max(extent, (f.Cells.center - center).magnitude);
                 }
+                builtExtent = extent;
                 spawnRadius = extent + 12f;
             }
             float most = Mathf.Min(map.width, map.height) * 0.5f - 3f;

@@ -852,7 +852,7 @@ namespace KingdomGame.Building
                         int have = storage.Stock.Get(type);
                         left[i] = have - Store(type, have, storage.Center);
                     }
-                    if (LootBag.Drop(storage.Center, left[(int)ResourceType.Wood], left[(int)ResourceType.Stone], left[(int)ResourceType.Food]) != null)
+                    if (LootBag.Drop(storage.Center, left) != null)
                         spilled = ". The other storehouses are full: the rest is in a bag on the ground";
                 }
                 if (thing is MineShaft mineShaft)
@@ -928,20 +928,16 @@ namespace KingdomGame.Building
             foreach (var layer in new[] { floors, rugs })
                 foreach (var pair in layer)
                     if (bounds.Contains(pair.Key) && pair.Value is IBuilt built && !(pair.Value is Blueprint) && !things.Contains(built)) things.Add(built);
-            int wood = 0, stone = 0, food = 0;
+            var spilled = new int[Inventory.TypeCount];
             foreach (var thing in things)
             {
                 if (thing is Storage chest && chest.Stock != null)
-                {
-                    wood += chest.Stock.Get(ResourceType.Wood);
-                    stone += chest.Stock.Get(ResourceType.Stone);
-                    food += chest.Stock.Get(ResourceType.Food);
-                }
+                    for (int i = 0; i < spilled.Length; i++) spilled[i] += chest.Stock.Get((ResourceType)i);
                 Forget(thing);
                 if (refund) Refund(thing.Config, 1, outside);
                 thing.Remove();
             }
-            if (wood + stone + food > 0) LootBag.Drop(outside, wood, stone, food);
+            LootBag.Drop(outside, spilled);
             return things.Count;
         }
 
@@ -1171,7 +1167,7 @@ namespace KingdomGame.Building
             if (thing is Storage storage && storage.Stock != null)
             {
                 var stock = storage.Stock;
-                LootBag.Drop(storage.Center, stock.Get(ResourceType.Wood), stock.Get(ResourceType.Stone), stock.Get(ResourceType.Food));
+                LootBag.DropAll(storage.Center, stock);
             }
             if (world != null)
             {
@@ -1273,6 +1269,8 @@ namespace KingdomGame.Building
         }
 
         readonly Dictionary<ResourceNode, float> unreachableNodes = new Dictionary<ResourceNode, float>();
+        // Towers a guard couldn't find a way to, and until when to leave them be.
+        readonly Dictionary<Defenses.Defense, float> unreachableTowers = new Dictionary<Defenses.Defense, float>();
 
         /// <summary>Marks rock in a mine to be dug out. False if it can't be (with why in <paramref name="reason"/>).</summary>
         public bool MarkDig(Vector2Int cell, out string reason)
@@ -1316,10 +1314,14 @@ namespace KingdomGame.Building
             int amount = ore == Ore.None ? best.Config.stonePerTile : best.Config.orePerTile;
             if (v.CarryAmount > 0 && (v.CarryType != comes || v.CarryAmount + amount > full))
             {
+                // Nowhere to put it: don't dig (what's in hand would be lost).
                 var home = NearestWithSpace(v.Position);
-                if (home != null) { v.StartReturn(home); return true; }
+                if (home != null) v.StartReturn(home);
+                return home != null;
             }
-            return v.StartDig(best, bestCell);
+            if (v.StartDig(best, bestCell)) return true;
+            best.CantReach(bestCell);
+            return false;
         }
 
         // Woodcutters, miners and foragers: gather until their hands are full, then take it to storage.
@@ -1380,10 +1382,11 @@ namespace KingdomGame.Building
                 foreach (var d in Defenses.Defense.All)
                 {
                     if (d == null || !d.NeedsGuard || (d.Guard != null && d.Guard != v)) continue;
+                    if (unreachableTowers.TryGetValue(d, out float until) && until > now) continue;
                     float distance = Travel(v.Position, d.Center);
                     if (distance < best) { best = distance; post = d; }
                 }
-                if (post != null) v.StartGuard(post);
+                if (post != null && !v.StartGuard(post)) unreachableTowers[post] = now + 15f;
                 return;
             }
             if (v.Job != Job.Builder)

@@ -294,8 +294,11 @@ namespace KingdomGame.Villagers
             }
             // What they were carrying is left where they fell.
             if (carryAmount > 0)
-                LootBag.Drop(Position, carryType == ResourceType.Wood ? carryAmount : 0, carryType == ResourceType.Stone ? carryAmount : 0,
-                    carryType == ResourceType.Food ? carryAmount : 0);
+            {
+                var carried = new int[Inventory.TypeCount];
+                carried[(int)carryType] = carryAmount;
+                LootBag.Drop(Position, carried);
+            }
             carryAmount = 0;
             Abandon();
             kingdom.Lost(this);
@@ -567,7 +570,12 @@ namespace KingdomGame.Villagers
                 space = through;
                 transform.position = through.Entrance;
             }
-            if (!Walk(goal, goalBeside)) Abandon();
+            if (!Walk(goal, goalBeside))
+            {
+                // In the mine but no way to the rock it came to dig (furniture in the way).
+                if (task == Task.Dig && mine != null) mine.CantReach(digCell);
+                Abandon();
+            }
         }
 
         /// <summary>Puts back what a saved game says: the house or mine it's in (or null), what it carries, its hit points.</summary>

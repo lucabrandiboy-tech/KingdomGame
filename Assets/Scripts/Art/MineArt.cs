@@ -30,7 +30,7 @@ namespace KingdomGame.Art
                     if (dug)
                     {
                         // Packed earth, darker in the shadow of rock above and to the left (the light is top-left).
-                        float grit = Noise.Hash01(seed + 7u, ox + px, oy + py);
+                        float grit = Noise.Hash01(seed + 7u, wx * detail + px, wy * detail + py);
                         float patch = Noise.Value(x * 1.3f, y * 1.3f, seed + 8u);
                         float shade = 0.82f + patch * 0.22f + (grit - 0.5f) * 0.1f;
                         if (!openUp) shade *= Mathf.Lerp(0.55f, 1f, Mathf.Clamp01((1f - v) / 0.3f));
@@ -40,7 +40,7 @@ namespace KingdomGame.Art
                     else
                     {
                         float lumps = Noise.Value(x * 3.2f, y * 3.2f, seed + 1u);
-                        float fine = Noise.Hash01(seed + 2u, ox + px, oy + py);
+                        float fine = Noise.Hash01(seed + 2u, wx * detail + px, wy * detail + py);
                         float crack = Mathf.Abs(Noise.Value(x * 5f, y * 5f, seed + 3u) - 0.5f);
                         float shade = 0.78f + lumps * 0.3f + (fine - 0.5f) * 0.08f;
                         if (crack < 0.025f) shade *= 0.6f;

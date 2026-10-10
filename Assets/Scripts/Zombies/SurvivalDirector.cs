@@ -197,7 +197,8 @@ namespace KingdomGame.Zombies
             var names = new List<string>(4);
             foreach (float along in entries)
             {
-                string name = along < 0.25f ? "south" : along < 0.5f ? "east" : along < 0.75f ? "north" : "west";
+                // `along` goes once round anticlockwise from the east (see ZombieDirector.FindSpawnPoint).
+                string name = along < 0.125f || along >= 0.875f ? "east" : along < 0.375f ? "north" : along < 0.625f ? "west" : "south";
                 if (!names.Contains(name)) names.Add(name);
             }
             if (names.Count == 0) return "dark";

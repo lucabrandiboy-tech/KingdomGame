@@ -36,11 +36,17 @@ namespace KingdomGame.Building
         bool[] marked;
         Ore[] ore;
         uint seed;
-        Texture2D texture;
-        Sprite sprite;
-        Color32[] pixels;
+        // The picture, in squares of PieceTiles tiles (digging repaints and uploads only the squares it touches).
+        const int PieceTiles = 16;
+        int piecesX, piecesY;
+        Texture2D[] textures;
+        Sprite[] sprites;
+        Color32[][] pieces;
+        bool[] pieceChanged;
         readonly Dictionary<Vector2Int, SpriteRenderer> marks = new Dictionary<Vector2Int, SpriteRenderer>();
         readonly Dictionary<Vector2Int, Villager> diggers = new Dictionary<Vector2Int, Villager>();
+        // Marked tiles a miner couldn't find a way to (furniture in the way), and until when to leave them be.
+        readonly Dictionary<Vector2Int, float> unreachable = new Dictionary<Vector2Int, float>();
 
         public MineShaft Shaft { get; private set; }
         public MineConfig Config => config;
@@ -170,6 +176,7 @@ namespace KingdomGame.Building
                     int i = Index(c);
                     if (!marked[i] || dug[i]) continue;
                     if (diggers.TryGetValue(c, out var other) && other != null && other != miner) continue;
+                    if (unreachable.TryGetValue(c, out float until) && until > Time.time) continue;
                     // It has to be reachable: an open tile beside it.
                     if (!(Open(c + Vector2Int.left) || Open(c + Vector2Int.right) || Open(c + Vector2Int.up) || Open(c + Vector2Int.down))) continue;
                     float d = ((Vector2)c - from).sqrMagnitude;
@@ -181,6 +188,9 @@ namespace KingdomGame.Building
         bool Open(Vector2Int c) => Inside(c) && nav.Walkable(c);
 
         public void Claim(Vector2Int cell, Villager miner) => diggers[cell] = miner;
+
+        /// <summary>A miner couldn't find a way to this tile: others go for other tiles for a while.</summary>
+        public void CantReach(Vector2Int cell) => unreachable[cell] = Time.time + 15f;
 
         public void Release(Vector2Int cell, Villager miner)
         {
@@ -214,8 +224,7 @@ namespace KingdomGame.Building
             for (int y = -1; y <= 1; y++)
                 for (int x = -1; x <= 1; x++)
                     PaintCell(cell + new Vector2Int(x, y));
-            texture.SetPixels32(pixels);
-            texture.Apply(true);
+            Upload();
             return true;
         }
 
@@ -255,8 +264,7 @@ namespace KingdomGame.Building
             for (int y = bounds.yMin; y < bounds.yMax; y++)
                 for (int x = bounds.xMin; x < bounds.xMax; x++)
                     PaintCell(new Vector2Int(x, y));
-            texture.SetPixels32(pixels);
-            texture.Apply(true);
+            Upload();
         }
 
         void ShowMark(Vector2Int cell, bool on)
@@ -282,21 +290,37 @@ namespace KingdomGame.Building
 
         void Paint()
         {
-            int n = bounds.width * Detail;
-            pixels = new Color32[n * n];
+            piecesX = (bounds.width + PieceTiles - 1) / PieceTiles;
+            piecesY = (bounds.height + PieceTiles - 1) / PieceTiles;
+            int count = piecesX * piecesY;
+            textures = new Texture2D[count];
+            sprites = new Sprite[count];
+            pieces = new Color32[count][];
+            pieceChanged = new bool[count];
+            for (int py = 0; py < piecesY; py++)
+                for (int px = 0; px < piecesX; px++)
+                {
+                    int i = py * piecesX + px;
+                    int w = PieceWidth(px) * Detail, h = PieceHeight(py) * Detail;
+                    pieces[i] = new Color32[w * h];
+                    textures[i] = PixelTextures.NewTexture(w, h, "Mine");
+                }
             for (int y = bounds.yMin; y < bounds.yMax; y++)
                 for (int x = bounds.xMin; x < bounds.xMax; x++)
                     PaintCell(new Vector2Int(x, y));
-            texture = PixelTextures.NewTexture(n, n, "Mine");
-            texture.SetPixels32(pixels);
-            texture.Apply(true);
-            sprite = PixelTextures.NewSprite(texture, Vector2.zero, Detail);
-            var go = new GameObject("Rock and floor");
-            go.transform.SetParent(transform, false);
-            go.transform.position = (Vector2)bounds.position;
-            var r = go.AddComponent<SpriteRenderer>();
-            r.sprite = sprite;
-            r.sortingOrder = SortOrder.Floors - 10;
+            Upload();
+            for (int py = 0; py < piecesY; py++)
+                for (int px = 0; px < piecesX; px++)
+                {
+                    int i = py * piecesX + px;
+                    sprites[i] = PixelTextures.NewSprite(textures[i], Vector2.zero, Detail);
+                    var piece = new GameObject("Rock and floor");
+                    piece.transform.SetParent(transform, false);
+                    piece.transform.position = (Vector2)(bounds.position + new Vector2Int(px, py) * PieceTiles);
+                    var r = piece.AddComponent<SpriteRenderer>();
+                    r.sprite = sprites[i];
+                    r.sortingOrder = SortOrder.Floors - 10;
+                }
             // The ladder up the shaft.
             var ladder = ArtSprites.Get(ArtKeys.Turned(FurnitureArt.Ladder, 0));
             if (ladder != null)
@@ -310,20 +334,38 @@ namespace KingdomGame.Building
             }
         }
 
-        // One tile (MineArt draws it).
+        int PieceWidth(int px) => Mathf.Min(PieceTiles, bounds.width - px * PieceTiles);
+        int PieceHeight(int py) => Mathf.Min(PieceTiles, bounds.height - py * PieceTiles);
+
+        // One tile (MineArt draws it), into the square of the picture it's in.
         void PaintCell(Vector2Int cell)
         {
             if (!Inside(cell)) return;
             int i = Index(cell);
-            MineArt.PaintCell(pixels, bounds.width * Detail, Detail, (cell.x - bounds.x) * Detail, (cell.y - bounds.y) * Detail, cell.x, cell.y, seed,
+            int tx = cell.x - bounds.x, ty = cell.y - bounds.y;
+            int px = tx / PieceTiles, py = ty / PieceTiles, p = py * piecesX + px;
+            MineArt.PaintCell(pieces[p], PieceWidth(px) * Detail, Detail, (tx - px * PieceTiles) * Detail, (ty - py * PieceTiles) * Detail, cell.x, cell.y, seed,
                 dug[i], (int)ore[i], IsDug(cell + Vector2Int.left), IsDug(cell + Vector2Int.right), IsDug(cell + Vector2Int.up), IsDug(cell + Vector2Int.down));
+            pieceChanged[p] = true;
+        }
+
+        // Sends the squares that were painted to the graphics card.
+        void Upload()
+        {
+            for (int p = 0; p < pieces.Length; p++)
+            {
+                if (!pieceChanged[p]) continue;
+                pieceChanged[p] = false;
+                textures[p].SetPixels32(pieces[p]);
+                textures[p].Apply(true);
+            }
         }
 
         void OnDestroy()
         {
             nav?.Dispose();
-            if (texture != null) Destroy(texture);
-            if (sprite != null) Destroy(sprite);
+            if (textures != null) foreach (var t in textures) if (t != null) Destroy(t);
+            if (sprites != null) foreach (var s in sprites) if (s != null) Destroy(s);
         }
     }
 }

@@ -23,7 +23,14 @@ is in `docs/ROADMAP.md`, and the decisions with their reasons in `docs/DECISIONS
 ## Stack
 
 Unity 6.3 LTS (6000.3.x), URP 2D Renderer, Input System package, C# 9.
-Networking (Phase 5): Fish-Net recommended, not installed yet.
+Networking: LiteNetLib 1.3.5 (`Assets/ThirdParty/LiteNetLib`, MIT), chosen over
+Fish-Net because it can be tested with real connections outside Unity (see
+`docs/ONLINE-PLAN.md`). `Networking/Core` is plain C# (server, client, protocol);
+`Networking/NetPlay.cs` runs it in the game: `NetHost` (you host your own game and
+play it) and `NetClient` (you join one); `NetServer` is a dedicated server (`-server`).
+The role comes from `GameSession.Role`; `KingdomBootstrap` starts each.
+So far joined players see the map, everyone walking (`RemotePlayers`) and chat
+(`UI/ChatBox`); the host's buildings, villagers and zombies aren't shared yet.
 
 ## Conventions
 

@@ -31,6 +31,7 @@ namespace KingdomGame.World
         ZombieDirector zombies;
         PixelWorld world;
         bool loaded;
+        bool hosted;
         // The saved game couldn't be (fully) loaded: it's only saved over when the player saves on purpose.
         bool keepOldSave;
         float started, nextAutosave;
@@ -40,7 +41,9 @@ namespace KingdomGame.World
 
         public GameMode Mode => mode;
         /// <summary>Whether this mode has a saved game to load.</summary>
-        public bool HasSave => SaveFiles.Exists(mode);
+        public bool HasSave => SaveFiles.Exists(mode, hosted);
+        /// <summary>A game you host (saved in its own file).</summary>
+        public bool Hosted { get => hosted; set => hosted = value; }
 
         public void Setup(GameContent gameContent, GameMode gameMode, int mapSeed, Kingdom owner, RulerController rulerController,
             Research tech, DayNightCycle clock, SurvivalDirector survival, ZombieDirector zombieDirector, PixelWorld pixelWorld)
@@ -110,7 +113,7 @@ namespace KingdomGame.World
             if (!CanSave(out string why)) return Say(why);
             try
             {
-                SaveFiles.Write(mode, Collect());
+                SaveFiles.Write(mode, Collect(), hosted);
                 loaded = true;   // this game is the saved one now
                 keepOldSave = false;
                 return quietly ? Say("Game saved", 2f) : Say("Game saved");
@@ -146,7 +149,7 @@ namespace KingdomGame.World
             {
                 mode = mode.ToString(),
                 seed = seed,
-                mapSize = content.world != null ? content.world.mapSize : 0,
+                mapSize = NatureMap.Current != null ? NatureMap.Current.Cells.width : content.world != null ? content.world.mapSize : 0,
                 savedAt = System.DateTime.Now.ToString("d MMM HH:mm"),
             };
             if (dayNight != null)
@@ -309,8 +312,9 @@ namespace KingdomGame.World
         int RestoreAll(SaveData data)
         {
             int missing = 0;
-            if (content.world != null && data.mapSize != 0 && data.mapSize != content.world.mapSize)
-                Debug.LogWarning($"This game was saved on a map {data.mapSize} tiles across, but World Config's Map Size is now {content.world.mapSize}: the map won't be quite the same.");
+            int size = NatureMap.Current != null ? NatureMap.Current.Cells.width : 0;
+            if (data.mapSize != 0 && size != 0 && data.mapSize != size)
+                Debug.LogWarning($"This game was saved on a map {data.mapSize} tiles across, but the map is {size}: it won't be quite the same.");
 
             if (dayNight != null) dayNight.SetTime(data.day, data.hour);
             if (research != null && data.research != null) research.Load(data.research);

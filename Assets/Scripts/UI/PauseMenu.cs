@@ -1,4 +1,5 @@
 using KingdomGame.Building;
+using KingdomGame.Networking;
 using KingdomGame.World;
 using KingdomGame.Zombies;
 using UnityEngine;
@@ -17,18 +18,25 @@ namespace KingdomGame.UI
         BuildController builder;
         SurvivalDirector survival;
         SaveSystem saves;
+        NetHost host;
+        NetClient client;
         GUIStyle title, text, button;
         string saveMessage;
         bool confirmLoad;
 
         public bool IsOpen { get; private set; }
 
-        public void Setup(BuildController build, SurvivalDirector director, SaveSystem saveSystem)
+        /// <summary>Online (<paramref name="hosting"/> or <paramref name="joined"/>) the world doesn't stop while the menu is open.</summary>
+        public void Setup(BuildController build, SurvivalDirector director, SaveSystem saveSystem, NetHost hosting, NetClient joined)
         {
             builder = build;
             survival = director;
             saves = saveSystem;
+            host = hosting;
+            client = joined;
         }
+
+        bool Online => host != null || client != null;
 
         void Update()
         {
@@ -46,7 +54,7 @@ namespace KingdomGame.UI
         void Open()
         {
             IsOpen = true;
-            Time.timeScale = 0f;
+            if (!Online) Time.timeScale = 0f;
             saveMessage = null;
             confirmLoad = false;
         }
@@ -75,7 +83,7 @@ namespace KingdomGame.UI
         {
             Time.timeScale = 1f;
             GameSession.Chosen = mode;
-            GameSession.LoadSave = true;
+            GameSession.LoadSave = true;   // (a hosted game stays hosted: the role is kept)
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
 
@@ -83,6 +91,7 @@ namespace KingdomGame.UI
         public static void ToMainMenu()
         {
             Time.timeScale = 1f;
+            GameSession.Role = NetRole.Offline;
             if (Application.CanStreamedLevelBeLoaded(GameSession.MenuScene)) SceneManager.LoadScene(GameSession.MenuScene);
             else Restart();
         }
@@ -140,10 +149,26 @@ namespace KingdomGame.UI
                 return;
             }
 
-            GUI.Label(new Rect(x - width, y, width * 3f, font * 3f), "<b>Paused</b>", title);
+            GUI.Label(new Rect(x - width, y, width * 3f, font * 3f), Online ? "<b>Menu</b>" : "<b>Paused</b>", title);
             y += font * 3.6f;
             if (GUI.Button(new Rect(x, y, width, row), "<b>Resume</b>   (Esc)", button)) Close();
             y += row + font * 0.6f;
+            if (client != null)
+            {
+                // In someone else's game: nothing to save here (it's theirs).
+                if (client.Status != null) GUI.Label(new Rect(x - width * 0.5f, y, width * 2f, font * 2.4f), client.Status, text);
+                y += font * 2.6f;
+                if (GUI.Button(new Rect(x, y, width, row), "Leave the game", button)) client.Leave();
+                y += row + font * 0.6f;
+                if (GUI.Button(new Rect(x, y, width, row), "Quit the game", button)) Quit();
+                return;
+            }
+            if (host != null)
+            {
+                string how = host.HowToJoin();
+                if (how != null) GUI.Label(new Rect(x - width * 0.6f, y, width * 2.2f, font * 4.2f), how, text);
+                y += font * 4.4f;
+            }
             if (saves != null)
             {
                 if (GUI.Button(new Rect(x, y, width, row), "Save the game", button))
@@ -163,9 +188,12 @@ namespace KingdomGame.UI
                     y += row + font * 0.6f;
                 }
             }
-            if (GUI.Button(new Rect(x, y, width, row), "Start again", button)) Restart();
-            y += row + font * 0.6f;
-            if (GUI.Button(new Rect(x, y, width, row), saves != null ? "Save and go to the main menu" : "Main menu", button))
+            if (host == null)
+            {
+                if (GUI.Button(new Rect(x, y, width, row), "Start again", button)) Restart();
+                y += row + font * 0.6f;
+            }
+            if (GUI.Button(new Rect(x, y, width, row), saves != null ? (host != null ? "Save, stop hosting, main menu" : "Save and go to the main menu") : "Main menu", button))
             {
                 // Not a brand-new game over the saved one, nor a game whose save couldn't be loaded (see SaveSystem).
                 if (saves != null && saves.SafeToOverwrite()) saves.Save(true);

@@ -147,14 +147,16 @@ namespace KingdomGame.World
     {
         public static string Folder => Path.Combine(Application.persistentDataPath, "saves");
 
-        public static string PathFor(GameMode mode) => Path.Combine(Folder, (mode == GameMode.Survival ? "survival" : "freebuild") + ".json");
+        /// <summary>A mode's save file; games you host (open to others) have their own.</summary>
+        public static string PathFor(GameMode mode, bool hosted = false) =>
+            Path.Combine(Folder, (mode == GameMode.Survival ? "survival" : "freebuild") + (hosted ? "-hosted" : "") + ".json");
 
-        public static bool Exists(GameMode mode) => File.Exists(PathFor(mode));
+        public static bool Exists(GameMode mode, bool hosted = false) => File.Exists(PathFor(mode, hosted));
 
-        public static void Write(GameMode mode, SaveData data)
+        public static void Write(GameMode mode, SaveData data, bool hosted = false)
         {
             Directory.CreateDirectory(Folder);
-            string path = PathFor(mode), fresh = path + ".new";
+            string path = PathFor(mode, hosted), fresh = path + ".new";
             File.WriteAllText(fresh, JsonUtility.ToJson(data));
             // Swaps the new file in, keeping the old one as .bak, in one step.
             if (File.Exists(path)) File.Replace(fresh, path, path + ".bak");
@@ -165,9 +167,9 @@ namespace KingdomGame.World
         /// The saved game for a mode, or null (with why in <paramref name="problem"/>) if there's none or it
         /// can't be read. If the save itself is broken, the copy before it (.bak) is tried.
         /// </summary>
-        public static SaveData Read(GameMode mode, out string problem)
+        public static SaveData Read(GameMode mode, out string problem, bool hosted = false)
         {
-            string path = PathFor(mode);
+            string path = PathFor(mode, hosted);
             var data = ReadFile(path, out problem);
             if (data != null || !File.Exists(path)) return data;
             var older = ReadFile(path + ".bak", out string olderProblem);
@@ -201,9 +203,9 @@ namespace KingdomGame.World
         }
 
         /// <summary>A line about a mode's saved game for the main menu (like "Day 3, wave 5. Saved 10 Oct 14:32"), or null.</summary>
-        public static string Describe(GameMode mode)
+        public static string Describe(GameMode mode, bool hosted = false)
         {
-            var data = Read(mode, out _);
+            var data = Read(mode, out _, hosted);
             if (data == null) return null;
             string where = data.hasSurvival && data.survival.wave > 0 ? $"Day {data.day}, wave {data.survival.wave}" : $"Day {data.day}";
             return string.IsNullOrEmpty(data.savedAt) ? where : $"{where}. Saved {data.savedAt}";

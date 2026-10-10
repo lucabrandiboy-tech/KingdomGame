@@ -39,18 +39,18 @@ namespace KingdomGame.World
         const int MaxTint = 1024;
 
         /// <summary>
-        /// Builds the map. <paramref name="drawGround"/> false skips the ground pictures
-        /// (a server with no screen doesn't need them).
+        /// Builds the map, <paramref name="mapSize"/> tiles across (0: World Config's Map Size).
+        /// <paramref name="drawGround"/> false skips the ground pictures (a server with no screen doesn't need them).
         /// </summary>
-        public static WorldParts Generate(GameContent content, Transform parent, int seed, bool drawGround = true)
+        public static WorldParts Generate(GameContent content, Transform parent, int seed, bool drawGround = true, int mapSize = 0)
         {
             var config = content.world;
-            int half = config.mapSize / 2;
+            int size = mapSize > 0 ? mapSize : config.mapSize;
+            int half = size / 2;
             uint s = (uint)seed;
 
             // "Forest-ness" of every tile. The cut-off is chosen so that exactly
             // Forest Cover of the map is forest, whatever the noise looks like.
-            int size = config.mapSize;
             var forest = new float[size * size];
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)

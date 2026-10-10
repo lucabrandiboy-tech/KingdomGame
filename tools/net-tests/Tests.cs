@@ -32,6 +32,7 @@ static class Tests
         Run(nameof(RejoiningGetsTheSameKingdom), RejoiningGetsTheSameKingdom);
         Run(nameof(NobodyThereFailsWithAReason), NobodyThereFailsWithAReason);
         Run(nameof(ManySnapshotEntriesArriveInPieces), ManySnapshotEntriesArriveInPieces);
+        Run(nameof(HostIsSeenAndHeard), HostIsSeenAndHeard);
         Console.WriteLine(failed == 0 ? "All network tests passed." : $"{failed} network test(s) FAILED.");
         return failed == 0 ? 0 : 1;
     }
@@ -417,6 +418,37 @@ static class Tests
             Check(p.FailedWhy.Contains("Nobody answered"), $"failed with: {p.FailedWhy}");
         }
         finally { p.Core.Disconnect(); }
+    }
+
+    static void HostIsSeenAndHeard()
+    {
+        var server = NewServer();
+        var host = server.AddLocalPlayer("host-key", "Hosty", new KingdomInfo { Id = 1, X = 0, Y = 0 });
+        double movedAt = -1;
+        server.PositionTaken += (p, t) => movedAt = t;
+        var a = new Player(server.Port, "key-a", "Alice");
+        var sameAsHost = new Player(server.Port, "host-key", "Hosty");
+        var both = new[] { a, sameAsHost };
+        try
+        {
+            Pump(server, both, () => a.Welcome != null && sameAsHost.FailedWhy != null);
+            Check(sameAsHost.FailedWhy.Contains("host"), $"same key as the host: {sameAsHost.FailedWhy}");
+            Check(a.Welcome.Players.Exists(p => p.Name == "Hosty" && p.Id == host.Id), "the host isn't in the welcome");
+            var mine = a.Welcome.Kingdoms.Find(k => k.Id == a.Welcome.YourKingdom);
+            Check(mine != null && mine.Id != 1 && Math.Sqrt(mine.X * mine.X + mine.Y * mine.Y) >= 96, "the joiner's kingdom is too near the host's");
+            double start = Now;
+            Pump(server, both, () =>
+            {
+                server.MoveLocal(host, new Motion { X = 3, Y = 4, Aim = 90 });
+                a.Core.SendState(new Motion { X = 10, Y = 10 });
+                return Now - start > 0.3 && a.Seen.ContainsKey(host.Id) && movedAt > 0;
+            });
+            Check(Math.Abs(a.Seen[host.Id].X - 3) < 1e-4, "Alice sees the host where they are");
+            server.ChatLocal(host, "welcome!");
+            Pump(server, both, () => a.Chat.Count > 0);
+            Check(a.Chat[0].From == "Hosty" && a.Chat[0].Text == "welcome!", "the host's chat");
+        }
+        finally { Stop(server, a, sameAsHost); }
     }
 
     static void ManySnapshotEntriesArriveInPieces()

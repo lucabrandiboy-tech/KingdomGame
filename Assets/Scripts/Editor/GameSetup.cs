@@ -71,7 +71,7 @@ namespace KingdomGame.EditorTools
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             Folder("Assets", "Data");
-            foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies", "Defenses", "Progression" })
+            foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies", "Defenses", "Progression", "Network" })
                 Folder(DataRoot, area);
             foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming", "Traps", "Towers", "Mining" })
                 Folder(DataRoot + "/Building", area);
@@ -319,6 +319,7 @@ namespace KingdomGame.EditorTools
             if (content.storehouse == null) content.storehouse = storehouse;
             if (content.survival == null) content.survival = survival;
             if (content.progression == null) content.progression = Ages(defensesByAge, roofs);
+            if (content.network == null) content.network = Asset<Networking.NetworkConfig>("Network/NetworkConfig", n => { });
             // Everything on the build bar, in order (each item shows on its category's tab).
             var menu = new List<BuildingConfig> { stoneWallBuilding, woodWallBuilding };
             menu.AddRange(castle);

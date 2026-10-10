@@ -72,6 +72,16 @@ namespace KingdomGame.Character
         public Place Inside { get; private set; }
         /// <summary>Furnishing a house (standing still while the build bar is open).</summary>
         public bool Busy { get; private set; }
+        /// <summary>Typing in the chat: stands still.</summary>
+        public bool Typing { get; set; }
+        /// <summary>
+        /// In someone else's game: walking about, doors and chat, but no shooting, gathering or
+        /// building yet (those aren't shared over the network yet).
+        /// </summary>
+        public bool Visiting { get; set; }
+        /// <summary>Which way the ruler aims (a direction).</summary>
+        public Vector2 AimDirection => aim;
+        public Vector2 CurrentVelocity => Velocity;
         Vector2 cameOutAt;   // where to come out if the house goes while the ruler is inside
 
         public void Setup(PlayerConfig playerConfig, WeaponConfig primary, WeaponConfig secondary, ExplosiveConfig thrown,
@@ -160,6 +170,12 @@ namespace KingdomGame.Character
                 if (look != null) look.Show(Vector2.zero, Vector2.down, config.moveSpeed, config.stepsPerSecond, holdingGun: false);
                 return;
             }
+            if (Typing)
+            {
+                wantedVelocity = Vector2.zero;
+                if (look != null) look.Show(Velocity, aim, config.moveSpeed, config.stepsPerSecond);
+                return;
+            }
 
             wantedVelocity = GameInput.Move * config.moveSpeed;
             if (view != null)
@@ -176,6 +192,12 @@ namespace KingdomGame.Character
             }
 
             float now = Time.time;
+            if (Visiting)
+            {
+                Interact(now);
+                if (now > noticeUntil) Notice = null;
+                return;
+            }
             if (primaryWeapon != null && (primaryWeapon.automatic ? GameInput.FireHeld : GameInput.FirePressed) && now >= primaryReady)
             {
                 Shoot(primaryWeapon);
@@ -498,6 +520,13 @@ namespace KingdomGame.Character
                         if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; }
                     }
 
+            if (Visiting)
+            {
+                // Visiting: no gathering or building (yet).
+                node = null;
+                blueprint = null;
+                storage = null;
+            }
             if (ladder != null) UseLadder(kingdom, ladder);
             else if (throne != null) UseThrone(kingdom);
             else if (storage != null) UseStorage(storage);
@@ -640,10 +669,22 @@ namespace KingdomGame.Character
 
         void UseThrone(Kingdom kingdom)
         {
+            var builder = kingdom.GetComponent<BuildController>();
+            if (builder == null)
+            {
+                Hint = "Your throne. Building online comes in the next update";
+                return;
+            }
             Hint = "E: sit on the throne (build your kingdom)";
             if (!GameInput.Pressed(KeyCode.E)) return;
-            var builder = kingdom.GetComponent<BuildController>();
-            if (builder != null) builder.Enter();
+            builder.Enter();
+        }
+
+        /// <summary>Puts the ruler straight at <paramref name="at"/> (the server didn't believe a move).</summary>
+        public void ForceMove(Vector2 at)
+        {
+            if (OnWalls) GetDown(at);
+            else MoveTo(at);
         }
 
         void UseStorage(Storage storage)

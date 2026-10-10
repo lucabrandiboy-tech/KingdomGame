@@ -3,6 +3,7 @@ using KingdomGame.Character;
 using KingdomGame.Combat;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
+using KingdomGame.Networking;
 using KingdomGame.Progression;
 using KingdomGame.UI;
 using KingdomGame.Zombies;
@@ -45,60 +46,56 @@ namespace KingdomGame.World
             ArtSprites.Configure(content.art, walls);
             if (content.dayNight != null)
                 FireLight.Configure(content.dayNight.fireColor, content.dayNight.fireRadius, content.dayNight.fireBrightness, content.dayNight.fireDaytimeShare);
-
             Mode = GameSession.Chosen ?? defaultMode;
+
+            switch (GameSession.Role)
+            {
+                case NetRole.Client: StartJoining(world); break;
+                case NetRole.Server: StartDedicated(); break;
+                default: StartPlaying(world, GameSession.Role == NetRole.Host); break;
+            }
+        }
+
+        // Playing your own game: alone, or hosting it (open to others: they join over the network).
+        void StartPlaying(PixelWorld world, bool hosting)
+        {
             bool survival = Mode == GameMode.Survival;
             if (survival && content.survival == null)
             {
                 Debug.LogWarning("The Game Content has no Survival Config, so this game has no zombies. Run KingdomGame > Build Game Scenes again.", this);
                 survival = false;
             }
+            var network = content.network;
+            if (hosting)
+            {
+                Application.runInBackground = true;   // keeps going for the others while this window isn't in front
+                if (network == null) Debug.LogWarning("The Game Content has no Network Config: hosting with the defaults. Run KingdomGame > Build Game Scenes again.", this);
+            }
 
-            // Continuing a saved game: the same map again (from its seed), then what was built on it.
+            // Continuing a saved game: the same map again (from its seed and size), then what was built on it.
             SaveData saved = null;
             string loadProblem = null;
             if (GameSession.LoadSave)
             {
                 GameSession.LoadSave = false;
-                saved = SaveFiles.Read(Mode, out loadProblem);
+                saved = SaveFiles.Read(Mode, out loadProblem, hosting);
                 if (saved == null) Debug.LogWarning($"{loadProblem}: starting a new game instead.");
             }
 
-            int seed = saved != null ? saved.seed : content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
-            Debug.Log($"Map seed {seed}. Put this number in WorldConfig's Seed to get the same map again.");
-            var parts = WorldGenerator.Generate(content, transform, seed);
-            var canopies = parts.Canopies;
-            // The test outpost is for trying weapons on walls; survival starts on open ground.
+            int configSeed = hosting && network != null && network.seed != 0 ? network.seed : content.world.seed;
+            int seed = saved != null ? saved.seed : configSeed != 0 ? configSeed : Random.Range(1, int.MaxValue);
+            int mapSize = saved != null && saved.mapSize > 0 ? saved.mapSize : hosting && network != null ? network.mapSize : content.world.mapSize;
+            Debug.Log($"Map seed {seed}, {mapSize} x {mapSize}. Put the seed in WorldConfig's Seed to get the same map again.");
+            var parts = WorldGenerator.Generate(content, transform, seed, true, mapSize);
+            // The test outpost is for trying weapons on walls; survival (and hosted games) start on open ground.
             // (A saved game has its own walls: the outpost's are among them if they still stand.)
-            if (content.world.testOutpost && !survival) BuildOutpost(world, saved == null);
+            if (content.world.testOutpost && !survival && !hosting) BuildOutpost(world, saved == null);
             new GameObject("Remains").AddComponent<Remains>().transform.SetParent(transform, false);
 
-            var kingdom = MakeKingdom(world, survival ? content.survival : null, saved == null);
+            var kingdom = MakeKingdom(world, survival ? content.survival : null, saved == null, mapSize, null, true);
             var ruler = SpawnRuler(kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero);
             var rulerController = ruler.GetComponent<RulerController>();
-            kingdom.Ruler = ruler.transform;
-            kingdom.RulerRadius = content.player != null ? content.player.bodyRadius : 0.15f;
-            canopies.Focus = ruler.transform;
-            kingdom.Canopies = canopies;
-            // Trees, rocks and bushes are real objects round the ruler, the camera's view and the kingdom.
-            parts.Streamer.Followed.Add(ruler.transform);
-            parts.Streamer.View = Camera.main;
-            parts.Streamer.Areas.Add(kingdom.ActiveAreas);
-            kingdom.Streamer = parts.Streamer;
-            if (content.view != null) canopies.NearAlpha = content.view.canopyFadeAlpha;
-
-            CameraRig rig = null;
-            var view = Camera.main;
-            if (view != null)
-            {
-                rig = view.GetComponent<CameraRig>();
-                if (rig == null) rig = view.gameObject.AddComponent<CameraRig>();
-                rig.Setup(content.view);
-                rig.Follow(ruler.transform);
-                int half = content.world.mapSize / 2;
-                rig.Bounds = new Rect(-half, -half, half * 2, half * 2);
-                if (content.view != null) view.backgroundColor = content.view.backgroundColor;
-            }
+            var rig = Follow(parts, kingdom, ruler, mapSize);
 
             // The ages: survival researches them (days of real time each), free build has them all.
             var research = gameObject.AddComponent<Research>();
@@ -109,7 +106,7 @@ namespace KingdomGame.World
             gameObject.AddComponent<VillagersPanel>().Setup(kingdom);
 
             var builder = kingdom.gameObject.AddComponent<BuildController>();
-            builder.Setup(kingdom, rulerController, rig, canopies, content.view);
+            builder.Setup(kingdom, rulerController, rig, parts.Canopies, content.view);
 
             // Survival: the zombies, and the waves they come in. Falling ends the game.
             SurvivalDirector waves = null;
@@ -133,24 +130,142 @@ namespace KingdomGame.World
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
             var saves = gameObject.AddComponent<SaveSystem>();
+            saves.Hosted = hosting;
             saves.Setup(content, Mode, seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
             if (saved != null) saves.Restore(saved);
             // Continuing failed: this new game mustn't save over the save on its own.
             else if (loadProblem != null) saves.KeepOldSave(loadProblem + ": started a new game instead");
             parts.Streamer.ShowNow();
-            gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves);
+
+            NetHost host = null;
+            if (hosting)
+            {
+                var remotes = new GameObject("Other players").AddComponent<RemotePlayers>();
+                remotes.transform.SetParent(transform, false);
+                remotes.Setup(content.player);
+                var chat = gameObject.AddComponent<ChatBox>();
+                chat.Ruler = rulerController;
+                host = gameObject.AddComponent<NetHost>();
+                host.Setup(Settings(network, seed, mapSize), kingdom, rulerController, remotes, chat, parts.Nature, dayNight);
+            }
+            gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves, host, null);
+            AddDebug();
+        }
+
+        // Playing in someone else's game: connect first; the world is made once the host says what it is.
+        void StartJoining(PixelWorld world)
+        {
+            Application.runInBackground = true;
+            var client = gameObject.AddComponent<NetClient>();
+            client.WorldReady = welcome => EnterJoinedWorld(world, client, welcome);
+            client.Connect(GameSession.JoinHost, GameSession.JoinPort, content.network != null ? content.network.sendRate : 15f);
+        }
+
+        void EnterJoinedWorld(PixelWorld world, NetClient client, WelcomeInfo welcome)
+        {
+            var parts = WorldGenerator.Generate(content, transform, welcome.Seed, true, welcome.MapSize);
+            new GameObject("Remains").AddComponent<Remains>().transform.SetParent(transform, false);
+            // Every kingdom's ground is cleared the same way the host cleared it.
+            foreach (var k in welcome.Kingdoms) KingdomGround.Clear(parts.Nature, k);
+
+            // Your kingdom (just its throne and storehouse for now: building online comes next), others as markers.
+            var mine = welcome.Kingdoms.Find(k => k.Id == welcome.YourKingdom);
+            var throneCell = mine != null ? new Vector2Int(mine.X, mine.Y) : Vector2Int.zero;
+            var kingdom = MakeKingdom(world, null, true, welcome.MapSize, throneCell, false);
+            var ruler = SpawnRuler(kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero);
+            var rulerController = ruler.GetComponent<RulerController>();
+            rulerController.Visiting = true;
+            var rig = Follow(parts, kingdom, ruler, welcome.MapSize);
+
+            var remotes = new GameObject("Other players").AddComponent<RemotePlayers>();
+            remotes.transform.SetParent(transform, false);
+            remotes.Setup(content.player);
+            foreach (var k in welcome.Kingdoms) if (k.Id != welcome.YourKingdom) remotes.AddKingdom(k);
+            var chat = gameObject.AddComponent<ChatBox>();
+            chat.Ruler = rulerController;
+
+            var hud = gameObject.AddComponent<GameHud>();
+            hud.Setup(rulerController, dayNight, kingdom, null, rig, null);
+            parts.Streamer.ShowNow();
+            client.Enter(welcome, rulerController, remotes, chat, dayNight, parts.Nature);
+            gameObject.AddComponent<PauseMenu>().Setup(null, null, null, null, client);
+            AddDebug();
+        }
+
+        // A dedicated server: the world for everyone, no player and nothing to draw (started with -server).
+        void StartDedicated()
+        {
+            Application.runInBackground = true;
+            var network = content.network;
+            Application.targetFrameRate = network != null ? network.serverFrameRate : 30;
+            QualitySettings.vSyncCount = 0;
+            int seed = network != null && network.seed != 0 ? network.seed : Random.Range(1, int.MaxValue);
+            int mapSize = CommandLine.Int("-mapsize", network != null ? network.mapSize : 1024);
+            var parts = WorldGenerator.Generate(content, transform, seed, false, mapSize);
+            var settings = Settings(network, seed, mapSize);
+            settings.Port = CommandLine.Int("-port", settings.Port);
+            settings.MaxPlayers = CommandLine.Int("-maxplayers", settings.MaxPlayers);
+            settings.Name = CommandLine.Value("-servername") ?? settings.Name;
+            gameObject.AddComponent<NetServer>().Setup(settings, parts.Nature, dayNight);
+        }
+
+        static ServerSettings Settings(NetworkConfig network, int seed, int mapSize)
+        {
+            var s = new ServerSettings { Seed = seed, MapSize = mapSize };
+            if (network == null) return s;
+            s.Port = network.port;
+            s.MaxPlayers = network.maxPlayers;
+            s.Name = string.IsNullOrWhiteSpace(network.serverName) ? s.Name : network.serverName;
+            s.KingdomSpacing = network.kingdomSpacing;
+            s.InterestRadius = network.interestRadius;
+            s.SnapshotRate = network.snapshotRate;
+            return s;
+        }
+
+        // The ruler's surroundings: trees near them, the leaves that fade, the camera that follows them.
+        CameraRig Follow(WorldParts parts, Kingdom kingdom, GameObject ruler, int mapSize)
+        {
+            kingdom.Ruler = ruler.transform;
+            kingdom.RulerRadius = content.player != null ? content.player.bodyRadius : 0.15f;
+            parts.Canopies.Focus = ruler.transform;
+            kingdom.Canopies = parts.Canopies;
+            if (content.view != null) parts.Canopies.NearAlpha = content.view.canopyFadeAlpha;
+            // Trees, rocks and bushes are real objects round the ruler, the camera's view and the kingdom.
+            parts.Streamer.Followed.Add(ruler.transform);
+            parts.Streamer.View = Camera.main;
+            parts.Streamer.Areas.Add(kingdom.ActiveAreas);
+            kingdom.Streamer = parts.Streamer;
+
+            CameraRig rig = null;
+            var view = Camera.main;
+            if (view != null)
+            {
+                rig = view.GetComponent<CameraRig>();
+                if (rig == null) rig = view.gameObject.AddComponent<CameraRig>();
+                rig.Setup(content.view);
+                rig.Follow(ruler.transform);
+                int half = mapSize / 2;
+                rig.Bounds = new Rect(-half, -half, half * 2, half * 2);
+                if (content.view != null) view.backgroundColor = content.view.backgroundColor;
+            }
+            return rig;
+        }
+
+        void AddDebug()
+        {
             var debug = gameObject.AddComponent<DebugHud>();
             debug.visible = false;
             debug.toggleKey = KeyCode.F3;
         }
 
-        // `fresh`: a new game (a loaded one puts back its own storehouses and villagers).
-        Kingdom MakeKingdom(PixelWorld world, SurvivalConfig survival, bool fresh)
+        // `fresh`: a new game (a loaded one puts back its own storehouses and villagers). `throneCell`: where the
+        // throne goes (null: the Kingdom Config's), the storehouse next to it the same way. `villagers`: false makes none.
+        Kingdom MakeKingdom(PixelWorld world, SurvivalConfig survival, bool fresh, int size, Vector2Int? throneCell, bool villagers)
         {
             var go = new GameObject("Kingdom");
             go.transform.SetParent(transform, false);
             var kingdom = go.AddComponent<Kingdom>();
-            int size = content.world.mapSize, half = size / 2;
+            int half = size / 2;
             var storehouse = content.storehouse;
             if (storehouse == null && content.buildMenu != null)
                 foreach (var b in content.buildMenu)
@@ -158,11 +273,13 @@ namespace KingdomGame.World
             kingdom.Setup(content.kingdom, content.villager, content.buildMenu, world, new RectInt(-half, -half, size, size), storehouse);
 
             var config = kingdom.Config;
-            var throne = kingdom.PlaceThrone(config.throneCell);
+            var at = throneCell ?? config.throneCell;
+            var throne = kingdom.PlaceThrone(at);
             if (!fresh) return kingdom;
             if (storehouse != null)
             {
-                var storage = kingdom.AddStorage(storehouse, config.storageCell);
+                var storage = kingdom.AddStorage(storehouse, at + (config.storageCell - config.throneCell));
+                if (!villagers) return kingdom;
                 storage.Deposit(ResourceType.Wood, survival != null ? survival.startWood : config.startWood);
                 storage.Deposit(ResourceType.Stone, survival != null ? survival.startStone : config.startStone);
                 storage.Deposit(ResourceType.Food, survival != null ? survival.startFood : config.startFood);
@@ -173,7 +290,7 @@ namespace KingdomGame.World
             }
 
             // Villagers start in a row in front of the throne.
-            for (int i = 0; i < config.startVillagers; i++)
+            for (int i = 0; villagers && i < config.startVillagers; i++)
             {
                 float x = (i - (config.startVillagers - 1) * 0.5f) * 0.8f;
                 var spot = throne.Front + new Vector2(x, -1.1f);

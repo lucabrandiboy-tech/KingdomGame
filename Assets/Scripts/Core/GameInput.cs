@@ -66,8 +66,10 @@ namespace KingdomGame
             }
         }
 
+        /// <summary>Whether a key is down (never while typing in the chat: the keys are letters then).</summary>
         public static bool Held(KeyCode key)
         {
+            if (UiFocus.Typing) return false;
 #if ENABLE_INPUT_SYSTEM
             var control = Find(key);
             return control != null && control.isPressed;
@@ -78,8 +80,10 @@ namespace KingdomGame
 #endif
         }
 
+        /// <summary>Whether a key went down this frame (never while typing in the chat).</summary>
         public static bool Pressed(KeyCode key)
         {
+            if (UiFocus.Typing) return false;
 #if ENABLE_INPUT_SYSTEM
             var control = Find(key);
             return control != null && control.wasPressedThisFrame;

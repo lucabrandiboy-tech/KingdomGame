@@ -19,6 +19,9 @@ namespace KingdomGame
             }
         }
 
+        /// <summary>Typing in the chat: keys are letters, not game keys (GameInput ignores them meanwhile).</summary>
+        public static bool Typing { get; set; }
+
         /// <summary>A panel is open, or closed this frame: its Esc mustn't also pause the game or stand the ruler up.</summary>
         public static bool TakesEscape => open || closedFrame == UnityEngine.Time.frameCount;
 
@@ -27,6 +30,7 @@ namespace KingdomGame
         {
             open = false;
             closedFrame = -1;
+            Typing = false;
         }
     }
 }

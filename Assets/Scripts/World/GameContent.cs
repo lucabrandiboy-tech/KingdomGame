@@ -57,6 +57,10 @@ namespace KingdomGame.World
         [Tooltip("The ages from the Stone Age to World War 2, their research, and what each lets you build.")]
         public ProgressionConfig progression;
 
+        [Header("Online")]
+        [Tooltip("Hosting and joining games: port, players, map size for hosted worlds.")]
+        public Networking.NetworkConfig network;
+
         [Tooltip("Bumped by Build Game Scenes when it updates older settings to new defaults.")]
         public int settingsVersion;
 

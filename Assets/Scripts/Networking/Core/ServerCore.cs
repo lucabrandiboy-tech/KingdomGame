@@ -43,6 +43,8 @@ namespace KingdomGame.Networking
         internal NetPeer Peer;
         public int Ping => Peer != null ? Peer.Ping : 0;
         public string Address => Peer != null ? Peer.ToString() : "";
+        /// <summary>The host: playing on the computer the server runs on (no connection of its own).</summary>
+        public bool IsLocal;
     }
 
     /// <summary>
@@ -88,6 +90,8 @@ namespace KingdomGame.Networking
         /// <summary>A new kingdom got a spot (the game builds its throne there).</summary>
         public event Action<KingdomInfo> KingdomPlaced;
         public event Action<PlayerSession, string> Said;
+        /// <summary>A player's new position was taken (server time, for smooth movement on the host's screen).</summary>
+        public event Action<PlayerSession, double> PositionTaken;
         /// <summary>Things worth a line in the server's log.</summary>
         public event Action<string> Log;
 
@@ -120,6 +124,38 @@ namespace KingdomGame.Networking
             kingdoms.Add(kingdom);
             planner.Add(kingdom.X, kingdom.Y);
             if (!string.IsNullOrEmpty(ownerKey)) kingdomOfKey[ownerKey] = kingdom.Id;
+        }
+
+        /// <summary>
+        /// The host, playing on this computer: one of the players, with the kingdom that's already here.
+        /// Their position is set with <see cref="MoveLocal"/> and their chat with <see cref="ChatLocal"/>.
+        /// </summary>
+        public PlayerSession AddLocalPlayer(string key, string name, KingdomInfo kingdom)
+        {
+            name = Protocol.CleanName(name);
+            if (kingdom != null)
+            {
+                kingdom.Owner = name;
+                AddKingdom(kingdom, key);
+            }
+            var session = new PlayerSession { Id = nextId++, Key = key, Name = name, KingdomId = kingdom != null ? kingdom.Id : 0, IsLocal = true, LastStateAt = now };
+            players.Add(session);
+            return session;
+        }
+
+        /// <summary>Where the host's ruler is now.</summary>
+        public void MoveLocal(PlayerSession host, Motion motion)
+        {
+            if (host == null || !motion.IsFinite) return;
+            host.Motion = motion;
+            host.HasMotion = true;
+            host.LastStateAt = now;
+        }
+
+        /// <summary>The host says something in chat.</summary>
+        public void ChatLocal(PlayerSession host, string text)
+        {
+            if (host != null) Chat(host, text);
         }
 
         /// <summary>The key of whoever owns a kingdom (for saving), or null.</summary>
@@ -197,7 +233,7 @@ namespace KingdomGame.Networking
             }
             if (string.IsNullOrEmpty(key)) return "Your game didn't say who you are";
             if (players.Count + pending.Count >= settings.MaxPlayers) return $"The server is full ({settings.MaxPlayers} players)";
-            foreach (var p in players) if (p.Key == key) return "You're already on this server (in another window?)";
+            foreach (var p in players) if (p.Key == key) return p.IsLocal ? "That's the host's name on this computer: pick another name" : "You're already on this server (in another window?)";
             foreach (var p in pending.Values) if (p.Key == key) return "You're already joining this server";
             return null;
         }
@@ -323,6 +359,7 @@ namespace KingdomGame.Networking
             p.Motion = m;
             p.HasMotion = true;
             p.LastStateAt = now;
+            PositionTaken?.Invoke(p, now);
         }
 
         void Chat(PlayerSession p, string text)

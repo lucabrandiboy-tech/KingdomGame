@@ -33,10 +33,10 @@ you can test.
 1. **Big map.** Trees, rocks and bushes become data. Only the ones near players and
    kingdoms are real objects (about 140,000 on a 1024 map would be far too many).
    The ground is drawn more cheaply on big maps. Also works offline.
-2. **Connecting.** A dedicated server mode: start the game with `-server`, or press
-   "Host a server" in the main menu. Plus "Join" with an address, your name, seeing
-   each other walk around, chat, and the server choosing a spot for each new
-   player's kingdom. *Test: you and a friend on the same map.*
+2. **Connecting** (done, `docs/ONLINE-TEST.md`). You **host** your own game from the
+   main menu and play it while friends **join** with your address. Everyone sees each
+   other walk around, chats, and each new player gets a kingdom spot. (A dedicated
+   server with no player, started with `-server`, also exists for later.)
 3. **Own kingdoms, synced.** Several kingdoms in one world. Building, blueprints,
    villagers, storage and research all go through the server. Late joiners see
    everything.

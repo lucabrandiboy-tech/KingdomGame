@@ -37,8 +37,9 @@ namespace KingdomGame.Zombies
         DayNightCycle dayNight;
         RectInt map;
         FlowField field;
-        Door[] doorAt;
+        bool[] fixedBlock;   // the map's edge, trees, rocks and bushes (what's built is checked as it is right now)
         float fieldAt;
+        bool fieldDirty;
         int[] bucketHead;
         int[] bucketNext = new int[256];
 
@@ -81,7 +82,13 @@ namespace KingdomGame.Zombies
         void OnDestroy()
         {
             if (Current == this) Current = null;
+            if (world != null) world.CellChanged -= OnCellChanged;
+            if (kingdom != null) kingdom.Changed -= OnKingdomChanged;
         }
+
+        // Something was built, broken or torn down: find the ways again straight away.
+        void OnCellChanged(Vector2Int cell, bool added) => fieldDirty = true;
+        void OnKingdomChanged() => fieldDirty = true;
 
         public void Setup(SurvivalConfig survival, PixelWorld pixelWorld, Kingdom owner, RulerController rulerController, DayNightCycle cycle, RectInt mapCells)
         {
@@ -93,8 +100,10 @@ namespace KingdomGame.Zombies
             dayNight = cycle;
             map = mapCells;
             field = new FlowField(map.width, map.height);
-            doorAt = new Door[map.width * map.height];
+            fixedBlock = new bool[map.width * map.height];
             bucketHead = new int[map.width * map.height];
+            if (world != null) world.CellChanged += OnCellChanged;
+            if (kingdom != null) kingdom.Changed += OnKingdomChanged;
             UpdateField();
         }
 
@@ -103,9 +112,10 @@ namespace KingdomGame.Zombies
         void Update()
         {
             if (field == null) return;
-            if (Time.time >= fieldAt)
+            if (Time.time >= fieldAt || (fieldDirty && Time.time >= fieldAt - FieldSeconds + 0.1f))
             {
                 fieldAt = Time.time + FieldSeconds;
+                fieldDirty = false;
                 UpdateField();
             }
             float dt = Time.deltaTime;
@@ -252,29 +262,25 @@ namespace KingdomGame.Zombies
             foreach (var h in Health.Creatures)
             {
                 if (h == null || h.Dead || h.Team != Team.Friendly) continue;
-                AddTarget(h.Position, h == rulerHealth ? 0f : VillagerHeadStart);
+                if (SeatedRuler(h))
+                {
+                    // On the throne: reached from the cells along its sides (through a wall there, if need be).
+                    var r = kingdom.Throne.Cells;
+                    for (int x = r.xMin; x < r.xMax; x++) { AddTarget(new Vector2Int(x, r.yMin - 1)); AddTarget(new Vector2Int(x, r.yMax)); }
+                    for (int y = r.yMin; y < r.yMax; y++) { AddTarget(new Vector2Int(r.xMin - 1, y)); AddTarget(new Vector2Int(r.xMax, y)); }
+                    continue;
+                }
+                var cell = CellOf(h.Position);
+                if (Passable(cell)) AddTarget(cell, h == rulerHealth ? 0f : VillagerHeadStart);
             }
             field.Compute(targets, headStarts);
         }
 
-        void AddTarget(Vector2 at, float headStart)
+        void AddTarget(Vector2Int cell, float headStart = 0f)
         {
-            var cell = CellOf(at);
-            if (Passable(cell))
-            {
-                targets.Add(Index(cell));
-                headStarts.Add(headStart);
-                return;
-            }
-            // Somewhere zombies can't go (the ruler on the throne): the cells around it instead.
-            for (int dy = -2; dy <= 2; dy++)
-                for (int dx = -2; dx <= 2; dx++)
-                {
-                    var c = cell + new Vector2Int(dx, dy);
-                    if (!Passable(c)) continue;
-                    targets.Add(Index(c));
-                    headStarts.Add(headStart + 0.5f * Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)));
-                }
+            if (!Passable(cell)) return;
+            targets.Add(Index(cell));
+            headStarts.Add(headStart);
         }
 
         // What each cell takes to get through (see FlowField.Cost).
@@ -283,13 +289,13 @@ namespace KingdomGame.Zombies
             var cost = field.Cost;
             int w = map.width, h = map.height;
             for (int i = 0; i < cost.Length; i++) cost[i] = 1f;
-            Array.Clear(doorAt, 0, doorAt.Length);
             // The edge of the map.
             for (int x = 0; x < w; x++) { cost[x] = 0f; cost[(h - 1) * w + x] = 0f; }
             for (int y = 0; y < h; y++) { cost[y * w] = 0f; cost[y * w + w - 1] = 0f; }
             // Trees, rocks and bushes: walked round.
             foreach (var node in ResourceNode.All)
                 if (node != null && node.Blocks) Set(node.Cell, 0f);
+            for (int i = 0; i < cost.Length; i++) fixedBlock[i] = cost[i] <= 0f;
             // Walls: the more battering one would take, the further zombies will walk to go round it.
             if (world != null)
                 foreach (var cell in world.ChunkCells)
@@ -299,20 +305,12 @@ namespace KingdomGame.Zombies
                     Set(cell, 1.5f + left / HealthPerTile);
                 }
             if (kingdom == null) return;
-            // The throne and storehouses can't be broken; doors and furniture can.
+            // The throne can't be broken; storehouses, chests, doors and furniture can.
             if (kingdom.Throne != null) SetArea(kingdom.Throne.Cells, 0f);
             foreach (var s in kingdom.Storages)
-                if (s != null) SetArea(s.Cells, 0f);
+                if (s != null) SetArea(s.Cells, s.Health != null ? 1.5f + s.Health.Current / HealthPerTile : 0f);
             foreach (var d in kingdom.Doors)
-            {
-                if (d == null) continue;
-                foreach (var cell in d.Cells.allPositionsWithin)
-                {
-                    if (!map.Contains(cell)) continue;
-                    doorAt[Index(cell)] = d;
-                    Set(cell, d.IsOpen || d.Health == null ? 1f : 1.5f + d.Health.Current / HealthPerTile);
-                }
-            }
+                if (d != null) SetArea(d.Cells, d.IsOpen || d.Health == null ? 1f : 1.5f + d.Health.Current / HealthPerTile);
             foreach (var f in kingdom.AllFurniture)
             {
                 if (f == null || !f.Config.blocksMovement || f.Config.flat) continue;
@@ -338,14 +336,44 @@ namespace KingdomGame.Zombies
 
         bool Passable(Vector2Int cell) => map.Contains(cell) && field.Cost[Index(cell)] > 0f;
 
-        /// <summary>Whether a zombie can walk into this cell right now (open ground, or an open door).</summary>
+        /// <summary>
+        /// Whether a zombie can walk into this cell right now: not the map's edge or a tree, and
+        /// nothing built there that stops it (a wall, a closed door, the throne, a storehouse, a
+        /// table...). Checked as things are this moment, so a wall built a moment ago already stops them.
+        /// </summary>
         public bool Walkable(Vector2Int cell)
         {
-            if (!map.Contains(cell)) return false;
-            int i = Index(cell);
-            var door = doorAt[i];
-            if (!ReferenceEquals(door, null)) return door == null || door.IsOpen;   // a smashed door is a gap
-            return field.Cost[i] == 1f;
+            if (!map.Contains(cell) || fixedBlock[Index(cell)]) return false;
+            if (world != null && world.ChunkAt(cell) != null) return false;
+            if (kingdom == null) return true;
+            switch (kingdom.ThingAt(cell))
+            {
+                case Door door: return door.IsOpen;
+                case Throne _:
+                case Storage _:
+                    return false;
+                case Furniture piece: return !piece.Config.blocksMovement || piece.Config.flat;
+                default: return true;
+            }
+        }
+
+        /// <summary>The middle of the open cell nearest to <paramref name="from"/> (for a zombie that something was built on).</summary>
+        public Vector2 NearestOpenSpot(Vector2 from)
+        {
+            var cell = CellOf(from);
+            float best = float.MaxValue;
+            var spot = from;
+            for (int radius = 1; radius <= 3 && best == float.MaxValue; radius++)
+                for (int dy = -radius; dy <= radius; dy++)
+                    for (int dx = -radius; dx <= radius; dx++)
+                    {
+                        var c = new Vector2Int(cell.x + dx, cell.y + dy);
+                        if (!Walkable(c)) continue;
+                        var middle = (Vector2)c + new Vector2(0.5f, 0.5f);
+                        float d = (middle - from).sqrMagnitude;
+                        if (d < best) { best = d; spot = middle; }
+                    }
+            return spot;
         }
 
         /// <summary>Whether a zombie's body (a box <paramref name="halfSize"/> tiles from its middle) fits at <paramref name="p"/>.</summary>
@@ -402,7 +430,7 @@ namespace KingdomGame.Zombies
         {
             if (!SeatedRuler(h)) return h.Position;
             var r = kingdom.Throne.Cells;
-            return new Vector2(Mathf.Clamp(from.x, r.xMin, r.xMax), Mathf.Clamp(from.y, r.yMin, r.yMax));
+            return new Vector2(Mathf.Clamp(from.x, r.xMin, r.xMax - 0.001f), Mathf.Clamp(from.y, r.yMin, r.yMax - 0.001f));
         }
 
         /// <summary>How far <paramref name="from"/> is from someone's body (from the throne, if the ruler is sitting on it).</summary>

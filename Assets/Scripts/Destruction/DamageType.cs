@@ -51,10 +51,12 @@ namespace KingdomGame.Destruction
         [Min(0)] public float screenShake = 0.03f;
 
         [Header("Blast (zombies, people, doors and furniture)")]
-        [Tooltip("Damage to every creature, door and piece of furniture in the blast (a quarter of it at the edge). 0 = none. Careful: it hurts you and your villagers too.")]
+        [Tooltip("Damage to every zombie in the blast (a quarter of it at the edge). 0 = none.")]
         [Min(0)] public float creatureDamage;
         [Tooltip("How far the blast reaches, in tiles.")]
         [Min(0)] public float blastRadius;
+        [Tooltip("Share of that damage that you, your villagers, doors, furniture and storehouses take when they're caught in it.")]
+        [Range(0, 1)] public float friendlyShare = 0.35f;
 
         public DamageShapeParams ToShape(int radiusOverride) => new DamageShapeParams
         {

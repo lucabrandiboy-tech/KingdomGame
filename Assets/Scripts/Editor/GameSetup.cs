@@ -214,7 +214,7 @@ namespace KingdomGame.EditorTools
             {
                 b.displayName = "Storehouse"; b.kind = BuildingKind.Storage; b.category = BuildCategory.Storage; b.size = new Vector2Int(2, 2);
                 b.woodCost = 60; b.stoneCost = 20; b.buildSeconds = 15f; b.storageCapacity = 1000; b.dragToPlaceLines = false;
-                b.roomTag = RoomTag.Storage; b.height = 0.3f;
+                b.roomTag = RoomTag.Storage; b.height = 0.3f; b.health = 1200f;
             });
             var castle = CastleBuildings();
             var kingdomConfig = Asset<KingdomConfig>("Building/KingdomConfig", k => { });
@@ -270,6 +270,7 @@ namespace KingdomGame.EditorTools
                 content.buildMenu = list.ToArray();
                 storehouse.category = BuildCategory.Storage;
                 storehouse.roomTag = RoomTag.Storage;
+                storehouse.health = 1200f;
                 stoneWallBuilding.category = woodWallBuilding.category = BuildCategory.Walls;
                 stoneWallBuilding.roomTag = woodWallBuilding.roomTag = RoomTag.None;
                 stone.siegeHealth = 600f;
@@ -344,12 +345,14 @@ namespace KingdomGame.EditorTools
         {
             d.creatureDamage = 120f;
             d.blastRadius = 2.2f;
+            d.friendlyShare = 0.35f;
         }
 
         static void C4Blast(DamageType d)
         {
             d.creatureDamage = 300f;
             d.blastRadius = 3.2f;
+            d.friendlyShare = 0.35f;
         }
 
         // Doors, floors, furniture, lights and storage for building a castle (the art is in FurnitureArt).
@@ -384,7 +387,7 @@ namespace KingdomGame.EditorTools
                 Furnish("Furniture/Cauldron", "Cauldron", FurnitureArt.Cauldron, BuildCategory.Furniture, Vector2Int.one, 1, 0, 15, 0, 4f, RoomTag.Cooking, true, 150f, 0.35f, light: 0.45f),
                 Furnish("Furniture/Anvil", "Anvil", FurnitureArt.Anvil, BuildCategory.Furniture, Vector2Int.one, 2, 5, 20, 0, 4f, RoomTag.Workshop, true, 200f, 0.4f),
                 Furnish("Furniture/Banner", "Banner", FurnitureArt.Banner, BuildCategory.Furniture, Vector2Int.one, 4, 5, 0, 10, 3f, RoomTag.Decor, false, 30f, 0.9f),
-                Furnish("Furniture/Well", "Well", FurnitureArt.Well, BuildCategory.Furniture, new Vector2Int(2, 2), 1, 10, 40, 0, 10f, RoomTag.Decor, true, 0f, 0.5f),
+                Furnish("Furniture/Well", "Well", FurnitureArt.Well, BuildCategory.Furniture, new Vector2Int(2, 2), 1, 10, 40, 0, 10f, RoomTag.Decor, true, 400f, 0.5f),
 
                 Furnish("Lights/Torch", "Torch", FurnitureArt.Torch, BuildCategory.Lights, Vector2Int.one, 1, 5, 0, 0, 2f, RoomTag.Decor, false, 30f, 0.55f,
                     light: 0.75f, flames: new[] { Vector2.zero }, flameSize: 1f),
@@ -395,9 +398,9 @@ namespace KingdomGame.EditorTools
                 Furnish("Lights/Fireplace", "Fireplace", FurnitureArt.Fireplace, BuildCategory.Lights, new Vector2Int(2, 1), 4, 0, 40, 0, 8f, RoomTag.Decor, true, 400f, 0.7f,
                     light: 1.2f, flames: new[] { FurnitureArt.FireplaceFlame }, flameSize: 2.4f),
 
-                Store("Chest", "Chest", FurnitureArt.Chest, 4, 20, 4f, 200, 0.3f),
-                Store("Barrel", "Barrel", FurnitureArt.Barrel, 1, 15, 3f, 150, 0.36f),
-                Store("Crates", "Crates", FurnitureArt.Crates, 1, 15, 3f, 250, 0.3f),
+                Store("Chest", "Chest", FurnitureArt.Chest, 4, 20, 4f, 200, 0.3f, 200f),
+                Store("Barrel", "Barrel", FurnitureArt.Barrel, 1, 15, 3f, 150, 0.36f, 150f),
+                Store("Crates", "Crates", FurnitureArt.Crates, 1, 15, 3f, 250, 0.3f, 180f),
             };
             return list;
         }
@@ -422,12 +425,12 @@ namespace KingdomGame.EditorTools
                 b.dragToPlaceLines = false;
             });
 
-        static BuildingConfig Store(string file, string displayName, string art, int rotations, int wood, float seconds, int capacity, float height) =>
+        static BuildingConfig Store(string file, string displayName, string art, int rotations, int wood, float seconds, int capacity, float height, float health) =>
             Asset<BuildingConfig>("Building/Storage/" + file, b =>
             {
                 b.displayName = displayName; b.kind = BuildingKind.Storage; b.category = BuildCategory.Storage; b.art = art;
                 b.size = Vector2Int.one; b.rotations = rotations; b.woodCost = wood; b.buildSeconds = seconds; b.storageCapacity = capacity;
-                b.height = height; b.roomTag = RoomTag.Storage; b.dragToPlaceLines = false;
+                b.height = height; b.roomTag = RoomTag.Storage; b.dragToPlaceLines = false; b.health = health;
             });
 
         // Loads the asset if it already exists (keeping your changes), otherwise

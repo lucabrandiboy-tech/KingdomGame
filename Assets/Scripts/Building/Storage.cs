@@ -7,7 +7,8 @@ namespace KingdomGame.Building
     /// A storehouse or a chest: the kingdom's resources live here. Builders take
     /// what blueprints need from it; the ruler empties their backpack into it (E).
     /// Builders reserve what they're coming to fetch, so two of them never walk
-    /// over for the same stones.
+    /// over for the same stones. Zombies can break it (if it has hit points):
+    /// what's inside spills out in a bag.
     /// </summary>
     public sealed class Storage : MonoBehaviour, IBuilt
     {
@@ -18,8 +19,10 @@ namespace KingdomGame.Building
         public int Rotation { get; private set; }
         public Inventory Stock { get; private set; }
         public Vector2 Center => Cells.center;
+        /// <summary>Null if it can't be broken.</summary>
+        public Health Health { get; private set; }
 
-        public void Setup(BuildingConfig config, RectInt cells, Sprite look, Sprite shadow, int rotation = 0)
+        public void Setup(BuildingConfig config, RectInt cells, Sprite look, Sprite shadow, int rotation = 0, Kingdom owner = null)
         {
             Config = config;
             Cells = cells;
@@ -29,6 +32,12 @@ namespace KingdomGame.Building
             float height = config != null && config.kind == BuildingKind.Storage && config.size.x * config.size.y <= 1 ? config.height : 0.3f;
             BuildingLook.Make(transform, look, shadow, height, SortOrder.Buildings);
             BuildingLook.MakeSolid(gameObject, cells.size);
+            if (config != null && config.health > 0f)
+            {
+                Health = gameObject.AddComponent<Health>();
+                Health.Setup(Team.Friendly, config.health, Mathf.Min(cells.width, cells.height) * 0.45f, false);
+                Health.Died += _ => { if (owner != null) owner.Broke(this); };
+            }
         }
 
         /// <summary>Takes it away (torn down). What's inside is lost unless the kingdom moved it first.</summary>

@@ -266,7 +266,7 @@ namespace KingdomGame.Building
             var go = new GameObject(b != null ? b.displayName : "Storehouse");
             go.transform.SetParent(transform, false);
             var storage = go.AddComponent<Storage>();
-            storage.Setup(b, cells, LookOf(b, rotation), ShadowOf(b, rotation), rotation);
+            storage.Setup(b, cells, LookOf(b, rotation), ShadowOf(b, rotation), rotation, this);
             // The big storehouse has a lantern on its porch.
             if (b == null || string.IsNullOrEmpty(b.art)) storage.AddLantern(brazier);
             storages.Add(storage);
@@ -335,6 +335,8 @@ namespace KingdomGame.Building
         /// <summary>What tearing down would remove at this cell (furniture, a door, a rug, a floor or a chest), or null.</summary>
         public IBuilt BuiltAt(Vector2Int cell)
         {
+            // A wall built over a floor comes first (walls aren't on these layers: they're in the PixelWorld).
+            if (world != null && world.ChunkAt(cell) != null) return null;
             if (occupied.TryGetValue(cell, out var thing) && thing is IBuilt top && !(thing is Blueprint)) return top;
             if (rugs.TryGetValue(cell, out var rug) && rug is IBuilt r && !(rug is Blueprint)) return r;
             if (floors.TryGetValue(cell, out var floor) && floor is IBuilt f && !(floor is Blueprint)) return f;
@@ -511,25 +513,27 @@ namespace KingdomGame.Building
             var thing = BuiltAt(cell);
             if (thing != null)
             {
+                string spilled = "";
                 if (thing is Storage storage)
                 {
                     if (storages.Count <= 1) return "You need at least one storehouse";
-                    // Move what's inside to the other storehouses first.
+                    // Move what's inside to the other storehouses first; what doesn't fit is left in a bag.
                     storages.Remove(storage);
-                    int lostGoods = 0;
+                    var left = new int[Inventory.TypeCount];
                     for (int i = 0; i < Inventory.TypeCount; i++)
                     {
                         var type = (ResourceType)i;
                         int have = storage.Stock.Get(type);
-                        lostGoods += have - Store(type, have, storage.Center);
+                        left[i] = have - Store(type, have, storage.Center);
                     }
-                    storages.Add(storage);
-                    if (lostGoods > 0) Debug.Log($"{lostGoods} resources didn't fit in the other storehouses and were lost.");
+                    if (LootBag.Drop(storage.Center, left[(int)ResourceType.Wood], left[(int)ResourceType.Stone], left[(int)ResourceType.Food]) != null)
+                        spilled = ". The other storehouses are full: the rest is in a bag on the ground";
                 }
-                Refund(thing.Config, 1, thing.Cells.center);
+                // Off the books first, so the refund doesn't go into the thing being torn down.
                 Forget(thing);
+                Refund(thing.Config, 1, thing.Cells.center);
                 thing.Remove();
-                return $"Tore down the {thing.Config.displayName}";
+                return $"Tore down the {thing.Config.displayName}{spilled}";
             }
 
             var chunk = world != null ? world.ChunkAt(cell) : null;
@@ -599,6 +603,12 @@ namespace KingdomGame.Building
         public void Broke(IBuilt thing)
         {
             if (thing == null) return;
+            // What was inside a broken storehouse or chest spills out in a bag.
+            if (thing is Storage storage && storage.Stock != null)
+            {
+                var stock = storage.Stock;
+                LootBag.Drop(storage.Center, stock.Get(ResourceType.Wood), stock.Get(ResourceType.Stone), stock.Get(ResourceType.Food));
+            }
             if (world != null)
             {
                 var c = thing.Config;
@@ -706,12 +716,25 @@ namespace KingdomGame.Building
             UpdateRooms(false);
         }
 
+        static bool BlocksZombies(BuildingConfig b) => NeedsClearSpot(b) || b.kind == BuildingKind.Door;
+
         // Walls, storehouses and things you can't walk through can't appear on top of someone.
         static bool NeedsClearSpot(BuildingConfig b) =>
             b.kind == BuildingKind.Wall || b.kind == BuildingKind.Storage || (b.kind == BuildingKind.Furniture && b.blocksMovement && !b.flat);
 
         void TryComplete(Blueprint b)
         {
+            // Nothing zombies can't walk through may appear on top of them (doors included).
+            if (BlocksZombies(b.Config))
+            {
+                var area = new Rect(b.Cells.position, b.Cells.size);
+                foreach (var h in Health.Creatures)
+                    if (h != null && h.Team == Team.Zombie && Overlaps(area, h.Position, h.Radius))
+                    {
+                        b.Problem = "Finished, but zombies are in the way";
+                        return;
+                    }
+            }
             if (NeedsClearSpot(b.Config))
             {
                 // Nobody may be standing where it appears.
@@ -728,12 +751,7 @@ namespace KingdomGame.Building
                     b.Problem = "Finished, but you're standing on it: step off";
                     return;
                 }
-                foreach (var h in Health.Creatures)
-                    if (h != null && h.Team == Team.Zombie && Overlaps(area, h.Position, h.Radius))
-                    {
-                        b.Problem = "Finished, but zombies are standing on it";
-                        return;
-                    }
+
                 if (blocked)
                 {
                     b.Problem = "Finished: waiting for a villager to step off";

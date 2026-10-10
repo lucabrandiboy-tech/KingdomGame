@@ -34,12 +34,16 @@ What's new:
   - **Free build:** no zombies; build in peace.
 - **Health:** you have 100. Zombies hurt you (the screen flashes red); you
   heal after a few seconds without being hit. Your own rockets and C4 hurt you
-  too if you're too close.
+  too if you're too close (a third of what they do to zombies; C4 at your feet
+  is still deadly, so run).
 - **Shooting over your walls:** your rifle shots fly over a wall you stand
   right behind (within about a tile and a half), so you can defend from inside.
   Rockets don't: they hit the first wall in the way.
 - **Loot:** some zombies drop a bag of wood, stone and food. Walk over it to
   pick it up.
+- **Everything you build can be broken** except the throne: walls, doors,
+  furniture, storehouses and chests. A broken storehouse or chest spills what
+  was in it in a bag.
 - **Villagers** run from zombies they can see (to the throne, or away), and
   can be killed.
 - **Pause:** Esc (Resume, Start again, Main menu, Quit).

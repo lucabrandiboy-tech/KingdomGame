@@ -215,8 +215,10 @@ namespace KingdomGame.Zombies
             float box = Radius * 0.8f;
             if (!director.Fits(position, box))
             {
-                // Something was built on top of it: let it walk out.
-                position += delta;
+                // Something was built where it stands: step out to the nearest open cell (never through it).
+                var cell = director.CellOf(position);
+                var to = director.Walkable(cell) ? (Vector2)cell + new Vector2(0.5f, 0.5f) : director.NearestOpenSpot(position);
+                position = Vector2.MoveTowards(position, to, Mathf.Max(delta.magnitude, Config.moveSpeed * Time.deltaTime));
                 return;
             }
             var p = position;

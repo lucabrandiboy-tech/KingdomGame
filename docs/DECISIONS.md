@@ -325,12 +325,19 @@ Breaking into a base should take explosives, like in Rust.
   gives each cell its "effort" to the nearest person. Each zombie just steps to
   its cheapest neighbour, so 5 or 500 zombies cost the same search. The ruler
   is preferred: a villager has to be 2 tiles closer.
-- **Breaking through is part of the path:** each cell has a cost. Trees, rocks,
-  the throne and storehouses can't be broken (zombies walk round); doors, walls
-  and big furniture can, and cost more the more health they have left
-  (8 health ≈ 1 tile of walking round). So zombies smash through a door or a
-  wooden wall when that's quicker than the way round, and look for the weakest
-  point of a closed castle.
+- **Breaking through is part of the path:** each cell has a cost. Trees, rocks
+  and the throne can't be broken (zombies walk round); walls, doors,
+  storehouses, chests and big furniture can, and cost more the more health
+  they have left (8 health ≈ 1 tile of walking round). So zombies smash through
+  a door or a wooden wall when that's quicker than the way round, and look for
+  the weakest point of a closed castle. Everything you build can be broken, so
+  nothing (a ring of crates, say) seals a castle for good; a broken storehouse
+  or chest spills what's inside in a bag. The ruler on the throne is reached
+  from the cells along the throne's sides.
+- **What zombies can walk through is checked as it is right now** (a wall built
+  a moment ago stops them), and the field is worked out again as soon as
+  something is built, broken or torn down. A zombie that something is built on
+  steps out to the nearest open cell.
 - **Zombies wear walls down instead of breaking pixels.** A zombie's claws
   would need hundreds of blows to cut a hole through a stone tile pixel by
   pixel. Instead each blow takes the zombie's Wall Damage off the tile's
@@ -344,8 +351,10 @@ Breaking into a base should take explosives, like in Rust.
   crowd). Shots find zombies through `Core/Health.cs`.
 - **Shots fly over your own wall** for the first 1.6 tiles (rifle) so you can
   defend from behind a wall you stand next to; further walls stop them, and
-  rockets always hit the first wall. Explosions hurt every creature, door and
-  piece of furniture in the blast, including yours.
+  rockets always hit the first wall. Explosions hurt every zombie in the blast,
+  and your side (you, villagers, doors, furniture, storehouses) a third as much
+  (`DamageType.friendlyShare`), so a rocket at a zombie in your face hurts but
+  doesn't kill you. C4 at your feet still does: run.
 - **Waves** (`Zombies/SurvivalDirector.cs`, numbers in `SurvivalConfig`):
   6 zombies, then 3 more each wave, all times 1.05 per wave (wave 10: 51,
   wave 20: about 160), with 6% more health each wave. New kinds join over three

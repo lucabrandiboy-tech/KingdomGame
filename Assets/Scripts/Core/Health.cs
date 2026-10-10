@@ -162,10 +162,11 @@ namespace KingdomGame
 
         /// <summary>
         /// An explosion: everything within <paramref name="radius"/> tiles takes damage,
-        /// <paramref name="damage"/> in the middle falling to a quarter at the edge
-        /// (creatures of both teams, doors and furniture).
+        /// <paramref name="damage"/> in the middle falling to a quarter at the edge: zombies
+        /// all of it, the friendly side (the ruler, villagers, doors, furniture, storehouses)
+        /// <paramref name="friendlyShare"/> of it.
         /// </summary>
-        public static void Blast(Vector2 at, float radius, float damage)
+        public static void Blast(Vector2 at, float radius, float damage, float friendlyShare = 1f)
         {
             if (radius <= 0f || damage <= 0f) return;
             // Copy first: dying removes things from the lists.
@@ -176,7 +177,7 @@ namespace KingdomGame
             {
                 float distance = Mathf.Max(0f, Vector2.Distance(h.Position, at) - h.Radius);
                 float falloff = Mathf.Lerp(1f, 0.25f, Mathf.Clamp01(distance / radius));
-                h.Damage(damage * falloff, at);
+                h.Damage(damage * falloff * (h.Team == Team.Friendly ? Mathf.Clamp01(friendlyShare) : 1f), at);
             }
         }
 

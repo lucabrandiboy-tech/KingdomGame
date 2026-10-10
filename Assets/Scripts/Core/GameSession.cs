@@ -22,9 +22,15 @@ namespace KingdomGame
 
         /// <summary>The mode picked in the main menu, or null if the game scene was started directly.</summary>
         public static GameMode? Chosen { get; set; }
+        /// <summary>Load the saved game of the chosen mode instead of starting a new one (the game scene clears it once read).</summary>
+        public static bool LoadSave { get; set; }
 
         // Statics survive between plays when Unity's "Enter Play Mode Options" skip reloading scripts.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => Chosen = null;
+        static void ResetStatics()
+        {
+            Chosen = null;
+            LoadSave = false;
+        }
     }
 }

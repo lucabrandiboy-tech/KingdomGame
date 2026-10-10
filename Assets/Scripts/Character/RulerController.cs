@@ -535,6 +535,32 @@ namespace KingdomGame.Character
             return new Rect(b.xMin, b.yMin, b.width, b.height);
         }
 
+        /// <summary>
+        /// Puts the ruler back where a saved game had them: at <paramref name="at"/>, inside
+        /// <paramref name="place"/> (or on the map if null), up on the walls if <paramref name="onWalls"/>
+        /// and there's still wall there, with this much health and this in the backpack.
+        /// </summary>
+        public void Restore(Vector2 at, Place place, bool onWalls, float health, int[] backpack)
+        {
+            if (rig == null && Camera.main != null) rig = Camera.main.GetComponent<CameraRig>();
+            if (place != null)
+            {
+                EnterHouse(place);
+                MoveTo(place.Bounds.Contains(NavCell(at)) ? at : place.Entrance);
+            }
+            else
+            {
+                var kingdom = Kingdom.Current;
+                if (onWalls && kingdom != null && config != null && OnTop(kingdom, at)) GetUp(at);
+                else MoveTo(at);
+                if (rig != null) rig.Follow(transform, true);
+            }
+            if (Health != null) Health.SetCurrent(health);
+            if (Backpack != null && backpack != null)
+                for (int i = 0; i < backpack.Length && i < Inventory.TypeCount; i++)
+                    if (backpack[i] > 0) Backpack.Add((ResourceType)i, backpack[i]);
+        }
+
         /// <summary>Comes out of the house's door onto the map.</summary>
         public void LeaveHouse()
         {

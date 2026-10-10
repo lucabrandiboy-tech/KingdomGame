@@ -570,6 +570,16 @@ namespace KingdomGame.Villagers
             if (!Walk(goal, goalBeside)) Abandon();
         }
 
+        /// <summary>Puts back what a saved game says: the house or mine it's in (or null), what it carries, its hit points.</summary>
+        public void Restore(Place inside, ResourceType type, int amount, float health)
+        {
+            space = inside;
+            portal = null;
+            carryType = type;
+            carryAmount = Mathf.Max(0, amount);
+            if (Health != null) Health.SetCurrent(health);
+        }
+
         /// <summary>Its house is gone (torn down, broken): it's put out by the door and drops what it was doing.</summary>
         public void PutOutside(Vector2 at)
         {

@@ -65,6 +65,9 @@ namespace KingdomGame.Destruction
             if (SiegeHealthLeft <= 0f) Collapse();
         }
 
+        /// <summary>Puts back zombie damage from a saved game (it doesn't cave in from this).</summary>
+        public void RestoreBattered(float amount) => Battered = Mathf.Max(0f, amount);
+
         /// <summary>Set by <see cref="PixelWorld"/> while an integrity check is queued.</summary>
         internal bool CheckQueued;
 

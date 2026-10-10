@@ -26,5 +26,9 @@ namespace KingdomGame.World
         [Header("Test outpost")]
         [Tooltip("Stone and wood walls near the start, for trying out guns and explosives.")]
         public bool testOutpost = true;
+
+        [Header("Saving")]
+        [Tooltip("Minutes between autosaves (0 = only when you save, leave or quit). The game also saves when you go to the main menu or quit.")]
+        [Min(0)] public float autosaveMinutes = 3f;
     }
 }

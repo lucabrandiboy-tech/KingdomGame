@@ -219,6 +219,46 @@ namespace KingdomGame.Building
             return true;
         }
 
+        // ------------------------------------------------------------- saving --
+
+        /// <summary>Which tiles are dug out, one character each ('1' dug, '0' rock), row by row from the bottom (for saving).</summary>
+        public string DugText() => Bits(dug);
+        /// <summary>Which tiles are marked to dig, like <see cref="DugText"/>.</summary>
+        public string MarkedText() => Bits(marked);
+
+        static string Bits(bool[] cells)
+        {
+            var text = new char[cells.Length];
+            for (int i = 0; i < cells.Length; i++) text[i] = cells[i] ? '1' : '0';
+            return new string(text);
+        }
+
+        /// <summary>Puts back what was dug and marked in a saved game (texts from <see cref="DugText"/> and <see cref="MarkedText"/>).</summary>
+        public void Restore(string dugText, string markedText)
+        {
+            if (string.IsNullOrEmpty(dugText) || dugText.Length != dug.Length) return;
+            for (int i = 0; i < dug.Length; i++)
+            {
+                if (dugText[i] != '1' || dug[i]) continue;
+                dug[i] = true;
+                ore[i] = Ore.None;
+                nav.Unblock(new RectInt(bounds.x + i % bounds.width, bounds.y + i / bounds.width, 1, 1));
+            }
+            if (markedText != null && markedText.Length == marked.Length)
+                for (int i = 0; i < marked.Length; i++)
+                    if (markedText[i] == '1' && !dug[i] && !marked[i])
+                    {
+                        marked[i] = true;
+                        Marked++;
+                        ShowMark(new Vector2Int(bounds.x + i % bounds.width, bounds.y + i / bounds.width), true);
+                    }
+            for (int y = bounds.yMin; y < bounds.yMax; y++)
+                for (int x = bounds.xMin; x < bounds.xMax; x++)
+                    PaintCell(new Vector2Int(x, y));
+            texture.SetPixels32(pixels);
+            texture.Apply(true);
+        }
+
         void ShowMark(Vector2Int cell, bool on)
         {
             if (!on)

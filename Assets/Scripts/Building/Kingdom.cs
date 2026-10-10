@@ -67,6 +67,10 @@ namespace KingdomGame.Building
         readonly HashSet<Vector2Int> supportLost = new HashSet<Vector2Int>();
         RoofView roofView;
         readonly Dictionary<Vector2Int, ResourceNode> nodes = new Dictionary<Vector2Int, ResourceNode>();
+        // The cells that had a tree, rock or bush when the map was made (saving notes which are gone).
+        readonly HashSet<Vector2Int> natural = new HashSet<Vector2Int>();
+        // Loading a saved game: the inside or mine square the next house or mine gets (-1: the first free one).
+        int restoreSlot = -1;
 
         readonly Dictionary<BuildingConfig, Sprite[]> looks = new Dictionary<BuildingConfig, Sprite[]>();
         readonly Dictionary<BuildingConfig, Sprite[]> openLooks = new Dictionary<BuildingConfig, Sprite[]>();
@@ -156,7 +160,11 @@ namespace KingdomGame.Building
             // Builders shouldn't stand on a planned building's spot while they work (it couldn't be finished).
             Nav.NoStopping = cell => occupied.TryGetValue(cell, out var thing) && thing is Blueprint b && NeedsClearSpot(b.Config);
             foreach (var node in ResourceNode.All)
-                if (node != null) nodes[node.Cell] = node;
+                if (node != null)
+                {
+                    nodes[node.Cell] = node;
+                    natural.Add(node.Cell);
+                }
             if (world != null) world.CellChanged += OnWallChanged;
             MakeSprites(otherBuildings);
             roofView = new GameObject("Roofs").AddComponent<RoofView>();
@@ -423,6 +431,7 @@ namespace KingdomGame.Building
         public Vector2Int TakeSlot(out int slot)
         {
             slot = 0;
+            if (restoreSlot >= 0 && !usedSlots.Contains(restoreSlot)) slot = restoreSlot;
             while (usedSlots.Contains(slot)) slot++;
             usedSlots.Add(slot);
             return InsideOrigin + new Vector2Int(slot % 64, slot / 64) * Interior.SlotSize;
@@ -940,13 +949,16 @@ namespace KingdomGame.Building
         /// Starts upgrading a house to its next level: builders bring what it costs and work on it.
         /// Returns a message for the player (why not, or that it's started).
         /// </summary>
-        public string StartUpgrade(House house)
+        public string StartUpgrade(House house) => StartUpgrade(house, false);
+
+        // `restoring`: a saved game had it started, so the age it needs doesn't matter.
+        string StartUpgrade(House house, bool restoring)
         {
             if (house == null) return null;
             if (house.Upgrade != null) return $"The {house.Name} is already being upgraded";
             var next = house.Next;
             if (next == null) return $"The {house.Name} is as good as it gets";
-            string wait = UpgradeLockedReason(house);
+            string wait = restoring ? null : UpgradeLockedReason(house);
             if (wait != null) return wait;
             var job = UpgradeJob(house.Config, house.Level + 1);
             var go = new GameObject($"Upgrade: {house.Name}");
@@ -1558,7 +1570,7 @@ namespace KingdomGame.Building
                     var go = new GameObject(config.displayName);
                     go.transform.SetParent(transform, false);
                     var shaft = go.AddComponent<MineShaft>();
-                    int slot = 0;
+                    int slot = restoreSlot >= 0 && !usedMineSlots.Contains(restoreSlot) ? restoreSlot : 0;
                     while (usedMineSlots.Contains(slot)) slot++;
                     usedMineSlots.Add(slot);
                     var origin = MineOrigin + new Vector2Int(slot % 32, slot / 32) * MineSlot;
@@ -1671,9 +1683,74 @@ namespace KingdomGame.Building
             int variant = (int)(DamageShape.Hash(0x7Au, cell.x, cell.y) % (uint)NatureArt.Variants);
             node.Setup(kind, natureLooks[(int)kind.look, variant], 0f);
             node.Grow(growSeconds);
+            node.Planted = true;
             nodes[cell] = node;
             if (Canopies != null) Canopies.Add(node);
             return node;
+        }
+
+        // ------------------------------------------------------------ saving --
+
+        /// <summary>
+        /// Everything finished that the kingdom built (not the throne), for saving: houses and mines
+        /// first, since what's built inside them needs them there when a save is loaded.
+        /// </summary>
+        public List<IBuilt> AllBuilt()
+        {
+            var all = new List<IBuilt>();
+            foreach (var h in houses) if (h != null) all.Add(h);
+            foreach (var m in mines) if (m != null) all.Add(m);
+            foreach (var s in storages) if (s != null) all.Add(s);
+            foreach (var d in doors) if (d != null) all.Add(d);
+            foreach (var f in furniture) if (f != null) all.Add(f);
+            foreach (var layer in new[] { floors, roofs })
+                foreach (var thing in layer.Values)
+                    if (thing != null && !(thing is Blueprint) && thing is IBuilt built && !all.Contains(built)) all.Add(built);
+            return all;
+        }
+
+        /// <summary>The cells where the map had a tree, rock or bush that's gone now (cut down to nothing, built over), for saving.</summary>
+        public List<Vector2Int> NatureGone()
+        {
+            var gone = new List<Vector2Int>();
+            foreach (var cell in natural)
+                if (!nodes.TryGetValue(cell, out var node) || node == null || node.Planted) gone.Add(cell);
+            return gone;
+        }
+
+        /// <summary>The tree, rock or bush at a cell (even a used-up one), or null.</summary>
+        public ResourceNode NodeIn(Vector2Int cell) => nodes.TryGetValue(cell, out var node) && node != null ? node : null;
+
+        /// <summary>Takes away the tree, rock or bush at a cell (loading a saved game where it's gone).</summary>
+        public void RemoveNature(Vector2Int cell) => ClearNature(new RectInt(cell, Vector2Int.one));
+
+        /// <summary>Puts up a finished building from a saved game; a house or mine gets inside square <paramref name="slot"/> again.</summary>
+        public Component Restore(BuildingConfig config, RectInt cells, int rotation, int slot)
+        {
+            restoreSlot = slot;
+            try { return Build(config, cells, rotation); }
+            finally { restoreSlot = -1; }
+        }
+
+        /// <summary>Puts back a blueprint from a saved game, without the checks for placing one.</summary>
+        public Blueprint RestoreBlueprint(BuildingConfig b, RectInt cells, int rotation)
+        {
+            if (b == null) return null;
+            rotation = b.ClampRotation(rotation);
+            var go = new GameObject($"Blueprint: {b.displayName}");
+            go.transform.SetParent(transform, false);
+            var blueprint = go.AddComponent<Blueprint>();
+            blueprint.Setup(b, cells, rotation, LookOf(b, rotation), White);
+            blueprints.Add(blueprint);
+            Occupy(LayerOf(b), cells, blueprint);
+            return blueprint;
+        }
+
+        /// <summary>Puts back a house's upgrade from a saved game (even if the age it needs is gone).</summary>
+        public Blueprint RestoreUpgrade(House house)
+        {
+            StartUpgrade(house, true);
+            return house != null ? house.Upgrade : null;
         }
 
         static bool Overlaps(Rect area, Vector2 point, float radius) =>

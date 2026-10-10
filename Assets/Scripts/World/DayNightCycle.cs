@@ -16,6 +16,7 @@ namespace KingdomGame.World
 
         readonly List<Light2D> nightLights = new List<Light2D>();
         float hour;
+        bool timeSet;
 
         public DayNightConfig Config => config;
         /// <summary>Day number, starting at 1.</summary>
@@ -44,7 +45,16 @@ namespace KingdomGame.World
         void Start()
         {
             if (config == null) config = ScriptableObject.CreateInstance<DayNightConfig>();
-            hour = config.startHour;
+            if (!timeSet) hour = config.startHour;
+            Apply();
+        }
+
+        /// <summary>Sets the day and the time (loading a saved game).</summary>
+        public void SetTime(int day, float hourOfDay)
+        {
+            timeSet = true;
+            Day = Mathf.Max(1, day);
+            hour = Mathf.Repeat(hourOfDay, 24f);
             Apply();
         }
 

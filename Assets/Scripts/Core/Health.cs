@@ -84,6 +84,13 @@ namespace KingdomGame
             Register();
         }
 
+        /// <summary>Sets what's left (loading a saved game): at least 1, at most <see cref="Max"/>.</summary>
+        public void SetCurrent(float value)
+        {
+            if (Max <= 0f) return;
+            Current = Mathf.Clamp(value, 1f, Max);
+        }
+
         /// <summary>A new maximum (tougher zombies in later waves), filling it up.</summary>
         public void SetMax(float max)
         {

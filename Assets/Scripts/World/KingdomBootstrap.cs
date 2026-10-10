@@ -54,14 +54,24 @@ namespace KingdomGame.World
                 survival = false;
             }
 
-            int seed = content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
+            // Continuing a saved game: the same map again (from its seed), then what was built on it.
+            SaveData saved = null;
+            if (GameSession.LoadSave)
+            {
+                GameSession.LoadSave = false;
+                saved = SaveFiles.Read(Mode, out string problem);
+                if (saved == null) Debug.LogWarning($"{problem}: starting a new game instead.");
+            }
+
+            int seed = saved != null ? saved.seed : content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
             Debug.Log($"Map seed {seed}. Put this number in WorldConfig's Seed to get the same map again.");
             var canopies = WorldGenerator.Generate(content, transform, seed);
             // The test outpost is for trying weapons on walls; survival starts on open ground.
-            if (content.world.testOutpost && !survival) BuildOutpost(world);
+            // (A saved game has its own walls: the outpost's are among them if they still stand.)
+            if (content.world.testOutpost && !survival) BuildOutpost(world, saved == null);
             new GameObject("Remains").AddComponent<Remains>().transform.SetParent(transform, false);
 
-            var kingdom = MakeKingdom(world, survival ? content.survival : null);
+            var kingdom = MakeKingdom(world, survival ? content.survival : null, saved == null);
             var ruler = SpawnRuler(kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero);
             var rulerController = ruler.GetComponent<RulerController>();
             kingdom.Ruler = ruler.transform;
@@ -113,13 +123,17 @@ namespace KingdomGame.World
 
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
-            gameObject.AddComponent<PauseMenu>().Setup(builder, waves);
+            var saves = gameObject.AddComponent<SaveSystem>();
+            saves.Setup(content, Mode, seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
+            if (saved != null) saves.Restore(saved);
+            gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves);
             var debug = gameObject.AddComponent<DebugHud>();
             debug.visible = false;
             debug.toggleKey = KeyCode.F3;
         }
 
-        Kingdom MakeKingdom(PixelWorld world, SurvivalConfig survival)
+        // `fresh`: a new game (a loaded one puts back its own storehouses and villagers).
+        Kingdom MakeKingdom(PixelWorld world, SurvivalConfig survival, bool fresh)
         {
             var go = new GameObject("Kingdom");
             go.transform.SetParent(transform, false);
@@ -133,6 +147,7 @@ namespace KingdomGame.World
 
             var config = kingdom.Config;
             var throne = kingdom.PlaceThrone(config.throneCell);
+            if (!fresh) return kingdom;
             if (storehouse != null)
             {
                 var storage = kingdom.AddStorage(storehouse, config.storageCell);
@@ -161,12 +176,15 @@ namespace KingdomGame.World
 
         // A small walled yard east of the start: stone on two sides, wood on one,
         // and a stone tower, for trying bullets, rockets and C4. Torches in the corners.
-        void BuildOutpost(PixelWorld world)
+        void BuildOutpost(PixelWorld world, bool walls)
         {
-            Wall(world, "Outpost north wall", content.stone, 5, 4, 9, 1);
-            Wall(world, "Outpost south wall", content.stone, 5, -4, 9, 1);
-            Wall(world, "Outpost east palisade", content.wood, 13, -3, 1, 7);
-            Wall(world, "Outpost tower", content.stone, 8, -1, 2, 2);
+            if (walls)
+            {
+                Wall(world, "Outpost north wall", content.stone, 5, 4, 9, 1);
+                Wall(world, "Outpost south wall", content.stone, 5, -4, 9, 1);
+                Wall(world, "Outpost east palisade", content.wood, 13, -3, 1, 7);
+                Wall(world, "Outpost tower", content.stone, 8, -1, 2, 2);
+            }
             var fire = ArtSprites.Get(Art.ArtKeys.Brazier);
             foreach (var spot in new[] { new Vector2(5.5f, 3.5f), new Vector2(12.5f, 3.5f), new Vector2(5.5f, -3f), new Vector2(12.5f, -3f) })
             {

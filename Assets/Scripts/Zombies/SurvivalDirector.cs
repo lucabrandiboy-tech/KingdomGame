@@ -89,6 +89,28 @@ namespace KingdomGame.Zombies
             }
         }
 
+        /// <summary>
+        /// Picks up a saved game. Zombies aren't saved, so a game saved during a wave
+        /// starts that wave again after a short wait.
+        /// </summary>
+        public void Restore(Phase phase, int wave, float timeLeft, float secondsSurvived, int kills)
+        {
+            SecondsSurvived = Mathf.Max(0f, secondsSurvived);
+            if (zombies != null) zombies.RestoreKills(kills);
+            if (phase == Phase.Fighting)
+            {
+                Wave = Mathf.Max(0, wave - 1);
+                Now = Wave == 0 ? Phase.Preparing : Phase.Calm;
+                TimeLeft = Mathf.Max(timeLeft, 20f);
+                Announce($"Game loaded. Wave {wave} comes again in {Mathf.CeilToInt(TimeLeft)} seconds.", 6f);
+                return;
+            }
+            Wave = Mathf.Max(0, wave);
+            Now = phase == Phase.Calm && Wave > 0 ? Phase.Calm : Phase.Preparing;
+            TimeLeft = Mathf.Max(5f, timeLeft);
+            Announce($"Game loaded. The next wave comes in {Mathf.CeilToInt(TimeLeft)} seconds.", 6f);
+        }
+
         /// <summary>The ruler fell: the game is over.</summary>
         public void RulerFell()
         {

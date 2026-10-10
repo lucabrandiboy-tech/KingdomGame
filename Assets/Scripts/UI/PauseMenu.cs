@@ -1,4 +1,5 @@
 using KingdomGame.Building;
+using KingdomGame.World;
 using KingdomGame.Zombies;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -7,21 +8,26 @@ namespace KingdomGame.UI
 {
     /// <summary>
     /// Esc pauses the game (not while sitting on the throne: there Esc stands you
-    /// up): resume, start again, go back to the main menu or quit. When the ruler
-    /// falls in survival it shows how long you lasted instead.
+    /// up): resume, save, load the last save, start again, go back to the main menu
+    /// (saving first) or quit. When the ruler falls in survival it shows how long
+    /// you lasted instead.
     /// </summary>
     public sealed class PauseMenu : MonoBehaviour
     {
         BuildController builder;
         SurvivalDirector survival;
+        SaveSystem saves;
         GUIStyle title, text, button;
+        string saveMessage;
+        bool confirmLoad;
 
         public bool IsOpen { get; private set; }
 
-        public void Setup(BuildController build, SurvivalDirector director)
+        public void Setup(BuildController build, SurvivalDirector director, SaveSystem saveSystem)
         {
             builder = build;
             survival = director;
+            saves = saveSystem;
         }
 
         void Update()
@@ -41,6 +47,8 @@ namespace KingdomGame.UI
         {
             IsOpen = true;
             Time.timeScale = 0f;
+            saveMessage = null;
+            confirmLoad = false;
         }
 
         void Close()
@@ -58,6 +66,16 @@ namespace KingdomGame.UI
         public static void Restart()
         {
             Time.timeScale = 1f;
+            GameSession.LoadSave = false;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        }
+
+        /// <summary>Throws this game away and loads the saved one of the same mode.</summary>
+        static void LoadSaved(GameMode mode)
+        {
+            Time.timeScale = 1f;
+            GameSession.Chosen = mode;
+            GameSession.LoadSave = true;
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
 
@@ -113,6 +131,11 @@ namespace KingdomGame.UI
                 y += font * 4f;
                 if (GUI.Button(new Rect(x, y, width, row), "<b>Try again</b>", button)) Restart();
                 y += row + font * 0.6f;
+                if (saves != null && saves.HasSave)
+                {
+                    if (GUI.Button(new Rect(x, y, width, row), "Load the last save", button)) LoadSaved(saves.Mode);
+                    y += row + font * 0.6f;
+                }
                 if (GUI.Button(new Rect(x, y, width, row), "Main menu", button)) ToMainMenu();
                 return;
             }
@@ -121,11 +144,36 @@ namespace KingdomGame.UI
             y += font * 3.6f;
             if (GUI.Button(new Rect(x, y, width, row), "<b>Resume</b>   (Esc)", button)) Close();
             y += row + font * 0.6f;
+            if (saves != null)
+            {
+                if (GUI.Button(new Rect(x, y, width, row), "Save the game", button))
+                {
+                    saveMessage = saves.Save();
+                    confirmLoad = false;
+                }
+                y += row + font * 0.6f;
+                if (saves.HasSave)
+                {
+                    string load = confirmLoad ? "<color=#f0b060>Sure? What isn't saved is lost. Click again</color>" : "Load the last save";
+                    if (GUI.Button(new Rect(x, y, width, row), load, button))
+                    {
+                        if (confirmLoad) LoadSaved(saves.Mode);
+                        else confirmLoad = true;
+                    }
+                    y += row + font * 0.6f;
+                }
+            }
             if (GUI.Button(new Rect(x, y, width, row), "Start again", button)) Restart();
             y += row + font * 0.6f;
-            if (GUI.Button(new Rect(x, y, width, row), "Main menu", button)) ToMainMenu();
+            if (GUI.Button(new Rect(x, y, width, row), saves != null ? "Save and go to the main menu" : "Main menu", button))
+            {
+                if (saves != null && saves.CanSave(out _)) saves.Save(true);
+                ToMainMenu();
+            }
             y += row + font * 0.6f;
             if (GUI.Button(new Rect(x, y, width, row), "Quit the game", button)) Quit();
+            y += row + font * 0.6f;
+            if (saveMessage != null) GUI.Label(new Rect(x - width * 0.5f, y, width * 2f, font * 2f), $"<color=#e8dcc0>{saveMessage}</color>", text);
         }
     }
 }

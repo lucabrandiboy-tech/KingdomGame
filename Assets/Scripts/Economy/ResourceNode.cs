@@ -62,6 +62,12 @@ namespace KingdomGame.Economy
         public SpriteRenderer Leaves => leaves;
         /// <summary>The villager gathering from it (one at a time), or null.</summary>
         public Component Gatherer { get; set; }
+        /// <summary>Planted by the kingdom (not part of the map as it was made).</summary>
+        public bool Planted { get; set; }
+        /// <summary>How long a growing one takes to grow, in all (for saving).</summary>
+        public float GrowSeconds => growing ? growEnd - growStart : 0f;
+        /// <summary>Seconds until a used-up one grows back, or -1 if it isn't waiting to (for saving).</summary>
+        public float RegrowLeft => Empty && !growing && config != null && config.regrowSeconds > 0 ? Mathf.Max(0f, regrowAt - Time.time) : -1f;
 
         /// <summary>Sets the node up. <paramref name="rotation"/> turns the pictures (seen from above, any angle looks natural).</summary>
         public void Setup(ResourceNodeConfig nodeConfig, NodeSprites nodeSprites, float rotation)
@@ -146,6 +152,39 @@ namespace KingdomGame.Economy
             SetSolid(true);
             ShowGrowth();
             enabled = true;
+        }
+
+        /// <summary>
+        /// Puts it back as it was in a saved game: <paramref name="grown"/> 0..1 for a young one still
+        /// growing (over <paramref name="growSeconds"/> in all), otherwise <paramref name="left"/> to gather
+        /// and, if it's used up, <paramref name="regrowLeft"/> seconds until it grows back (-1: it doesn't).
+        /// </summary>
+        public void Restore(int left, float grown, float growSeconds, float regrowLeft)
+        {
+            if (config == null) return;
+            if (grown >= 0f && grown < 1f)
+            {
+                float total = Mathf.Max(1f, growSeconds);
+                Grow(total);
+                growStart = Time.time - grown * total;
+                growEnd = growStart + total;
+                ShowGrowth();
+                return;
+            }
+            if (growing)
+            {
+                // Just planted (by the loading): it's grown already.
+                growing = false;
+                ShowGrowth();
+            }
+            Left = Mathf.Clamp(left, 0, config.amount);
+            if (Left > 0) return;
+            UseUp();
+            if (!growing && config.regrowSeconds > 0)
+            {
+                regrowAt = Time.time + Mathf.Max(0f, regrowLeft);
+                enabled = true;
+            }
         }
 
         // A growing one is drawn smaller: a quarter of its size when planted, full size when grown.

@@ -69,6 +69,8 @@ namespace KingdomGame.Zombies
         public bool TestHordeKey { get; set; }
         public int Alive => zombies.Count;
         public int Kills { get; private set; }
+        /// <summary>Puts back the kill count from a saved game.</summary>
+        public void RestoreKills(int kills) => Kills = Mathf.Max(0, kills);
         /// <summary>A zombie died (for counting and the HUD).</summary>
         public event Action<Zombie> ZombieDied;
         /// <summary>Zombies are faster at night...</summary>

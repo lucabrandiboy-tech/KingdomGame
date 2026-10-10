@@ -586,6 +586,19 @@ namespace KingdomGame.Zombies
         }
 
         /// <summary>A zombie's blow lands on what's in <paramref name="cell"/>: a wall wears down, a door or piece of furniture loses health.</summary>
+        /// <summary>Whether a cell holds something built that zombies can break (furniture, a door, a chest...), not a wall.</summary>
+        public bool BreakableThing(Vector2Int cell)
+        {
+            if (kingdom == null) return false;
+            switch (kingdom.ThingAt(cell))
+            {
+                case Door door: return door.Health != null && !door.Health.Dead;
+                case Furniture piece: return piece.Health != null && !piece.Health.Dead;
+                case Storage store: return store.Health != null && !store.Health.Dead;
+                default: return false;
+            }
+        }
+
         public void HitCell(Vector2Int cell, Zombie z)
         {
             float damage = DamageFactor;

@@ -155,6 +155,17 @@ namespace KingdomGame.Zombies
             if (prey != null && Time.time >= chaseBlockedUntil)
             {
                 want = director.AimPoint(prey, position) - position;
+                // Furniture or a door right in the way (a table, a barricade): smash through it.
+                if (want.sqrMagnitude > 1e-4f)
+                {
+                    var ahead = director.CellOf(position + want.normalized * (Radius + 0.25f));
+                    if (!director.Walkable(ahead) && director.BreakableThing(ahead) && DistanceTo(ahead) - Radius <= Config.reach)
+                    {
+                        StartAttack(null, ahead);
+                        Show(Vector2.zero, dt);
+                        return;
+                    }
+                }
             }
             else if (director.NextStep(position, out var next, out bool blocked))
             {

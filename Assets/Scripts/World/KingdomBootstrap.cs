@@ -117,6 +117,9 @@ namespace KingdomGame.World
                 rulerController.OpenArmory = armoryPanel.Open;
             }
             else Debug.LogWarning("The Game Content has no Armory Config, so the ruler has the old rifle. Run KingdomGame > Build Game Scenes again.", this);
+            var storagePanel = gameObject.AddComponent<StoragePanel>();
+            storagePanel.Setup(rulerController);
+            rulerController.OpenStorage = storagePanel.Open;
 
             var builder = kingdom.gameObject.AddComponent<BuildController>();
             builder.Setup(kingdom, rulerController, rig, parts.Canopies, content.view);

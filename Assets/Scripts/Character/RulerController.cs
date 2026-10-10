@@ -83,6 +83,8 @@ namespace KingdomGame.Character
         public Combat.Armory Armory { get; set; }
         /// <summary>Opens the weapons screen (E at an anvil).</summary>
         public System.Action OpenArmory { get; set; }
+        /// <summary>Opens a storehouse or chest to put things in or take them out (E at one).</summary>
+        public System.Action<Storage> OpenStorage { get; set; }
         /// <summary>The weapon in hand, for the HUD.</summary>
         public string WeaponName => Armory != null ? (Armory.Selected != null ? Armory.Selected.displayName : "Bare hands") : "Rifle";
         /// <summary>Which way the ruler aims (a direction).</summary>
@@ -754,6 +756,13 @@ namespace KingdomGame.Character
 
         void UseStorage(Storage storage)
         {
+            if (OpenStorage != null)
+            {
+                // The storage screen: put the backpack in, or take things out.
+                Hint = $"E: open the {(storage.Config != null ? storage.Config.displayName.ToLowerInvariant() : "storehouse")} (put in or take out)";
+                if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) OpenStorage(storage);
+                return;
+            }
             Hint = Backpack.Total > 0
                 ? "E: put your backpack in the storehouse"
                 : $"Storehouse: {Economy.ResourceText.Describe(storage.Stock)}";

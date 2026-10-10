@@ -228,18 +228,17 @@ namespace KingdomGame.Building
             target = null;
             route.Clear();
             var storeAt = new Dictionary<Vector2Int, Storage>();
-            // Each house has a belt hole in the middle of each wall: a belt just outside it joins one on the
-            // inside edge tile there (both ways), so machines inside can send things out and the other way.
+            // Houses' belt holes (House.BeltHoles): red inputs carry from the belt just outside to the one just
+            // inside, blue outputs from inside to outside. One way only.
             var holes = new Dictionary<Vector2Int, Vector2Int>();
+            var list = new List<(Vector2Int Outside, Vector2Int Inside, bool In)>();
             foreach (var h in kingdom.Houses)
             {
-                if (h == null || h.Interior == null) continue;
-                RectInt o = h.Cells, i = h.Interior.Inner;
-                void Hole(Vector2Int outside, Vector2Int inside) { holes[outside] = inside; holes[inside] = outside; }
-                Hole(new Vector2Int(o.xMax, o.y + o.height / 2), new Vector2Int(i.xMax - 1, i.y + i.height / 2));
-                Hole(new Vector2Int(o.x - 1, o.y + o.height / 2), new Vector2Int(i.x, i.y + i.height / 2));
-                Hole(new Vector2Int(o.x + o.width / 2, o.yMax), new Vector2Int(i.x + i.width / 2, i.yMax - 1));
-                Hole(new Vector2Int(o.x + o.width / 2, o.y - 1), new Vector2Int(i.x + i.width / 2, i.y));
+                if (h == null) continue;
+                h.BeltHoles(list);
+                foreach (var hole in list)
+                    if (hole.In) holes[hole.Outside] = hole.Inside;
+                    else holes[hole.Inside] = hole.Outside;
             }
             foreach (var s in kingdom.Storages)
                 if (s != null) foreach (var c in s.Cells.allPositionsWithin) storeAt[c] = s;

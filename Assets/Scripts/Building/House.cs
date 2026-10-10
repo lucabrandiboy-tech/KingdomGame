@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace KingdomGame.Building
@@ -101,6 +102,54 @@ namespace KingdomGame.Building
             Health.SetMax(current.health);
             name = current.displayName;
             Interior.Build(current, current.inside);
+            ShowBeltHoles();
+        }
+
+        /// <summary>
+        /// The conveyor holes: on each wall an input (red: things go in) just left of / below the middle and an
+        /// output (blue: things come out) just right of / above it. Each joins the tile just outside the wall
+        /// with the edge tile just inside it.
+        /// </summary>
+        public void BeltHoles(List<(Vector2Int Outside, Vector2Int Inside, bool In)> into)
+        {
+            into.Clear();
+            if (Interior == null) return;
+            RectInt o = Cells, i = Interior.Inner;
+            for (int k = 0; k < 2; k++)
+            {
+                int d = k == 0 ? -1 : 1;
+                bool input = k == 0;
+                into.Add((new Vector2Int(o.xMax, o.y + o.height / 2 + d), new Vector2Int(i.xMax - 1, i.y + i.height / 2 + d), input));
+                into.Add((new Vector2Int(o.x - 1, o.y + o.height / 2 + d), new Vector2Int(i.x, i.y + i.height / 2 + d), input));
+                into.Add((new Vector2Int(o.x + o.width / 2 + d, o.yMax), new Vector2Int(i.x + i.width / 2 + d, i.yMax - 1), input));
+                into.Add((new Vector2Int(o.x + o.width / 2 + d, o.y - 1), new Vector2Int(i.x + i.width / 2 + d, i.y), input));
+            }
+        }
+
+        static Sprite dot;
+        readonly List<GameObject> holeMarks = new List<GameObject>();
+        readonly List<(Vector2Int Outside, Vector2Int Inside, bool In)> holes = new List<(Vector2Int, Vector2Int, bool)>();
+
+        // Small red and blue squares on the holes' tiles, outside and inside.
+        void ShowBeltHoles()
+        {
+            foreach (var g in holeMarks) if (g != null) Destroy(g);
+            holeMarks.Clear();
+            if (dot == null) dot = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
+            BeltHoles(holes);
+            foreach (var h in holes)
+                foreach (var cell in new[] { h.Outside, h.Inside })
+                {
+                    var go = new GameObject(h.In ? "Belt hole in" : "Belt hole out");
+                    go.transform.SetParent(cell == h.Inside ? Interior.transform : transform, true);
+                    go.transform.position = new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
+                    go.transform.localScale = Vector3.one * 0.3f;
+                    var r = go.AddComponent<SpriteRenderer>();
+                    r.sprite = dot;
+                    r.color = h.In ? new Color(0.9f, 0.15f, 0.12f, 0.85f) : new Color(0.15f, 0.4f, 0.95f, 0.85f);
+                    r.sortingOrder = SortOrder.Rugs + 1;
+                    holeMarks.Add(go);
+                }
         }
 
         public void Remove()

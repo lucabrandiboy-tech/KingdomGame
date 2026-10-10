@@ -43,12 +43,13 @@ build bar's new **Industry** tab and unlocks it with its age.
 
 ## Belts into and out of houses
 
-Every house has a belt hole in the middle of each of its four walls. A conveyor on the tile just
-outside the middle of a wall joins a conveyor on the edge tile just inside that wall (go in and
-look: it's the middle tile along that wall). Things ride through in either direction, so a quarry
-inside a house can send stone out to a storehouse, or a sawmill outside can send wood in to a chest
-inside. Machines inside a house get power from a generator within 10 tiles of the house's door.
+Every house wall has two belt holes, marked with small squares on the tile just outside the wall
+and on the edge tile just inside it:
+- **Red = input**: things go **in** (a belt on the red square outside joins the belt on the red square inside).
+- **Blue = output**: things come **out** (inside blue to outside blue).
+Red is just left of (or below) the middle of the wall, blue just right of (or above) it.
+Machines inside a house get power from a generator within 10 tiles of the house's door.
 
-Test: build a house, a quarry inside it next to the inside-middle tile of a wall, a belt on that
-tile, a belt outside the middle of the same wall leading to a storehouse, and a generator near the
-house. Stone should go up in storage (the little rock jumps through the wall).
+Test: build a house, a quarry inside next to a blue square, a belt on that blue square, a belt on
+the blue square outside the same wall leading to a storehouse, and a generator near the house.
+Stone should go up in storage. Swap the belts onto the red squares: nothing comes out (red only goes in).

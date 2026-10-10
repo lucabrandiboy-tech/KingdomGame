@@ -81,6 +81,11 @@ namespace KingdomGame.UI
                     string problem = kingdom.GatherProblem(type);
                     if (problem != null) about = $"<color=#ff8a80>Stuck: {problem}</color>";
                 }
+                if (n > 0 && job == Job.Guard)
+                {
+                    string problem = kingdom.GuardProblem();
+                    if (problem != null) about = $"<color=#ff8a80>{problem}</color>";
+                }
                 GUI.Label(new Rect(x + font * 15.6f, y - font * 0.2f, inner - font * 15.6f, row), about, small);
                 y += row;
             }

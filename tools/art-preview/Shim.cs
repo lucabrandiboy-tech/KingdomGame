@@ -36,6 +36,8 @@ namespace UnityEngine
     public static class Mathf
     {
         public const float PI = (float)System.Math.PI;
+        public const float Deg2Rad = PI / 180f;
+        public const float Rad2Deg = 180f / PI;
         public static int FloorToInt(float v) => (int)System.Math.Floor(v);
         public static int CeilToInt(float v) => (int)System.Math.Ceiling(v);
         public static int RoundToInt(float v) => (int)System.Math.Round(v, System.MidpointRounding.ToEven);

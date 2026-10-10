@@ -47,12 +47,36 @@ namespace KingdomGame.Zombies
         bool struck;
         Health prey, victim;               // who it's after; who it's hitting
         bool hittingPerson;                // hitting victim (true) or the cell smashing (false)
+        float heldUntil;                   // caught in a trap until then
+        float slowKeep = 1f;               // share of its speed it keeps (stakes, wire), this frame
+        int slowFrame = -10;
         Vector2Int smashing;
 
         public ZombieConfig Config { get; private set; }
         public Health Health { get; private set; }
         public Vector2 Position => position;
         public float Radius => Config.radius;
+        /// <summary>Caught in a trap: it can't move or hit anything.</summary>
+        public bool Held => Time.time < heldUntil;
+
+        /// <summary>Caught in a trap for <paramref name="seconds"/>: no moving, no hitting (a blow it was winding up is lost).</summary>
+        public void Hold(float seconds)
+        {
+            heldUntil = Mathf.Max(heldUntil, Time.time + seconds);
+            attackClock = -1f;
+        }
+
+        /// <summary>Slowed this frame to <paramref name="keep"/> of its speed (the slowest of everything it's in counts).</summary>
+        public void Slow(float keep)
+        {
+            if (slowFrame != Time.frameCount)
+            {
+                slowFrame = Time.frameCount;
+                slowKeep = 1f;
+            }
+            slowKeep = Mathf.Min(slowKeep, Mathf.Clamp01(keep));
+        }
+
         /// <summary>The push from the zombies crowding round it, in tiles per second (set by the director every frame).</summary>
         internal Vector2 Crowding;
 
@@ -99,6 +123,11 @@ namespace KingdomGame.Zombies
             if (Health == null || Health.Dead) return;
             hurtFlash = Mathf.Max(0f, hurtFlash - dt);
             var before = position;
+            if (Held)
+            {
+                Show(Vector2.zero, dt);
+                return;
+            }
 
             if (attackClock >= 0f)
             {
@@ -157,7 +186,9 @@ namespace KingdomGame.Zombies
                 return;
             }
 
-            float speed = Config.moveSpeed * director.SpeedFactor;
+            // Slowed by what it walked through last frame (the defences run after the zombies move).
+            float slow = Time.frameCount - slowFrame <= 1 ? slowKeep : 1f;
+            float speed = Config.moveSpeed * director.SpeedFactor * slow;
             var move = (want.sqrMagnitude > 1e-6f ? want.normalized * speed : Vector2.zero) + Crowding;
             Move(move * dt);
             // Hardly moving while trying to walk (pressed into a corner, stuck in a crowd): follow the field for a while.

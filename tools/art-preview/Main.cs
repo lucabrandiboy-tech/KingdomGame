@@ -168,6 +168,33 @@ static class Program
                 }
         }
         SaveImage(sheet, Path.Combine(dir, "houses.png"));
+
+        // Traps and towers (DefenseArt) at 256 pixels per tile: each base, sprung trap, and four directions of each head.
+        const int ppt = 256;
+        var pics = new List<PixelImage>();
+        foreach (var d in FurnitureArt.Defenses)
+        {
+            pics.Add(d.Draw(ppt));
+            if (d.Sprung != null) pics.Add(d.Sprung(ppt));
+            if (d.Head != null) for (int k = 0; k < 4; k++) pics.Add(d.Head(ppt, k * 90f + 30f));
+        }
+        int box = ppt * 2 + 16, perRow = 6;
+        var defenses = new PixelImage(box * perRow, box * ((pics.Count + perRow - 1) / perRow));
+        for (int i = 0; i < defenses.Pixels.Length; i++) defenses.Pixels[i] = PixelImage.Rgb(70, 84, 52);
+        for (int i = 0; i < pics.Count; i++)
+        {
+            var pic = pics[i];
+            int ox = (i % perRow) * box + (box - pic.Width) / 2, oy = defenses.Height - (i / perRow + 1) * box + (box - pic.Height) / 2;
+            for (int y = 0; y < pic.Height; y++)
+                for (int x = 0; x < pic.Width; x++)
+                {
+                    var c = pic.Pixels[y * pic.Width + x];
+                    if (c.a == 0) continue;
+                    int k = (oy + y) * defenses.Width + ox + x;
+                    defenses.Pixels[k] = PixelImage.Mix(defenses.Pixels[k], c, c.a / 255f);
+                }
+        }
+        SaveImage(defenses, Path.Combine(dir, "defenses.png"));
     }
 
     // ------------------------------------------------------------- world --

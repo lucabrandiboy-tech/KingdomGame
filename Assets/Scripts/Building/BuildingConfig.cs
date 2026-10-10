@@ -115,6 +115,10 @@ namespace KingdomGame.Building
         [Tooltip("What the roof is covered with (each age has its own).")]
         public RoofStyle roofStyle = RoofStyle.Thatch;
 
+        [Header("Traps and towers")]
+        [Tooltip("What it does to zombies (a trap, an area, a mine or a tower), or empty for ordinary furniture.")]
+        public Defenses.DefenseConfig defense;
+
         [Header("Houses")]
         [Tooltip("A house's levels, one per age (Houses only).")]
         public HouseConfig house;

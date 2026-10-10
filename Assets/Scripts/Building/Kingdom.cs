@@ -1075,6 +1075,18 @@ namespace KingdomGame.Building
             }
         }
 
+        /// <summary>A mine went off: it's gone, and builders set a new one in the same place (it costs again).</summary>
+        public void Rebuild(Furniture spent)
+        {
+            if (spent == null) return;
+            var config = spent.Config;
+            var cell = spent.Cells.position;
+            int rotation = spent.Rotation;
+            Forget(spent);
+            spent.Remove();
+            PlaceBlueprint(config, cell, rotation);
+        }
+
         /// <summary>A door or piece of furniture was smashed (zombies, explosions): it's gone, with a burst of splinters.</summary>
         public void Broke(IBuilt thing)
         {
@@ -1165,6 +1177,16 @@ namespace KingdomGame.Building
             return true;
         }
 
+        /// <summary>Why guards are standing about, for the villagers panel (null if every guard has a tower).</summary>
+        public string GuardProblem()
+        {
+            int towers = 0;
+            foreach (var d in Defenses.Defense.All) if (d != null && d.NeedsGuard) towers++;
+            if (towers == 0) return "no towers to stand on: build an archer tower, ballista or cannon tower (Towers tab)";
+            int guards = CountOf(Job.Guard);
+            return guards > towers ? $"{guards - towers} more guards than towers" : null;
+        }
+
         /// <summary>Why gatherers of this kind are standing about, for the villagers panel (null if they're fine).</summary>
         public string GatherProblem(ResourceType type)
         {
@@ -1223,6 +1245,20 @@ namespace KingdomGame.Building
             if (Jobs.Gathers(v.Job, out var gathers))
             {
                 Gather(v, gathers);
+                return;
+            }
+            if (v.Job == Job.Guard && v.CarryAmount == 0)
+            {
+                // Up onto the nearest tower that has nobody on it.
+                Defenses.Defense post = null;
+                float best = float.MaxValue;
+                foreach (var d in Defenses.Defense.All)
+                {
+                    if (d == null || !d.NeedsGuard || (d.Guard != null && d.Guard != v)) continue;
+                    float distance = Travel(v.Position, d.Center);
+                    if (distance < best) { best = distance; post = d; }
+                }
+                if (post != null) v.StartGuard(post);
                 return;
             }
             if (v.Job != Job.Builder)

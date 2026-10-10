@@ -15,12 +15,14 @@ namespace KingdomGame.Villagers
         Miner,
         /// <summary>Picks berries and carries the food to storage.</summary>
         Forager,
+        /// <summary>Stands on a tower and works it (archer towers, ballistas, cannons). Doesn't run from zombies.</summary>
+        Guard,
     }
 
     public static class Jobs
     {
         /// <summary>The jobs in the villagers panel, in order.</summary>
-        public static readonly Job[] Listed = { Job.Builder, Job.Woodcutter, Job.Miner, Job.Forager };
+        public static readonly Job[] Listed = { Job.Builder, Job.Woodcutter, Job.Miner, Job.Forager, Job.Guard };
 
         public static string Name(Job job, bool plural = false)
         {
@@ -30,6 +32,7 @@ namespace KingdomGame.Villagers
                 case Job.Woodcutter: return plural ? "Woodcutters" : "Woodcutter";
                 case Job.Miner: return plural ? "Miners" : "Miner";
                 case Job.Forager: return plural ? "Foragers" : "Forager";
+                case Job.Guard: return plural ? "Guards" : "Guard";
                 default: return "Idle";
             }
         }
@@ -55,6 +58,7 @@ namespace KingdomGame.Villagers
                 case Job.Woodcutter: return "chop trees (planted ones first)";
                 case Job.Miner: return "break rocks for stone";
                 case Job.Forager: return "pick berries for food";
+                case Job.Guard: return "man the towers (archer tower, ballista, cannon)";
                 default: return "";
             }
         }

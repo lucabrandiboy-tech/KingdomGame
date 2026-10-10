@@ -4,6 +4,7 @@ using KingdomGame.Art;
 using KingdomGame.Building;
 using KingdomGame.Character;
 using KingdomGame.Combat;
+using KingdomGame.Defenses;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
 using KingdomGame.UI;
@@ -38,8 +39,9 @@ namespace KingdomGame.EditorTools
         /// 3: houses (a house you go into, bigger inside, upgraded age by age).
         /// 4: roofs on the build bar (one kind per age).
         /// 5: farming (tree saplings, berry bushes) for the woodcutters and foragers.
+        /// 6: traps and towers.
         /// </summary>
-        const int SettingsVersion = 5;
+        const int SettingsVersion = 6;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -65,9 +67,9 @@ namespace KingdomGame.EditorTools
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             Folder("Assets", "Data");
-            foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies" })
+            foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies", "Defenses" })
                 Folder(DataRoot, area);
-            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming" })
+            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming", "Traps", "Towers" })
                 Folder(DataRoot + "/Building", area);
             Folder("Assets", "Scenes");
             Folder("Assets", "Art");
@@ -82,6 +84,7 @@ namespace KingdomGame.EditorTools
             bool housesUpdate = oldContent != null && oldContent.settingsVersion < 3;
             bool roofsUpdate = oldContent != null && oldContent.settingsVersion < 4;
             bool farmingUpdate = oldContent != null && oldContent.settingsVersion < 5;
+            bool defensesUpdate = oldContent != null && oldContent.settingsVersion < 6;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -122,6 +125,25 @@ namespace KingdomGame.EditorTools
                 d.radiusPixels = 6; d.centerDamage = 120; d.edgeDamage = 30; d.jaggedness = 170; d.noiseBlock = 2;
                 d.debrisChance = 0.5f; d.debrisSpeed = new Vector2(0.8f, 2.5f); d.debrisLift = new Vector2(1f, 2.5f);
                 d.sparks = 3; d.sparkColor = new Color32(140, 128, 110, 255); d.screenShake = 0f;
+            });
+
+            // A mine going off, and a cannonball landing: they hurt zombies all round and break walls a little.
+            var mineBlast = Asset<DamageType>("Destruction/MineBlast", d =>
+            {
+                d.category = DamageCategory.Explosive;
+                d.radiusPixels = 30; d.centerDamage = 300; d.edgeDamage = 80; d.jaggedness = 110; d.noiseBlock = 3;
+                d.debrisChance = 0.12f; d.debrisSpeed = new Vector2(3f, 8f); d.debrisLift = new Vector2(2f, 6f);
+                d.sparks = 60; d.sparkColor = new Color32(255, 160, 70, 255); d.screenShake = 0.2f;
+                d.creatureDamage = 200f; d.blastRadius = 2.2f; d.friendlyShare = 0.35f;
+            });
+            var cannonBlast = Asset<DamageType>("Destruction/CannonBlast", d =>
+            {
+                d.category = DamageCategory.Explosive;
+                // Small in the walls (shells land among zombies at your walls): mostly a blast for the zombies.
+                d.radiusPixels = 8; d.centerDamage = 60; d.edgeDamage = 20; d.jaggedness = 110; d.noiseBlock = 2;
+                d.debrisChance = 0.12f; d.debrisSpeed = new Vector2(2f, 7f); d.debrisLift = new Vector2(2f, 5f);
+                d.sparks = 40; d.sparkColor = new Color32(255, 170, 80, 255); d.screenShake = 0.12f;
+                d.creatureDamage = 110f; d.blastRadius = 1.3f; d.friendlyShare = 0.1f;
             });
 
             var stone = Asset<StructureMaterial>("Destruction/StoneWall", m =>
@@ -225,6 +247,7 @@ namespace KingdomGame.EditorTools
             });
             var castle = CastleBuildings();
             var house = House(stone, wood);
+            var defenses = Defenses(mineBlast, cannonBlast);
             // Planted trees grow back after they're cut (a tree farm); a little less wood than a wild one.
             var plantedTree = Asset<ResourceNodeConfig>("Economy/PlantedTree", n =>
             {
@@ -290,6 +313,7 @@ namespace KingdomGame.EditorTools
             menu.Insert(firstStorage >= 0 ? firstStorage + 2 : menu.Count, storehouse);
             menu.Add(house);
             menu.AddRange(farming);
+            menu.AddRange(defenses);
             // Roofs go on the Floors & roofs tab after the rugs.
             int afterFloors = menu.FindLastIndex(b => b != null && b.category == BuildCategory.Floors);
             menu.InsertRange(afterFloors >= 0 ? afterFloors + 1 : menu.Count, roofs);
@@ -328,6 +352,13 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Added houses to your build bar (the Houses tab). Your other settings were kept.");
             }
 
+            if (defensesUpdate)
+            {
+                var list = new List<BuildingConfig>(content.buildMenu);
+                foreach (var d in defenses) if (!list.Contains(d)) list.Add(d);
+                content.buildMenu = list.ToArray();
+                Debug.Log("Added traps and towers to your build bar (the Traps and Towers tabs). Your other settings were kept.");
+            }
             if (farmingUpdate)
             {
                 var list = new List<BuildingConfig>(content.buildMenu);
@@ -357,7 +388,7 @@ namespace KingdomGame.EditorTools
             EditorUtility.SetDirty(content);
             AssetDatabase.SaveAssets();
 
-            var damageTypes = new[] { bullet, rocketBlast, c4Blast, smash, claw };
+            var damageTypes = new[] { bullet, rocketBlast, c4Blast, smash, claw, mineBlast, cannonBlast };
 
             // Scene 1: the main menu.
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
@@ -462,6 +493,56 @@ namespace KingdomGame.EditorTools
                 Store("Crates", "Crates", FurnitureArt.Crates, 1, 15, 3f, 250, 0.3f, 180f),
             };
             return list;
+        }
+
+        // Traps (they work by themselves) and towers (a guard works the early ones; the machine-gun nest shoots by itself).
+        static List<BuildingConfig> Defenses(DamageType mineBlast, DamageType cannonBlast)
+        {
+            WeaponConfig Shot(string file, float hit, float speed, float range, float spread, int length, int thickness, Color32 color,
+                DamageType damage = null, bool explode = false) =>
+                Asset<WeaponConfig>("Combat/" + file, w =>
+                {
+                    w.hitDamage = hit; w.projectileSpeed = speed; w.range = range; w.spreadDegrees = spread; w.fireRate = 1f; w.automatic = false;
+                    w.projectileLength = length; w.projectileThickness = thickness; w.projectileColor = color; w.overWalls = 0f;
+                    w.damage = damage; w.explodeAtEndOfRange = explode; w.recoilShake = 0f;
+                });
+            var arrow = Shot("Arrow", 18f, 18f, 8f, 2.5f, 12, 2, new Color32(176, 140, 92, 255));
+            var bolt = Shot("BallistaBolt", 45f, 22f, 10f, 1f, 20, 3, new Color32(150, 116, 74, 255));
+            var cannonball = Shot("Cannonball", 60f, 11f, 14f, 1.5f, 7, 7, new Color32(40, 40, 44, 255), cannonBlast, true);
+            var gunBullet = Shot("GunNestBullet", 14f, 34f, 9.5f, 4f, 8, 2, new Color32(255, 214, 102, 255));
+
+            DefenseConfig Defense(string file, Action<DefenseConfig> values) => Asset<DefenseConfig>("Defenses/" + file, values);
+            var spikePit = Defense("SpikePit", d => { d.kind = DefenseKind.Trap; d.damage = 40f; d.holdSeconds = 6f; d.catchesOne = true; d.rearmSeconds = 20f; });
+            var stakes = Defense("StakeField", d => { d.kind = DefenseKind.Area; d.slowTo = 0.5f; d.damagePerSecond = 5f; });
+            var bearTrap = Defense("BearTrap", d => { d.kind = DefenseKind.Trap; d.damage = 50f; d.holdSeconds = 8f; d.catchesOne = true; d.rearmSeconds = 12f; });
+            var wire = Defense("BarbedWire", d => { d.kind = DefenseKind.Area; d.slowTo = 0.3f; d.damagePerSecond = 6f; });
+            var mine = Defense("Landmine", d => { d.kind = DefenseKind.Mine; d.blast = mineBlast; d.triggerRadius = 0.45f; d.damage = 200f; });
+            var archers = Defense("ArcherTower", d => { d.kind = DefenseKind.Tower; d.weapon = arrow; d.range = 7.5f; d.shotsPerSecond = 1f; d.needsGuard = true; d.turnSpeed = 360f; });
+            var ballista = Defense("Ballista", d => { d.kind = DefenseKind.Tower; d.weapon = bolt; d.range = 9f; d.shotsPerSecond = 0.4f; d.pierce = 3; d.needsGuard = true; d.turnSpeed = 120f; });
+            var cannon = Defense("Cannon", d => { d.kind = DefenseKind.Tower; d.weapon = cannonball; d.range = 13f; d.minRange = 3f; d.shotsPerSecond = 0.2f; d.lobbed = true; d.needsGuard = true; d.turnSpeed = 90f; });
+            var gun = Defense("GunNest", d => { d.kind = DefenseKind.Tower; d.weapon = gunBullet; d.range = 9f; d.shotsPerSecond = 8f; d.needsGuard = false; d.turnSpeed = 200f; });
+
+            BuildingConfig Item(string file, string displayName, string art, BuildCategory category, int size, int wood, int stone, int food,
+                float seconds, float health, float height, bool blocks, bool drag, DefenseConfig defense) =>
+                Asset<BuildingConfig>("Building/" + file, b =>
+                {
+                    b.displayName = displayName; b.kind = BuildingKind.Furniture; b.category = category; b.art = art;
+                    b.size = new Vector2Int(size, size); b.rotations = 1; b.woodCost = wood; b.stoneCost = stone; b.foodCost = food;
+                    b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = blocks; b.flat = false;
+                    b.dragToPlaceLines = drag; b.roomTag = RoomTag.None; b.defense = defense;
+                });
+            return new List<BuildingConfig>
+            {
+                Item("Traps/SpikePit", "Spike pit", FurnitureArt.SpikePit, BuildCategory.Traps, 1, 10, 0, 0, 6f, 100f, 0f, false, false, spikePit),
+                Item("Traps/StakeField", "Stake field", FurnitureArt.StakeField, BuildCategory.Traps, 1, 12, 0, 0, 4f, 100f, 0.15f, false, true, stakes),
+                Item("Traps/BearTrap", "Bear trap", FurnitureArt.BearTrap, BuildCategory.Traps, 1, 5, 15, 0, 4f, 100f, 0f, false, false, bearTrap),
+                Item("Traps/BarbedWire", "Barbed wire", FurnitureArt.BarbedWire, BuildCategory.Traps, 1, 4, 10, 0, 3f, 100f, 0.2f, false, true, wire),
+                Item("Traps/Landmine", "Landmine", FurnitureArt.Landmine, BuildCategory.Traps, 1, 0, 20, 0, 3f, 100f, 0f, false, false, mine),
+                Item("Towers/ArcherTower", "Archer tower", FurnitureArt.ArcherTower, BuildCategory.Towers, 2, 80, 10, 0, 20f, 600f, 1.2f, true, false, archers),
+                Item("Towers/Ballista", "Ballista", FurnitureArt.BallistaTower, BuildCategory.Towers, 2, 120, 80, 0, 30f, 900f, 1.1f, true, false, ballista),
+                Item("Towers/CannonTower", "Cannon tower", FurnitureArt.CannonTower, BuildCategory.Towers, 2, 40, 300, 0, 45f, 1400f, 1.2f, true, false, cannon),
+                Item("Towers/GunNest", "Machine-gun nest", FurnitureArt.GunNest, BuildCategory.Towers, 2, 40, 120, 20, 30f, 800f, 0.5f, true, false, gun),
+            };
         }
 
         // Roofs, one kind per age: dragged over a room like a floor, drawn as one roof for its shape.

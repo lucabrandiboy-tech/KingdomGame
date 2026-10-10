@@ -9,7 +9,7 @@ namespace KingdomGame.Art
     /// turned and lit from the top-left (<see cref="Finish"/>), so every direction
     /// it can face is lit the same way. Sizes are in tiles; <c>ppu</c> is pixels per tile.
     /// </summary>
-    public static class FurnitureArt
+    public static partial class FurnitureArt
     {
         /// <summary>How each piece of furniture is drawn: its art name, how many directions, and the drawing.</summary>
         public struct Piece

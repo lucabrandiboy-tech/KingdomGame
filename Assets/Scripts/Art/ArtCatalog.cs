@@ -72,6 +72,10 @@ namespace KingdomGame.Art
         public static string FloorTile(string art, int variant) => $"{art}/{variant}";
         public static string DoorClosed(string art, int rotation) => $"{art}/Closed/{rotation}";
         public static string DoorOpen(string art, int rotation) => $"{art}/Open/{rotation}";
+        /// <summary>A trap once it's gone off (a pit opened up, jaws shut, a crater).</summary>
+        public static string Sprung(string art) => $"{art}/Sprung";
+        /// <summary>A tower's turning head, drawn for direction <paramref name="direction"/> of <see cref="FurnitureArt.HeadDirections"/>.</summary>
+        public static string Head(string art, int direction) => $"{art}/Head/{direction}";
         /// <summary>A small bright flame (torches, candles, fireplaces).</summary>
         public const string Flame = "Effect/Flame";
         public static string Blood(int variant) => $"Effect/Blood/{variant}";
@@ -97,7 +101,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 3;
+        public const int Version = 4;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -178,6 +182,21 @@ namespace KingdomGame.Art
                     Add(items, ArtKeys.DoorOpen(art, r), "Doors", p => FurnitureArt.Door(p, heavy, true, rotation), true, half);
                     Shadow(items, ArtKeys.DoorClosed(art, r), "FurnitureShadows", 0.02f);
                 }
+            // Traps and towers (their turning heads drawn for each direction).
+            foreach (var d in FurnitureArt.Defenses)
+            {
+                var piece = d;
+                string key = ArtKeys.Turned(piece.Art, 0);
+                Add(items, key, "Defenses", p => piece.Draw(p), true, half);
+                if (!piece.Flat) Shadow(items, key, "FurnitureShadows", 0.03f);
+                if (piece.Sprung != null) Add(items, ArtKeys.Sprung(piece.Art), "Defenses", p => piece.Sprung(p), true, half);
+                if (piece.Head == null) continue;
+                for (int h = 0; h < FurnitureArt.HeadDirections; h++)
+                {
+                    float degrees = h * 360f / FurnitureArt.HeadDirections;
+                    Add(items, ArtKeys.Head(piece.Art, h), "DefenseHeads", p => piece.Head(p, degrees), true, half);
+                }
+            }
             Add(items, ArtKeys.Flame, "Effects", FurnitureArt.Flame, false, half);
             for (int v = 0; v < BloodVariants; v++)
             {

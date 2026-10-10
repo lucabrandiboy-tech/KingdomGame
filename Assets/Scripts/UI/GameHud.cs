@@ -44,6 +44,7 @@ namespace KingdomGame.UI
             "Esc  pause          F3  performance info          H  hide this";
 
         const string SurvivalKeys = "\nN  call the next wave now";
+        const string FreeBuildKeys = "\nF9  send 8 zombies (to try your traps and towers)";
 
         const string ThroneControls =
             "Tab or click a tab  walls, floors & roofs, furniture, lights, storage, traps, towers\n" +
@@ -146,7 +147,7 @@ namespace KingdomGame.UI
             if (showControls)
             {
                 string controls = throne ? (builder.Furnishing != null ? FurnishControls : ThroneControls)
-                    : WalkControls + (waves != null ? SurvivalKeys : "");
+                    : WalkControls + (waves != null ? SurvivalKeys : FreeBuildKeys);
                 Draw(controls, box, Corner.BottomLeft);
             }
         }

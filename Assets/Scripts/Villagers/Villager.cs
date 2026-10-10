@@ -31,7 +31,7 @@ namespace KingdomGame.Villagers
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -56,6 +56,8 @@ namespace KingdomGame.Villagers
         Blueprint blueprint, countedOn;
         Storage storage;
         ResourceNode node;       // what it's gathering from
+        Defenses.Defense post;   // the tower it guards
+        bool onPost;             // up on it
         float gatherClock;
         Job job = Job.Builder;
         ResourceType carryType;
@@ -99,6 +101,7 @@ namespace KingdomGame.Villagers
                     case Task.Return: return "taking things back to storage";
                     case Task.MakeRoom: return "making room";
                     case Task.Flee: return "running from zombies";
+                    case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
                     case Task.Gather: return node != null ? $"gathering {node.Config.resource.ToString().ToLowerInvariant()}" : "gathering";
                     default: return Scared ? "hiding" : "idle";
                 }
@@ -122,7 +125,7 @@ namespace KingdomGame.Villagers
 
             Health = gameObject.AddComponent<Health>();
             Health.Setup(Team.Friendly, config.maxHealth, 0.18f, true);
-            Health.Hurt += (h, amount, from) => { if (!h.Dead) Flee(from); };
+            Health.Hurt += (h, amount, from) => { if (!h.Dead && job != Job.Guard) Flee(from); };
             Health.Died += OnDied;
         }
 
@@ -154,6 +157,50 @@ namespace KingdomGame.Villagers
             if (Walk(new RectInt(target.Cell, Vector2Int.one), true)) return true;
             Idle();
             return false;
+        }
+
+        /// <summary>Go to a tower and stand on it (guards): it shoots while they're up there.</summary>
+        public bool StartGuard(Defenses.Defense tower)
+        {
+            if (tower == null) return false;
+            post = tower;
+            tower.Guard = this;
+            onPost = false;
+            task = Task.Guard;
+            if (Walk(tower.Cells, true)) return true;
+            Idle();
+            return false;
+        }
+
+        /// <summary>Whether it's up on <paramref name="tower"/>, working it.</summary>
+        public bool OnPost(Defenses.Defense tower) => onPost && post == tower && Health != null && !Health.Dead;
+
+        /// <summary>Turns to face a way (a guard aiming at a zombie).</summary>
+        public void Face(Vector2 direction)
+        {
+            if (direction.sqrMagnitude > 1e-6f) facing = direction.normalized;
+        }
+
+        // Climbs up onto its tower: zombies can't reach it there.
+        void Mount()
+        {
+            onPost = true;
+            transform.position = post.Center + (post.HasHead ? new Vector2(0f, -0.55f) : Vector2.zero);
+            Health.OutOfReach = true;
+            bodyRenderer.sortingOrder = SortOrder.Furniture + 3;
+            if (shadow != null) shadow.enabled = false;
+        }
+
+        // Back down beside the tower (its tower went, or its job changed).
+        void Dismount()
+        {
+            if (!onPost) return;
+            onPost = false;
+            Health.OutOfReach = false;
+            bodyRenderer.sortingOrder = SortOrder.Characters;
+            if (shadow != null) shadow.enabled = true;
+            if (nav.NearestFreeSpot(Position, post != null ? post.Cells : new RectInt(NavGrid.CellAt(Position), Vector2Int.one), out var spot))
+                transform.position = spot;
         }
 
         /// <summary>Carry what's in hand to a blueprint that needs it (already counted as on its way there).</summary>
@@ -254,7 +301,7 @@ namespace KingdomGame.Villagers
             {
                 lookAt = Time.time + 0.3f;
                 var director = ZombieDirector.Current;
-                var zombie = director != null ? director.NearestVisible(Position, config.fleeDistance) : null;
+                var zombie = director != null && job != Job.Guard ? director.NearestVisible(Position, config.fleeDistance) : null;
                 if (zombie != null) Flee(zombie.Position);
             }
 
@@ -273,6 +320,11 @@ namespace KingdomGame.Villagers
             else if ((task == Task.Fetch || task == Task.Return) && storage == null)
             {
                 Abandon();
+            }
+            else if (task == Task.Guard && post == null)
+            {
+                Idle();   // its tower was broken or torn down
+                thinkAt = Time.time;
             }
             else if (task == Task.Gather && (node == null || node.Empty))
             {
@@ -362,6 +414,9 @@ namespace KingdomGame.Villagers
                     if (toSite.sqrMagnitude > 0.0001f) facing = toSite.normalized;
                     return;
                 }
+                case Task.Guard:
+                    if (!onPost) Mount();
+                    return;
                 case Task.Gather:
                 {
                     var toNode = (Vector2)node.transform.position - Position;
@@ -415,6 +470,9 @@ namespace KingdomGame.Villagers
             task = Task.Idle;
             if (node != null && node.Gatherer == (Component)this) node.Gatherer = null;
             node = null;
+            Dismount();
+            if (post != null && post.Guard == this) post.Guard = null;
+            post = null;
             CountAsBuilder(null);
             blueprint = null;
             storage = null;

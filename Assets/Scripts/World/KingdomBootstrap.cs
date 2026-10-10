@@ -95,11 +95,17 @@ namespace KingdomGame.World
             // Survival: the zombies, and the waves they come in. Falling ends the game.
             SurvivalDirector waves = null;
             rulerController.RespawnOnDeath = !survival;
-            if (survival)
+            // Zombies: waves in survival; in free build only the test horde (F9) for trying traps and towers.
+            ZombieDirector zombies = null;
+            if (content.survival != null)
             {
-                var zombies = new GameObject("Zombies").AddComponent<ZombieDirector>();
+                zombies = new GameObject("Zombies").AddComponent<ZombieDirector>();
                 zombies.transform.SetParent(transform, false);
                 zombies.Setup(content.survival, world, kingdom, rulerController, dayNight, kingdom.Nav.Cells);
+                zombies.TestHordeKey = !survival;
+            }
+            if (survival)
+            {
                 waves = gameObject.AddComponent<SurvivalDirector>();
                 waves.Setup(content.survival, zombies, kingdom);
                 rulerController.Health.Died += _ => waves.RulerFell();

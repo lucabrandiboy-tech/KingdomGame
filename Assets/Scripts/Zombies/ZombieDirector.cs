@@ -65,6 +65,8 @@ namespace KingdomGame.Zombies
         public static ZombieDirector Current { get; private set; }
 
         public IReadOnlyList<Zombie> Zombies => zombies;
+        /// <summary>Free build: F9 sends a small horde, to try traps and towers on.</summary>
+        public bool TestHordeKey { get; set; }
         public int Alive => zombies.Count;
         public int Kills { get; private set; }
         /// <summary>A zombie died (for counting and the HUD).</summary>
@@ -121,6 +123,7 @@ namespace KingdomGame.Zombies
             }
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
+            if (TestHordeKey && GameInput.Pressed(KeyCode.F9)) TestHorde();
             Crowd();
             for (int i = zombies.Count - 1; i >= 0; i--)
             {
@@ -143,6 +146,15 @@ namespace KingdomGame.Zombies
             z.Setup(this, kind, SpritesOf(kind), toughness, at);
             zombies.Add(z);
             return z;
+        }
+
+        // Eight zombies from a random side of the map (free build, F9).
+        void TestHorde()
+        {
+            if (config == null || config.zombies == null || config.zombies.Length == 0 || config.zombies[0] == null) return;
+            if (!FindSpawnPoint(UnityEngine.Random.value, 14f, out var spot)) return;
+            for (int i = 0; i < 8; i++)
+                Spawn(config.zombies[0], spot + UnityEngine.Random.insideUnitCircle * 0.8f, 1f);
         }
 
         ZombieSprites SpritesOf(ZombieConfig kind)

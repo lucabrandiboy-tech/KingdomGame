@@ -32,6 +32,8 @@ namespace KingdomGame.Building
             var r = go.AddComponent<SpriteRenderer>();
             r.sprite = look;
             r.sortingOrder = config.flat ? SortOrder.Rugs : SortOrder.Furniture;
+            // A trap or tower: it works on zombies by itself (or with a guard).
+            if (config.defense != null) gameObject.AddComponent<Defenses.Defense>().Setup(this, config.defense, r, owner);
 
             if (config.blocksMovement)
             {

@@ -524,6 +524,9 @@ namespace KingdomGame.Zombies
             if (target == null) return;
             target.Damage(z.Config.structureDamage * damage, z.Position);
             if (!target.Dead) ShowBar(target, null, target);
+            // Thorns, stakes, spikes: the zombie gets hurt hitting it.
+            if (thing is Furniture barrier && barrier.Config.defense != null && barrier.Config.defense.thorns > 0f && z.Health != null)
+                z.Health.Damage(barrier.Config.defense.thorns, (Vector2)cell + new Vector2(0.5f, 0.5f));
         }
 
         // ---------------------------------------------------------- bars --

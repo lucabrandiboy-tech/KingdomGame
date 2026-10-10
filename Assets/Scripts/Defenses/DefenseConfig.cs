@@ -14,6 +14,10 @@ namespace KingdomGame.Defenses
         Mine,
         /// <summary>Shoots zombies in range: with a guard on it, or by itself.</summary>
         Tower,
+        /// <summary>Stands in the way: zombies have to smash through it, and thorns hurt them while they do.</summary>
+        Barrier,
+        /// <summary>Goes off when a zombie steps on it and fills the air round it with gas or fire for a while.</summary>
+        Cloud,
     }
 
     /// <summary>
@@ -46,6 +50,21 @@ namespace KingdomGame.Defenses
         public DamageType blast;
         [Tooltip("How close a zombie must come to set it off, in tiles from its middle.")]
         [Min(0.05f)] public float triggerRadius = 0.45f;
+
+        [Header("Barriers")]
+        [Tooltip("Damage to a zombie each time it hits this (thorns, sharpened stakes). 0 = none.")]
+        [Min(0)] public float thorns;
+
+        [Header("Clouds (gas, napalm)")]
+        [Tooltip("How far the cloud reaches from its middle, in tiles.")]
+        [Min(0.2f)] public float cloudRadius = 2f;
+        [Tooltip("How long the cloud lasts, in seconds (it sets itself again after Rearm Seconds).")]
+        [Min(0.5f)] public float cloudSeconds = 8f;
+        [Tooltip("Damage per second to every zombie in the cloud.")]
+        [Min(0)] public float cloudDamagePerSecond = 12f;
+        public Color cloudColor = new Color(0.55f, 0.7f, 0.3f, 0.45f);
+        [Tooltip("The cloud glows (fire), instead of being lit like gas.")]
+        public bool cloudGlows;
 
         [Header("Towers")]
         [Tooltip("What it shoots (its Hit Damage, speed and look; explosive shots blow up where they land).")]

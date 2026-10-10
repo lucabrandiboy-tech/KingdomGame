@@ -176,9 +176,9 @@ static class Program
         {
             pics.Add(d.Draw(ppt));
             if (d.Sprung != null) pics.Add(d.Sprung(ppt));
-            if (d.Head != null) for (int k = 0; k < 4; k++) pics.Add(d.Head(ppt, k * 90f + 30f));
+            if (d.Head != null) for (int k = 0; k < 2; k++) pics.Add(d.Head(ppt, k * 135f + 30f));
         }
-        int box = ppt * 2 + 16, perRow = 6;
+        int box = ppt * 2 + 16, perRow = 10;
         var defenses = new PixelImage(box * perRow, box * ((pics.Count + perRow - 1) / perRow));
         for (int i = 0; i < defenses.Pixels.Length; i++) defenses.Pixels[i] = PixelImage.Rgb(70, 84, 52);
         for (int i = 0; i < pics.Count; i++)

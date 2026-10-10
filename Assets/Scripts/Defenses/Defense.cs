@@ -36,6 +36,8 @@ namespace KingdomGame.Defenses
         bool armed = true;
         float rearmAt, damageClock, shotReady, searchAt;
         float aim = 90f;
+        float cloudUntil, cloudStarted, cloudClock;
+        SpriteRenderer cloud;
         Zombie target;
         readonly List<Zombie> caught = new List<Zombie>();
 
@@ -88,6 +90,8 @@ namespace KingdomGame.Defenses
                 case DefenseKind.Trap: Trap(director); break;
                 case DefenseKind.Area: Area(director); break;
                 case DefenseKind.Mine: Mine(director); break;
+                case DefenseKind.Cloud: Cloud(director); break;
+                case DefenseKind.Barrier: break;   // the zombies do the work: see ZombieDirector.HitCell
                 default: Tower(director); break;
             }
         }
@@ -136,6 +140,89 @@ namespace KingdomGame.Defenses
                 if (hurt) caught.Add(z);
             }
             foreach (var z in caught) z.Health.Damage(config.damagePerSecond * DamageTick, z.Position);
+        }
+
+        // A gas or napalm trap: the first zombie on it sets off a cloud that hurts everything in it for a while.
+        void Cloud(ZombieDirector director)
+        {
+            float now = Time.time;
+            if (cloudUntil > now)
+            {
+                cloudClock += Time.deltaTime;
+                bool hurt = cloudClock >= DamageTick;
+                if (hurt) cloudClock -= DamageTick;
+                float r2 = config.cloudRadius * config.cloudRadius;
+                caught.Clear();
+                if (hurt)
+                    foreach (var z in director.Zombies)
+                        if (z != null && z.Health != null && !z.Health.Dead && (z.Position - Center).sqrMagnitude <= r2) caught.Add(z);
+                foreach (var z in caught) z.Health.Damage(config.cloudDamagePerSecond * DamageTick, z.Position);
+                ShowCloud(now);
+                return;
+            }
+            if (cloud != null && cloud.enabled) cloud.enabled = false;
+            if (!armed)
+            {
+                if (now < rearmAt) return;
+                armed = true;
+                if (look != null) look.sprite = armedLook;
+            }
+            var area = new Rect(Cells.position, Cells.size);
+            foreach (var z in director.Zombies)
+            {
+                if (z == null || z.Health == null || z.Health.Dead || !area.Contains(z.Position)) continue;
+                armed = false;
+                cloudUntil = now + config.cloudSeconds;
+                cloudStarted = now;
+                rearmAt = now + Mathf.Max(config.rearmSeconds, config.cloudSeconds);
+                if (look != null && sprungLook != null) look.sprite = sprungLook;
+                ShowCloud(now);
+                return;
+            }
+        }
+
+        // The cloud: a soft, slowly churning blot, growing in as it's let out and thinning before it's gone.
+        void ShowCloud(float now)
+        {
+            if (cloud == null)
+            {
+                var go = new GameObject("Cloud");
+                go.transform.SetParent(transform, false);
+                cloud = go.AddComponent<SpriteRenderer>();
+                cloud.sprite = CloudSprite();
+                cloud.sortingOrder = SortOrder.Smoke;
+                if (config.cloudGlows) Look.MakeGlow(cloud);
+            }
+            cloud.enabled = true;
+            float age = now - cloudStarted, left = cloudUntil - now;
+            float grow = Mathf.Clamp01(age / 0.6f), fade = Mathf.Clamp01(left / 1.5f);
+            float size = config.cloudRadius * 2f * (0.6f + 0.4f * grow) * (1f + Mathf.Sin(now * 1.7f) * 0.04f);
+            cloud.transform.localScale = new Vector3(size, size, 1f);
+            cloud.transform.localRotation = Quaternion.Euler(0f, 0f, now * 12f);
+            var c = config.cloudColor;
+            c.a *= grow * fade * (0.85f + Mathf.Sin(now * 5.3f) * 0.15f);
+            cloud.color = c;
+        }
+
+        static Sprite cloudSprite;
+
+        // One soft, lumpy white blot (1 tile across) shared by every cloud; each tints it.
+        static Sprite CloudSprite()
+        {
+            if (cloudSprite != null) return cloudSprite;
+            const int size = 96;
+            var img = new PixelImage(size, size);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float px = (x + 0.5f) / size - 0.5f, py = (y + 0.5f) / size - 0.5f;
+                    float d = Mathf.Sqrt(px * px + py * py) * 2f;
+                    float lumps = Noise.Fractal(px * 5f + 9f, py * 5f + 9f, 77u, 3);
+                    float a = Mathf.Clamp01((1f - d) * 1.6f) * (0.55f + 0.45f * lumps);
+                    img.Pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
+                }
+            cloudSprite = PixelTextures.ToSprite(img, "Cloud", false, size);
+            return cloudSprite;
         }
 
         void Mine(ZombieDirector director)

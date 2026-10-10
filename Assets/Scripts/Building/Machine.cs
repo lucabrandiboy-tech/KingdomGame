@@ -11,6 +11,7 @@ namespace KingdomGame.Building
     /// the sawmills and quarries within its reach. Those send what they make along the
     /// conveyor belts touching them to a storehouse or chest the belts (or the machine) touch;
     /// with no way to storage they fill up and stop. A machine that isn't working is drawn darker.
+    /// An electric lamp shines only while a burning generator's power reaches it.
     /// </summary>
     public sealed class Machine : MonoBehaviour
     {
@@ -35,6 +36,7 @@ namespace KingdomGame.Building
         Kingdom kingdom;
         SpriteRenderer look;
         float workAt, poweredUntil, routeAt;
+        FireLight lamp;
         int held;
         bool working;
         Storage target;
@@ -58,6 +60,14 @@ namespace KingdomGame.Building
                 enabled = false;
             }
             else if (config.kind == MachineKind.Generator) generators.Add(this);
+            else if (config.kind == MachineKind.Lamp)
+            {
+                // A cold white electric light, off until there's power.
+                lamp = FireLight.Create(transform, Vector2.zero, new Color(0.9f, 0.95f, 1f),
+                    FireLight.DefaultRadius * config.reach, FireLight.DefaultIntensity * 1.15f);
+                lamp.gameObject.SetActive(false);
+                workAt = Time.time + Random.value * 0.5f;   // (lamps don't all check on the same frame)
+            }
         }
 
         void OnDestroy()
@@ -80,6 +90,17 @@ namespace KingdomGame.Building
         {
             if (kingdom == null) return;
             float now = Time.time;
+            if (config.kind == MachineKind.Lamp)
+            {
+                if (now < workAt) return;
+                workAt = now + 0.5f;
+                // Inside a house (far off the map): powered if the house is in a generator's reach.
+                var place = kingdom.PlaceAt((Vector2)transform.position);
+                bool on = PoweredAt(place != null ? place.Outside : (Vector2)transform.position);
+                if (lamp != null && lamp.gameObject.activeSelf != on) lamp.gameObject.SetActive(on);
+                if (look != null) look.color = on ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
+                return;
+            }
             Move(now);
             if (now >= workAt)
             {

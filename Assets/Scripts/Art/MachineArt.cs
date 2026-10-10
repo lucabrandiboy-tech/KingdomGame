@@ -6,7 +6,7 @@ namespace KingdomGame.Art
     public static partial class FurnitureArt
     {
         public const string Smelter = "Machine/Smelter", Generator = "Machine/Generator", Sawmill = "Machine/Sawmill",
-            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor";
+            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight";
 
         static readonly Color32 Soot = PixelImage.Rgb(38, 34, 32);
         static readonly Color32 Rust = PixelImage.Rgb(120, 70, 44);
@@ -61,6 +61,29 @@ namespace KingdomGame.Art
             Rod(img, t, 0.35f, 0.35f, 1.65f, 1.65f, 0.06f, Steel, 0.9f, 0.9f);                               // the frame
             Rod(img, t, 0.35f, 1.65f, 1.65f, 0.35f, 0.06f, Steel, 0.9f, 0.9f);
             Round(img, t, 1f, 1f, 0.16f, Rust, 1f, 0.05f, Surface.Metal, 1433u);                            // the drill head
+            return Finish(img, t, 0);
+        }
+
+        // A lamp post seen from above: an iron base and a round glass shade.
+        static PixelImage DrawElectricLamp(int ppu)
+        {
+            float t = ppu;
+            var img = Canvas(1f, 1f, t);
+            Round(img, t, 0.5f, 0.5f, 0.2f, Steel, 0.15f, 0.03f, Surface.Metal, 1451u);
+            Round(img, t, 0.5f, 0.5f, 0.15f, PixelImage.Rgb(226, 230, 214), 1.4f, 0.08f, Surface.Plain, 1452u);   // the glass
+            Ring(img, t, 0.5f, 0.5f, 0.14f, 0.17f, Iron, 1.42f, Surface.Metal, 1453u);
+            return Finish(img, t, 0);
+        }
+
+        // A floodlight on a steel stand: a big square lamp with a lens.
+        static PixelImage DrawFloodlight(int ppu)
+        {
+            float t = ppu;
+            var img = Canvas(1f, 1f, t);
+            Rod(img, t, 0.2f, 0.2f, 0.8f, 0.8f, 0.03f, Steel, 0.6f, 0.6f);
+            Rod(img, t, 0.2f, 0.8f, 0.8f, 0.2f, 0.03f, Steel, 0.6f, 0.6f);
+            Block(img, t, 0.26f, 0.26f, 0.74f, 0.74f, PixelImage.Rgb(52, 56, 52), 1.5f, 0.03f, Surface.Metal, 1461u);
+            Round(img, t, 0.5f, 0.5f, 0.18f, PixelImage.Rgb(232, 236, 222), 1.55f, 0.04f, Surface.Plain, 1462u);   // the lens
             return Finish(img, t, 0);
         }
 

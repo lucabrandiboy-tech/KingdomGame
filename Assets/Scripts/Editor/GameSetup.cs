@@ -454,7 +454,7 @@ namespace KingdomGame.EditorTools
                 }
                 Unlock(3, medievalMachines);
                 Unlock(5, industrialMachines);
-                Debug.Log("Added the smelter (Medieval) and machines (Industrial) on the Industry tab. Your other settings were kept.");
+                Debug.Log("Added the smelter (Medieval), machines (Industry tab) and electric lights that need a generator (Lights tab), all Industrial. Your other settings were kept.");
             }
 
             if (endless && content.network != null && content.network.kingdomSpacing < 560)
@@ -748,8 +748,18 @@ namespace KingdomGame.EditorTools
                 Item("Sawmill", "Sawmill", FurnitureArt.Sawmill, 2, 80, 20, 30, 30f, 600f, 0.7f, false, Machine("Sawmill", MachineKind.Sawmill, 8f, 5, 8f, 0, 0)),
                 Item("Quarry", "Quarry", FurnitureArt.Quarry, 2, 40, 60, 40, 30f, 700f, 1f, false, Machine("Quarry", MachineKind.Quarry, 10f, 4, 1f, 0, 0)),
                 Item("Conveyor", "Conveyor belt", FurnitureArt.Conveyor, 1, 0, 2, 1, 2f, 150f, 0.05f, true, Machine("Conveyor", MachineKind.Conveyor, 1f, 1, 1f, 0, 0)),
+                // Electric lights (Lights tab): they only shine while a generator's power reaches them.
+                Lamp(Item("ElectricLamp", "Electric lamp", FurnitureArt.ElectricLamp, 1, 5, 5, 3, 6f, 150f, 1.4f, false, Machine("ElectricLamp", MachineKind.Lamp, 1f, 0, 1.3f, 0, 0))),
+                Lamp(Item("Floodlight", "Floodlight", FurnitureArt.Floodlight, 1, 0, 10, 8, 10f, 250f, 1.5f, false, Machine("Floodlight", MachineKind.Lamp, 1f, 0, 2.6f, 0, 0))),
             };
             return (medieval, industrial);
+
+            // Lamps go on the Lights tab and can be put up inside houses.
+            static BuildingConfig Lamp(BuildingConfig b)
+            {
+                if (b.category == BuildCategory.Industry) b.category = BuildCategory.Lights;
+                return b;
+            }
         }
 
         // Traps, barriers and towers, four or five for each age; returns them by age (blasts: their explosions, for the PixelWorld).

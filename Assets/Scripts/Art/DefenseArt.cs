@@ -74,6 +74,8 @@ namespace KingdomGame.Art
             new DefensePiece { Art = Sawmill, Draw = DrawSawmill },
             new DefensePiece { Art = Quarry, Draw = DrawQuarry },
             new DefensePiece { Art = Conveyor, Draw = DrawConveyor, Flat = true },
+            new DefensePiece { Art = ElectricLamp, Draw = DrawElectricLamp },
+            new DefensePiece { Art = Floodlight, Draw = DrawFloodlight },
             new DefensePiece { Art = Howitzer, Draw = DrawHowitzerBase, Head = DrawHowitzer },
         };
 

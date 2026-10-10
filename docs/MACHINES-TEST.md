@@ -16,6 +16,10 @@ build bar's new **Industry** tab and unlocks it with its age.
 - **Conveyor belt** (Industrial, 1x1, drag to lay a line): sawmills and quarries send what they
   make along belts that touch them to a storehouse or chest the belts touch. A machine right next
   to a storehouse needs no belt. With no way to storage, a machine fills up (60) and stops.
+- **Electric lamp** and **Floodlight** (Industrial, **Lights** tab, cost a little steel): bright
+  white lights that only shine while a burning generator is within 10 tiles (a lamp inside a
+  house counts from the house's spot). Without power they're dark and drawn darker. The
+  floodlight lights about twice as far as the lamp.
 - A machine that isn't working (no power, no trees, no iron, full) is drawn **darker**.
 
 ## How to test
@@ -27,6 +31,8 @@ build bar's new **Industry** tab and unlocks it with its age.
    bags riding along the belt, and wood going up in storage.
 5. Build a quarry the same way: small rocks ride the belt, stone goes up.
 6. Run out of wood in storage: the generator stops, and the sawmill and quarry turn darker.
+7. At night, put an electric lamp near the generator and one far away (over 10 tiles): only the
+   near one lights up. Let the generator run out of wood: the light goes out within a second.
 
 ## Not done yet
 

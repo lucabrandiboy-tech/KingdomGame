@@ -14,6 +14,8 @@ namespace KingdomGame.Economy
         Quarry,
         /// <summary>A piece of belt: carries what machines next to it make to a storehouse or chest it touches.</summary>
         Conveyor,
+        /// <summary>An electric light: shines only while a generator's power reaches it.</summary>
+        Lamp,
     }
 
     /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
@@ -25,7 +27,7 @@ namespace KingdomGame.Economy
         [Min(0.5f)] public float workSeconds = 6f;
         [Tooltip("How much each round makes (wood, stone or steel).")]
         [Min(1)] public int output = 5;
-        [Tooltip("Sawmill: how far away it cuts trees. Generator: how far its power reaches. In tiles.")]
+        [Tooltip("Sawmill: how far away it cuts trees. Generator: how far its power reaches. In tiles. Lamp: how big its light is (1 = a brazier's).")]
         [Min(1)] public float reach = 8f;
         [Tooltip("How much it keeps before it stops (when nothing takes its output away).")]
         [Min(1)] public int holds = 60;

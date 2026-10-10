@@ -181,23 +181,26 @@ namespace KingdomGame.Zombies
         }
 
         /// <summary>
-        /// A spot on the edge of the map to come from: around <paramref name="along"/> (0..1,
-        /// once round the map's edge anticlockwise from the bottom-left corner), at least
-        /// <paramref name="minDistance"/> tiles from the ruler, the villagers and the throne,
-        /// and from where someone can be reached (if anywhere can).
+        /// A spot to come from: on a ring round the kingdom (a little outside its outermost
+        /// walls, and at least <paramref name="minDistance"/> tiles from the ruler, the villagers
+        /// and the throne), around <paramref name="along"/> (0..1, once round anticlockwise from
+        /// the east), where they can walk and from where someone can be reached (if anywhere can).
+        /// On a big map the edge would be minutes away.
         /// </summary>
         public bool FindSpawnPoint(float along, float minDistance, out Vector2 spot)
         {
-            int inset = 2;
-            int w = map.width - inset * 2, h = map.height - inset * 2;
-            int perimeter = 2 * (w + h);
-            int start = Mathf.FloorToInt(Mathf.Repeat(along, 1f) * perimeter);
+            var center = kingdom != null && kingdom.Throne != null ? kingdom.Throne.Center : map.center;
+            float radius = SpawnRadius(center, minDistance);
+            int steps = Mathf.Max(64, Mathf.CeilToInt(radius * Mathf.PI * 2f));
             for (int pass = 0; pass < 2; pass++)
-                for (int i = 0; i < perimeter; i++)
+                for (int i = 0; i < steps; i++)
                 {
                     // Look outwards from the chosen spot, alternating sides.
                     int step = (i + 1) / 2 * (i % 2 == 0 ? 1 : -1);
-                    var cell = EdgeCell((start + step + perimeter * 4) % perimeter, inset, w, h);
+                    float a = (Mathf.Repeat(along, 1f) + step / (float)steps) * Mathf.PI * 2f;
+                    var p = center + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * radius;
+                    p = new Vector2(Mathf.Clamp(p.x, map.xMin + 3, map.xMax - 3), Mathf.Clamp(p.y, map.yMin + 3, map.yMax - 3));
+                    var cell = CellOf(p);
                     if (!Walkable(cell) || !FarFromEveryone(cell, minDistance)) continue;
                     if (pass == 0 && float.IsPositiveInfinity(field.Distance(cell.x - map.xMin, cell.y - map.yMin))) continue;
                     spot = (Vector2)cell + new Vector2(UnityEngine.Random.Range(0.3f, 0.7f), UnityEngine.Random.Range(0.3f, 0.7f));
@@ -207,17 +210,27 @@ namespace KingdomGame.Zombies
             return false;
         }
 
-        // The cell number i of the ring of cells inset from the map's edge.
-        Vector2Int EdgeCell(int i, int inset, int w, int h)
+        float spawnRadius, spawnRadiusAt = -999f;
+
+        // How far out zombies appear: past the outermost wall or building, worked out every few seconds.
+        float SpawnRadius(Vector2 center, float minDistance)
         {
-            int x0 = map.xMin + inset, y0 = map.yMin + inset;
-            if (i < w) return new Vector2Int(x0 + i, y0);
-            i -= w;
-            if (i < h) return new Vector2Int(x0 + w - 1, y0 + i);
-            i -= h;
-            if (i < w) return new Vector2Int(x0 + w - 1 - i, y0 + h - 1);
-            i -= w;
-            return new Vector2Int(x0, y0 + h - 1 - Mathf.Min(i, h - 1));
+            if (Time.time - spawnRadiusAt > 5f)
+            {
+                spawnRadiusAt = Time.time;
+                float extent = 0f;
+                if (world != null)
+                    foreach (var cell in world.ChunkCells)
+                        extent = Mathf.Max(extent, ((Vector2)cell + new Vector2(0.5f, 0.5f) - center).magnitude);
+                if (kingdom != null)
+                {
+                    foreach (var s in kingdom.Storages) if (s != null && map.Contains(s.Cells.position)) extent = Mathf.Max(extent, (s.Center - center).magnitude);
+                    foreach (var h in kingdom.Houses) if (h != null) extent = Mathf.Max(extent, (h.Center - center).magnitude);
+                }
+                spawnRadius = extent + 12f;
+            }
+            float most = Mathf.Min(map.width, map.height) * 0.5f - 3f;
+            return Mathf.Clamp(Mathf.Max(spawnRadius, minDistance + 4f), Mathf.Min(16f, most), most);
         }
 
         bool FarFromEveryone(Vector2Int cell, float minDistance)

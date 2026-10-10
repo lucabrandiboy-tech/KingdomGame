@@ -14,8 +14,10 @@ namespace KingdomGame.World
     public static class WorldGenerator
     {
         const int Variants = NatureArt.Variants;
-        /// <summary>Detail of the ground patch masks, in mask pixels per tile (fine enough for ragged edges).</summary>
+        /// <summary>Most detail of the ground patch masks, in mask pixels per tile (fine enough for ragged edges).</summary>
         const int MaskDetail = 32;
+        /// <summary>Biggest mask texture, in pixels: on big maps the masks get fewer pixels per tile to fit (video memory).</summary>
+        const int MaxMask = 4096;
         /// <summary>Detail of the soft ground tint, in pixels per tile.</summary>
         const int TintDetail = 4;
 
@@ -122,12 +124,13 @@ namespace KingdomGame.World
             Layer(root, "Dry grass", ArtKeys.GroundDry, mapSize, SortOrder.Ground + 2, true);
             Layer(root, "Mud", ArtKeys.GroundMud, mapSize, SortOrder.Ground + 4, true);
 
-            int n = mapSize * MaskDetail;
+            int detail = Mathf.Clamp(MaxMask / mapSize, 4, MaskDetail);
+            int n = mapSize * detail;
             var dry = new byte[n * n];
             var mud = new byte[n * n];
-            GroundArt.PatchMasks(mapSize, MaskDetail, seed, dry, mud);
-            Mask(root, "Dry grass mask", dry, n, SortOrder.Ground + 1, SortOrder.Ground + 2);
-            Mask(root, "Mud mask", mud, n, SortOrder.Ground + 3, SortOrder.Ground + 4);
+            GroundArt.PatchMasks(mapSize, detail, seed, dry, mud);
+            Mask(root, "Dry grass mask", dry, n, detail, SortOrder.Ground + 1, SortOrder.Ground + 2);
+            Mask(root, "Mud mask", mud, n, detail, SortOrder.Ground + 3, SortOrder.Ground + 4);
         }
 
         static void Layer(Transform root, string layerName, string key, int mapSize, int order, bool masked)
@@ -147,7 +150,7 @@ namespace KingdomGame.World
 
         // A sprite mask over the whole map: it only affects the layer between back and front order.
         // One byte per mask pixel (Alpha8), with mipmaps so the ragged edges don't shimmer far zoomed out.
-        static void Mask(Transform root, string maskName, byte[] alpha, int size, int back, int front)
+        static void Mask(Transform root, string maskName, byte[] alpha, int size, int detail, int back, int front)
         {
             var texture = new Texture2D(size, size, TextureFormat.Alpha8, true)
             {
@@ -157,7 +160,7 @@ namespace KingdomGame.World
             };
             texture.SetPixelData(alpha, 0);
             texture.Apply(true, true);
-            var sprite = Sprite.Create(texture, new Rect(0, 0, size, size), Vector2.zero, MaskDetail, 0, SpriteMeshType.FullRect);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, size, size), Vector2.zero, detail, 0, SpriteMeshType.FullRect);
             var go = new GameObject(maskName);
             go.transform.SetParent(root, false);
             var mask = go.AddComponent<SpriteMask>();

@@ -32,7 +32,7 @@ namespace KingdomGame.Zombies
         [Min(0.1f)] public float spawnPerSecond = 2f;
         [Tooltip("Most zombies alive at once; the rest of the wave waits its turn. Lower it if the game slows down.")]
         [Min(1)] public int maxAlive = 120;
-        [Tooltip("Zombies come from the edge of the map, at least this many tiles from you and your throne.")]
+        [Tooltip("Zombies come from a ring round your kingdom (just outside its outermost walls), at least this many tiles from you, your villagers and your throne.")]
         [Min(4)] public float spawnDistance = 24f;
 
         [Header("Night")]

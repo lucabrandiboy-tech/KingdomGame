@@ -6,8 +6,8 @@ namespace KingdomGame.World
     [CreateAssetMenu(menuName = "KingdomGame/World/World Config", fileName = "WorldConfig")]
     public sealed class WorldConfig : ScriptableObject
     {
-        [Tooltip("Map width and height in tiles. The ruler starts in the middle.")]
-        [Min(16)] public int mapSize = 96;
+        [Tooltip("Map width and height in tiles. The ruler starts in the middle. Big maps take longer to start and use more memory (the ground's patches get a little less detailed past 128).")]
+        [Range(32, 512)] public int mapSize = 256;
         [Tooltip("0 = a new random map every time. Any other number always makes the same map.")]
         public int seed = 0;
 

@@ -42,8 +42,9 @@ namespace KingdomGame.EditorTools
         /// 5: farming (tree saplings, berry bushes) for the woodcutters and foragers.
         /// 6: traps and towers.
         /// 7: the full set of defences (31, by age) and the ages themselves.
+        /// 8: a bigger map (256 tiles across instead of 96).
         /// </summary>
-        const int SettingsVersion = 7;
+        const int SettingsVersion = 8;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -87,6 +88,7 @@ namespace KingdomGame.EditorTools
             bool roofsUpdate = oldContent != null && oldContent.settingsVersion < 4;
             bool farmingUpdate = oldContent != null && oldContent.settingsVersion < 5;
             bool defensesUpdate = oldContent != null && oldContent.settingsVersion < 7;
+            bool biggerMap = oldContent != null && oldContent.settingsVersion < 8;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -181,6 +183,12 @@ namespace KingdomGame.EditorTools
             // ---- World
             var worldConfig = Asset<WorldConfig>("World/WorldConfig", w => { });
             var dayNight = Asset<DayNightConfig>("World/DayNightConfig", d => { });
+            if (biggerMap && worldConfig.mapSize == 96)
+            {
+                worldConfig.mapSize = 256;
+                EditorUtility.SetDirty(worldConfig);
+                Debug.Log("The map is bigger now: 256 tiles across (World/WorldConfig, Map Size).");
+            }
             if (newLook)
             {
                 StoneLook(stone);

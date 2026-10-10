@@ -1,0 +1,26 @@
+<!--
+  Tests for the online play code that doesn't need Unity (Assets/Scripts/Networking/Core)
+  together with LiteNetLib (Assets/ThirdParty/LiteNetLib): a real server and real players
+  talking over UDP on this computer. Run it as in CLAUDE.md ("Checks to run before every commit").
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- LiteNetLib's own code: warnings there aren't ours to fix. -->
+    <NoWarn>CS0649;CS0618;CS8632</NoWarn>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <Compile Include="../../Assets/Scripts/Networking/Core/*.cs" />
+    <Compile Include="../../Assets/ThirdParty/LiteNetLib/**/*.cs" />
+  </ItemGroup>
+</Project>

@@ -44,6 +44,8 @@
 ExportedObj/
 .consulo/
 *.csproj
+# (the test and check tools' own projects are not Unity's: keep them)
+!/tools/**/*.csproj
 *.unityproj
 *.sln
 *.slnx

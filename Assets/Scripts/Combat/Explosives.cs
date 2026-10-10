@@ -19,6 +19,7 @@ namespace KingdomGame.Combat
             public float Flight, FlightTime;  // seconds flown, seconds the flight takes
             public bool Landed;
             public bool OnWall;
+            public float OverWalls;   // thrown from up on a wall: flies over walls for this far
             public Vector2Int WallPixel;
             public float Fuse;
         }
@@ -35,8 +36,11 @@ namespace KingdomGame.Combat
             lightOff = PixelTextures.ToSprite(CharacterArt.C4(false), "C4 off");
         }
 
-        /// <summary>Throws a charge from <paramref name="from"/> towards <paramref name="target"/> (capped at its range).</summary>
-        public void Throw(ExplosiveConfig config, Vector2 from, Vector2 target)
+        /// <summary>
+        /// Throws a charge from <paramref name="from"/> towards <paramref name="target"/> (capped at its range).
+        /// Thrown from up on a wall, it sails over the walls for the first <paramref name="overWalls"/> tiles.
+        /// </summary>
+        public void Throw(ExplosiveConfig config, Vector2 from, Vector2 target, float overWalls = 0f)
         {
             if (config == null) return;
             var offset = Vector2.ClampMagnitude(target - from, config.throwRange);
@@ -48,6 +52,7 @@ namespace KingdomGame.Combat
                 Position = from,
                 FlightTime = Mathf.Max(0.05f, offset.magnitude / config.throwSpeed),
                 Fuse = config.fuseSeconds,
+                OverWalls = overWalls,
             });
             var r = RendererFor(charges.Count - 1);
             r.enabled = true;
@@ -70,7 +75,8 @@ namespace KingdomGame.Combat
                     c.Flight += dt;
                     float t = Mathf.Clamp01(c.Flight / c.FlightTime);
                     var next = Vector2.Lerp(c.Start, c.Target, t);
-                    if (world != null && world.Raycast(c.Position, next, out var pixel, out var hitPoint))
+                    bool overWalls = (next - c.Start).magnitude <= c.OverWalls;
+                    if (world != null && !overWalls && world.Raycast(c.Position, next, out var pixel, out var hitPoint))
                     {
                         // Stuck to the wall: sit just in front of the face it hit.
                         var back = (c.Position - next).normalized * 0.08f;

@@ -58,7 +58,7 @@ namespace KingdomGame.Building
             var center = Center;
             foreach (var h in Health.Creatures)
             {
-                if (h == null || h.Dead) continue;
+                if (h == null || h.Dead || h.OutOfReach) continue;
                 float d2 = (h.Position - center).sqrMagnitude;
                 if (h.Team == Team.Friendly && d2 < OpenDistance * OpenDistance) friendNear = true;
                 float r = 0.5f + h.Radius;

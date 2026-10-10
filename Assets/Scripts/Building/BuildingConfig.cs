@@ -89,6 +89,8 @@ namespace KingdomGame.Building
         public RoomTag roomTag = RoomTag.Decor;
         [Tooltip("Beds: how many villagers it gives a home (survival: more survivors can join).")]
         [Min(0)] public int sleeps;
+        [Tooltip("A ladder or stairs: it leans on the wall it faces, and the ruler climbs up there with E.")]
+        public bool climb;
 
         [Header("Light (torches, candles, fireplaces)")]
         [Tooltip("0 = no light. 1 = as far and bright as a brazier.")]

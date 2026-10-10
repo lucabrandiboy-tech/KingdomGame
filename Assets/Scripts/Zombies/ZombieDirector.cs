@@ -444,7 +444,7 @@ namespace KingdomGame.Zombies
             float bestDistance = range * range;
             foreach (var h in Health.Creatures)
             {
-                if (h == null || h.Dead || h.Team != Team.Friendly) continue;
+                if (h == null || h.Dead || h.Team != Team.Friendly || h.OutOfReach) continue;
                 var at = AimPoint(h, from);
                 float d = (at - from).sqrMagnitude;
                 if (d < bestDistance && ClearLine(from, at))

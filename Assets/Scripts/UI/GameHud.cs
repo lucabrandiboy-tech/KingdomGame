@@ -35,8 +35,9 @@ namespace KingdomGame.UI
             "Left click  rifle (barely scratches stone)\n" +
             "Right click  rocket          G  throw C4\n" +
             "Your shots fly over a wall you stand right behind\n" +
-            "E  use what's next to you: the throne, a storehouse,\n" +
+            "E  use what's next to you: the throne, a storehouse, a ladder,\n" +
             "    a blueprint (hold), a tree/rock/bush (hold to gather)\n" +
+            "On the walls: walk along them, shoot over them; E climbs down\n" +
             "Walk over loot bags to pick them up\n" +
             "Esc  pause          F3  performance info          H  hide this";
 

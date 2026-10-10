@@ -247,11 +247,15 @@ static class Program
             Piece(FurnitureArt.Torch, -2, -4, 1, 1, 0, 0.55f, flames: new[] { Vector2.zero }, flameSize: 1f, light: 0.75f);
             Piece(FurnitureArt.Torch, 2, -4, 1, 1, 0, 0.55f, flames: new[] { Vector2.zero }, flameSize: 1f, light: 0.75f);
 
-            // The ruler behind the gate, aiming out over the wall; a villager hiding by the throne.
-            Person(ArtKeys.Ruler(0, 1), 0.6f, -1.45f, -80f, CharacterArt.RulerDirections, ArtKeys.RulerShadow(1));
-            var hand = Rotate(CharacterArt.RulerHand, -80f);
-            Things.Add(new Inst { Key = ArtKeys.Rifle, X = 0.6f + hand.x, Y = -1.45f + hand.y, Rot = -80f, Order = 1001 });
-            Lights.Add(new Light { X = 0.6f, Y = -1.45f, R = 1f, G = 0.82f, B = 0.55f, Intensity = 1.1f, Radius = 5.5f, Inner = 0.25f, NightOnly = true });
+            // A ladder and stone stairs up onto the south wall; the ruler up on the wall by the gate,
+            // aiming down at the horde (RulerLook.SetRaised: a little bigger, shadow further off).
+            Piece(FurnitureArt.Ladder, 2, -2, 1, 1, 2, 0.35f);
+            Piece(FurnitureArt.StoneStairs, -3, -2, 1, 1, 2, 0.35f);
+            Things.Add(new Inst { Key = ArtKeys.RulerShadow(1), X = 1.5f + 0.55f * 0.36f, Y = -2.5f - 0.65f * 0.36f, Rot = -85f, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = ArtKeys.Ruler(12, 1), X = 1.5f, Y = -2.5f, Rot = -85f, Scale = 1.07f, Order = 1000 });
+            var hand = Rotate(CharacterArt.RulerHand * 1.07f, -85f);
+            Things.Add(new Inst { Key = ArtKeys.Rifle, X = 1.5f + hand.x, Y = -2.5f + hand.y, Rot = -85f, Scale = 1.07f, Order = 1001 });
+            Lights.Add(new Light { X = 1.5f, Y = -2.5f, R = 1f, G = 0.82f, B = 0.55f, Intensity = 1.1f, Radius = 5.5f, Inner = 0.25f, NightOnly = true });
             Person(ArtKeys.Villager(false, 0, 0), 1.6f, 1.6f, 200f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
 
             // The horde: walkers clawing at the gate and the wall, more coming, a brute and a runner, and the dead.

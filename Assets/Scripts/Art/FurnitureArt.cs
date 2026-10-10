@@ -26,7 +26,8 @@ namespace KingdomGame.Art
             Bookshelf = "Furniture/Bookshelf", WeaponRack = "Furniture/WeaponRack", ArmorStand = "Furniture/ArmorStand",
             Cauldron = "Furniture/Cauldron", Fireplace = "Furniture/Fireplace", Rug = "Furniture/Rug",
             Candelabra = "Furniture/Candelabra", Torch = "Furniture/Torch", Brazier = "Furniture/Brazier",
-            Anvil = "Furniture/Anvil", Crates = "Furniture/Crates", Banner = "Furniture/Banner", Well = "Furniture/Well";
+            Anvil = "Furniture/Anvil", Crates = "Furniture/Crates", Banner = "Furniture/Banner", Well = "Furniture/Well",
+            Ladder = "Furniture/Ladder", StoneStairs = "Furniture/StoneStairs";
         public const string WoodFloor = "Floor/Wood", StoneFloor = "Floor/Stone";
         public const string WoodDoor = "Door/Wood", HeavyDoor = "Door/Heavy";
 
@@ -53,6 +54,8 @@ namespace KingdomGame.Art
             new Piece { Art = Crates, Rotations = 1, Draw = DrawCrates },
             new Piece { Art = Banner, Rotations = 4, Draw = DrawBanner },
             new Piece { Art = Well, Rotations = 1, Draw = DrawWell },
+            new Piece { Art = Ladder, Rotations = 4, Draw = DrawLadder },
+            new Piece { Art = StoneStairs, Rotations = 4, Draw = DrawStoneStairs },
         };
 
         /// <summary>Where the candelabra's three candles are, in tiles from its middle.</summary>
@@ -704,6 +707,43 @@ namespace KingdomGame.Art
             Rod(img, t, c, c, c + 0.02f, c - 0.18f, 0.008f, PixelImage.Rgb(150, 126, 84), 0.9f, 0.6f);   // rope
             Round(img, t, c + 0.02f, c - 0.24f, 0.1f, PixelImage.Rgb(110, 80, 50), 0.58f, 0f, Surface.Wood, 243u);
             Ring(img, t, c + 0.02f, c - 0.24f, 0.08f, 0.1f, Iron, 0.6f, Surface.Metal, 244u);
+            return Finish(img, t, rotation);
+        }
+
+        // A ladder leaning on the wall at the top of its tile: two rails rising towards the wall, rungs across.
+        static PixelImage DrawLadder(int ppu, int rotation)
+        {
+            float t = ppu;
+            var img = Canvas(1f, 1f, t);
+            var wood = PixelImage.Rgb(122, 88, 54);
+            for (int i = 0; i < 7; i++)
+            {
+                float y = 0.12f + i * 0.13f, h = 0.06f + y * 0.38f;
+                Rod(img, t, 0.3f, y, 0.7f, y, 0.022f, PixelImage.Scale(wood, 0.92f + (i % 2) * 0.06f), h, h);
+            }
+            foreach (float x in new[] { 0.28f, 0.72f })
+                Rod(img, t, x, 0.03f, x + (x < 0.5f ? 0.02f : -0.02f), 0.99f, 0.035f, wood, 0.03f, 0.44f);
+            // Rope lashings where the rungs meet the rails.
+            for (int i = 0; i < 7; i += 2)
+                foreach (float x in new[] { 0.29f, 0.71f })
+                    Stud(img, t, x, 0.12f + i * 0.13f, 0.02f, PixelImage.Rgb(150, 126, 84), 0.07f + (0.12f + i * 0.13f) * 0.4f);
+            return Finish(img, t, rotation);
+        }
+
+        // Stone steps rising towards the wall at the top of the tile, between two low side walls.
+        static PixelImage DrawStoneStairs(int ppu, int rotation)
+        {
+            float t = ppu;
+            var img = Canvas(1f, 1f, t);
+            for (int i = 0; i < 5; i++)
+            {
+                float y0 = i * 0.2f, top = 0.06f + i * 0.085f;
+                Block(img, t, 0.1f, y0, 0.9f, y0 + 0.2f, PixelImage.Scale(Granite, 0.86f + (i % 2) * 0.08f + i * 0.02f), top, 0.012f, Surface.Stone, 520u + (uint)i);
+                // The worn front edge of each step.
+                Block(img, t, 0.11f, y0, 0.89f, y0 + 0.025f, PixelImage.Scale(Granite, 0.7f), top + 0.005f, 0.004f, Surface.Stone, 530u + (uint)i);
+            }
+            foreach (float x in new[] { 0f, 0.9f })
+                Block(img, t, x, 0f, x + 0.1f, 1f, PixelImage.Scale(Granite, 0.78f), 0.46f, 0.012f, Surface.Stone, 540u, false);
             return Finish(img, t, rotation);
         }
 

@@ -179,8 +179,9 @@ namespace KingdomGame.Building
             // The building's middle follows the mouse.
             var size = b.SizeFacing(rotation);
             var origin = new Vector2Int(Mathf.RoundToInt(mouse.x - size.x * 0.5f), Mathf.RoundToInt(mouse.y - size.y * 0.5f));
-            // Doors turn to fit the wall they go in (unless you turned them yourself).
+            // Doors turn to fit the wall they go in, ladders to lean on one (unless you turned them yourself).
             if (b.kind == BuildingKind.Door && !turnedByHand && !dragging) rotation = b.ClampRotation(kingdom.DoorFacing(origin, rotation));
+            if (b.climb && !turnedByHand && !dragging) rotation = b.ClampRotation(kingdom.LadderFacing(origin, rotation));
 
             if (GameInput.AltFirePressed)
             {

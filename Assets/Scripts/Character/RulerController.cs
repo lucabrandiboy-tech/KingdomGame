@@ -15,6 +15,10 @@ namespace KingdomGame.Character
     /// <item>at a blueprint (hold): hand over what it needs from your backpack, then help build;</item>
     /// <item>at a tree, rock or bush (hold): gather wood, stone or food.</item>
     /// </list>
+    /// At a ladder or stairs, E climbs onto the wall it leans on: up there the
+    /// ruler walks along walls and gates, out of zombies' reach (they batter the
+    /// wall underneath instead), and shots and charges fly over the walls below.
+    /// E climbs back down a ladder, or jumps down. A wall that caves in drops them.
     /// Walking over a bag of loot puts it in the backpack. The ruler has
     /// <see cref="Health"/>: zombies hurt them, wounds heal after a while, and
     /// zombies can't be walked through. If the ruler falls, survival is over; in
@@ -24,6 +28,10 @@ namespace KingdomGame.Character
     public sealed class RulerController : MonoBehaviour
     {
         const float MuzzleDistance = 0.55f;   // from the grip to the end of the barrel, in tiles
+        /// <summary>From up on a wall, shots fly over walls for this many tiles (charges for less).</summary>
+        const float OverWallsFromTop = 3f;
+        /// <summary>Damage from jumping off a wall, and from falling when it caves in.</summary>
+        const float JumpDamage = 8f, FallDamage = 12f;
 
         [SerializeField] PlayerConfig config;
         [SerializeField] WeaponConfig primaryWeapon;
@@ -34,6 +42,7 @@ namespace KingdomGame.Character
         [SerializeField] Explosives explosives;
 
         Rigidbody2D body;
+        Collider2D feet;
         RulerLook look;
         Camera view;
         CameraRig rig;
@@ -56,6 +65,8 @@ namespace KingdomGame.Character
         public bool Dead => Health != null && Health.Dead;
         /// <summary>Free build: come back at the throne after falling. Survival: falling is the end.</summary>
         public bool RespawnOnDeath { get; set; } = true;
+        /// <summary>Up on the walls (climbed a ladder or stairs).</summary>
+        public bool OnWalls { get; private set; }
 
         public void Setup(PlayerConfig playerConfig, WeaponConfig primary, WeaponConfig secondary, ExplosiveConfig thrown,
             Transform gunTransform, Projectiles shots, Explosives charges)
@@ -80,6 +91,7 @@ namespace KingdomGame.Character
         void Awake()
         {
             body = GetComponent<Rigidbody2D>();
+            feet = GetComponent<Collider2D>();
             look = GetComponent<RulerLook>();
         }
 
@@ -121,6 +133,14 @@ namespace KingdomGame.Character
                 return;
             }
             Heal();
+            // The wall under them caved in (or was torn down): down they go.
+            if (OnWalls && Kingdom.Current != null && !Kingdom.Current.WallTopAt(NavCell(transform.position)))
+            {
+                GetDown(transform.position);
+                Health.Damage(FallDamage, transform.position);
+                Say("The wall gave way under you!");
+                if (Dead) return;
+            }
             if (Seated)
             {
                 if (look != null) look.Show(Vector2.zero, Vector2.down, config.moveSpeed, config.stepsPerSecond, holdingGun: false);
@@ -150,7 +170,7 @@ namespace KingdomGame.Character
             if (explosive != null && explosives != null && GameInput.Pressed(KeyCode.G) && now >= explosiveReady && view != null)
             {
                 Vector2 target = view.ScreenToWorldPoint(GameInput.PointerPosition);
-                explosives.Throw(explosive, Muzzle, target);
+                explosives.Throw(explosive, Muzzle, target, OnWalls ? OverWallsFromTop * 0.6f : 0f);
                 explosiveReady = now + explosive.cooldown;
             }
 
@@ -163,7 +183,93 @@ namespace KingdomGame.Character
         {
             if (config == null || Seated || Dead) return;
             Velocity = Vector2.MoveTowards(Velocity, wantedVelocity, config.acceleration * Time.fixedDeltaTime);
-            KeepOutOfZombies();
+            if (OnWalls) StayOnWalls();
+            else KeepOutOfZombies();
+        }
+
+        // ------------------------------------------------------------ walls --
+
+        static Vector2Int NavCell(Vector2 p) => new Vector2Int(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y));
+
+        // Up on the walls the body passes over them (its collider is off), so it's kept on top here:
+        // no step that would take any part of it off the walls and gates.
+        void StayOnWalls()
+        {
+            var kingdom = Kingdom.Current;
+            if (kingdom == null) return;
+            float dt = Time.fixedDeltaTime;
+            var p = body.position;
+            var v = Velocity;
+            if (!OnTop(kingdom, p + new Vector2(v.x * dt, 0f))) v.x = 0f;
+            if (!OnTop(kingdom, p + new Vector2(v.x * dt, v.y * dt))) v.y = 0f;
+            Velocity = v;
+        }
+
+        bool OnTop(Kingdom kingdom, Vector2 p)
+        {
+            float r = config.bodyRadius * 0.9f;
+            return kingdom.WallTopAt(NavCell(p + new Vector2(-r, -r))) && kingdom.WallTopAt(NavCell(p + new Vector2(r, -r))) &&
+                   kingdom.WallTopAt(NavCell(p + new Vector2(-r, r))) && kingdom.WallTopAt(NavCell(p + new Vector2(r, r)));
+        }
+
+        void GetUp(Vector2 at)
+        {
+            OnWalls = true;
+            if (feet != null) feet.enabled = false;
+            Health.OutOfReach = true;
+            MoveTo(at);
+            if (look != null) look.SetRaised(true);
+        }
+
+        void GetDown(Vector2 at)
+        {
+            OnWalls = false;
+            if (feet != null) feet.enabled = true;
+            Health.OutOfReach = false;
+            MoveTo(at);
+            if (look != null) look.SetRaised(false);
+        }
+
+        void MoveTo(Vector2 at)
+        {
+            body.position = at;
+            transform.position = at;
+            Velocity = Vector2.zero;
+            stoodUpFrame = Time.frameCount;   // the E that did it mustn't do something else too
+        }
+
+        // On the walls, E climbs down a ladder here or jumps down (towards where you aim).
+        void InteractOnWalls(Kingdom kingdom)
+        {
+            var here = NavCell(transform.position);
+            Furniture ladder = null;
+            foreach (var f in kingdom.AllFurniture)
+                if (f != null && f.Config.climb && Kingdom.LeansOn(f.Cells, f.Rotation) == here) { ladder = f; break; }
+            Hint = ladder != null ? $"E: climb down the {ladder.Config.displayName.ToLowerInvariant()}" : "E: jump down (it hurts a little)";
+            if (!GameInput.Pressed(KeyCode.E)) return;
+            if (ladder != null)
+            {
+                GetDown(ladder.Cells.center);
+                return;
+            }
+            // The free ground next to this bit of wall that's most the way you aim.
+            Vector2Int best = here;
+            float bestScore = float.MinValue;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    var cell = new Vector2Int(here.x + dx, here.y + dy);
+                    if ((dx == 0 && dy == 0) || kingdom.WallTopAt(cell) || !kingdom.Nav.Walkable(cell)) continue;
+                    float score = Vector2.Dot(new Vector2(dx, dy).normalized, aim) - (dx != 0 && dy != 0 ? 0.3f : 0f);
+                    if (score > bestScore) { bestScore = score; best = cell; }
+                }
+            if (best == here)
+            {
+                Say("Nowhere to jump down here");
+                return;
+            }
+            GetDown(new Vector2(best.x + 0.5f, best.y + 0.5f));
+            Health.Damage(JumpDamage, transform.position);
         }
 
         // Zombies can't be walked through: no walking into them, and they shove you out of the way.
@@ -231,9 +337,8 @@ namespace KingdomGame.Character
         {
             var throne = Kingdom.Current != null ? Kingdom.Current.Throne : null;
             Vector2 at = throne != null ? throne.Front : (Vector2)transform.position;
-            body.position = at;
-            transform.position = at;
             body.simulated = true;
+            GetDown(at);
             Health.Revive();
             if (look != null) look.ShowAlive();
             Say("You're back at the throne. Your backpack is where you fell.");
@@ -274,7 +379,8 @@ namespace KingdomGame.Character
         void Shoot(WeaponConfig weapon)
         {
             if (projectiles == null) return;
-            if (projectiles.Fire(weapon, Muzzle, aim) && rig != null)
+            // From up on the walls, shots fly over the walls below.
+            if (projectiles.Fire(weapon, Muzzle, aim, OnWalls ? Mathf.Max(weapon.overWalls, OverWallsFromTop) : -1f) && rig != null)
                 rig.AddShake(weapon.recoilShake);
         }
 
@@ -286,6 +392,11 @@ namespace KingdomGame.Character
             Vector2 here = transform.position;
             var kingdom = Kingdom.Current;
             float reach = kingdom != null ? kingdom.Config.reach : 0.9f;
+            if (OnWalls)
+            {
+                if (kingdom != null) InteractOnWalls(kingdom);
+                return;
+            }
 
             // Whatever is closest wins.
             float best = float.MaxValue;
@@ -293,21 +404,25 @@ namespace KingdomGame.Character
             Storage storage = null;
             Blueprint blueprint = null;
             ResourceNode node = null;
+            Furniture ladder = null;
             if (kingdom != null)
             {
                 if (kingdom.Throne != null && Closer(BuildingLook.Distance(kingdom.Throne.Cells, here), reach, ref best)) throne = kingdom.Throne;
+                foreach (var f in kingdom.AllFurniture)
+                    if (f != null && f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; throne = null; }
                 foreach (var s in kingdom.Storages)
-                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; }
+                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; }
                 foreach (var b in kingdom.Blueprints)
-                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; }
+                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; }
             }
             foreach (var n in ResourceNode.All)
             {
                 if (n == null || n.Empty || n.Config == null) continue;
-                if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; }
+                if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; }
             }
 
-            if (throne != null) UseThrone(kingdom);
+            if (ladder != null) UseLadder(kingdom, ladder);
+            else if (throne != null) UseThrone(kingdom);
             else if (storage != null) UseStorage(storage);
             else if (blueprint != null) UseBlueprint(blueprint, now);
             else if (node != null) Gather(node, now);
@@ -319,6 +434,18 @@ namespace KingdomGame.Character
             if (distance > reach || distance >= best) return false;
             best = distance;
             return true;
+        }
+
+        void UseLadder(Kingdom kingdom, Furniture ladder)
+        {
+            var top = Kingdom.LeansOn(ladder.Cells, ladder.Rotation);
+            if (!kingdom.WallTopAt(top))
+            {
+                Hint = "The wall this leaned on is gone";
+                return;
+            }
+            Hint = $"E: climb the {ladder.Config.displayName.ToLowerInvariant()} onto the wall";
+            if (GameInput.Pressed(KeyCode.E)) GetUp(new Vector2(top.x + 0.5f, top.y + 0.5f));
         }
 
         void UseThrone(Kingdom kingdom)

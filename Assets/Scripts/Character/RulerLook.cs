@@ -77,6 +77,16 @@ namespace KingdomGame.Character
             bodyRenderer.enabled = shadow.enabled = true;
         }
 
+        /// <summary>
+        /// Up on a wall (true) or on the ground: up there the ruler is a little closer to the
+        /// camera (drawn a bit bigger) and their shadow falls further away.
+        /// </summary>
+        public void SetRaised(bool raised)
+        {
+            transform.localScale = Vector3.one * (raised ? 1.07f : 1f);
+            if (shadow != null) shadow.transform.localPosition = (Vector3)(Look.ShadowDirection * (raised ? 0.36f : 0.12f));
+        }
+
         /// <summary>Which way the body faces, in degrees.</summary>
         public float FacingDegrees => body != null ? body.localEulerAngles.z : 0f;
 

@@ -441,6 +441,11 @@ namespace KingdomGame.Building
                     reason = "There's a wall here";
                     return false;
                 }
+                if (b.climb && !WallLike(LeansOn(cells, b.ClampRotation(rotation))))
+                {
+                    reason = "A ladder has to lean on a wall (R turns it)";
+                    return false;
+                }
                 if (nodes.TryGetValue(c, out var node) && node != null && !node.Empty)
                 {
                     reason = node.Config != null && node.Config.look == NodeLook.Rock ? "A rock is in the way (gather it first: hold E)"
@@ -580,6 +585,30 @@ namespace KingdomGame.Building
             bool sides = WallLike(cell + Vector2Int.left) || WallLike(cell + Vector2Int.right);
             bool ends = WallLike(cell + Vector2Int.up) || WallLike(cell + Vector2Int.down);
             return sides && !ends ? 0 : ends && !sides ? 1 : otherwise;
+        }
+
+        /// <summary>The cell a ladder or stairs on <paramref name="cells"/> facing <paramref name="rotation"/> leans on (the wall you climb onto).</summary>
+        public static Vector2Int LeansOn(RectInt cells, int rotation)
+        {
+            var up = Facing.Turn(Vector2.up, rotation);
+            return new Vector2Int(cells.x + Mathf.RoundToInt(up.x), cells.y + Mathf.RoundToInt(up.y));
+        }
+
+        /// <summary>Which way a ladder at <paramref name="cell"/> should face to lean on a wall beside it, or <paramref name="otherwise"/>.</summary>
+        public int LadderFacing(Vector2Int cell, int otherwise)
+        {
+            var one = new RectInt(cell, Vector2Int.one);
+            if (WallLike(LeansOn(one, otherwise))) return otherwise;
+            for (int r = 0; r < 4; r++)
+                if (WallLike(LeansOn(one, r))) return r;
+            return otherwise;
+        }
+
+        /// <summary>Whether the ruler can stand on top of this cell: a wall or a door (gates are part of the wall walk).</summary>
+        public bool WallTopAt(Vector2Int cell)
+        {
+            if (world != null && world.ChunkAt(cell) != null) return true;
+            return occupied.TryGetValue(cell, out var thing) && thing is Door;
         }
 
         bool WallLike(Vector2Int cell)

@@ -20,7 +20,8 @@ namespace KingdomGame.Combat
             public Vector2 Position;
             public Vector2 Velocity;
             public float RangeLeft;
-            public float Flown;   // tiles so far
+            public float Flown;      // tiles so far
+            public float OverWalls;  // flies over walls for this many tiles
             public WeaponConfig Weapon;
         }
 
@@ -33,8 +34,12 @@ namespace KingdomGame.Combat
 
         public int Count => shots.Count;
 
-        /// <summary>Fires one shot from <paramref name="from"/> in <paramref name="direction"/> (plus the weapon's spread).</summary>
-        public bool Fire(WeaponConfig weapon, Vector2 from, Vector2 direction)
+        /// <summary>
+        /// Fires one shot from <paramref name="from"/> in <paramref name="direction"/> (plus the weapon's spread).
+        /// <paramref name="overWalls"/> and <paramref name="range"/> replace the weapon's own when not negative
+        /// (shots from up on a wall or a tower fly over the walls below; a mortar shell lands where it's aimed).
+        /// </summary>
+        public bool Fire(WeaponConfig weapon, Vector2 from, Vector2 direction, float overWalls = -1f, float range = -1f)
         {
             if (weapon == null || shots.Count >= maxShots) return false;
             float spread = Random.Range(-weapon.spreadDegrees, weapon.spreadDegrees);
@@ -44,7 +49,8 @@ namespace KingdomGame.Combat
             {
                 Position = from,
                 Velocity = direction * weapon.projectileSpeed,
-                RangeLeft = weapon.range,
+                RangeLeft = range >= 0f ? range : weapon.range,
+                OverWalls = overWalls >= 0f ? overWalls : weapon.overWalls,
                 Weapon = weapon,
             });
 
@@ -74,7 +80,7 @@ namespace KingdomGame.Combat
                 bool hitWall = false;
                 Vector2Int pixel = default;
                 float wallAlong = 1f;
-                float overWalls = shot.Weapon.overWalls;
+                float overWalls = shot.OverWalls;
                 if (world != null && shot.Flown + stepLength > overWalls && stepLength > 1e-6f)
                 {
                     var from = shot.Flown < overWalls ? shot.Position + step * ((overWalls - shot.Flown) / stepLength) : shot.Position;

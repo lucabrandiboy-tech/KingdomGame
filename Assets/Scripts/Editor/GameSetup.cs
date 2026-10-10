@@ -64,7 +64,7 @@ namespace KingdomGame.EditorTools
             Folder("Assets", "Data");
             foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies" })
                 Folder(DataRoot, area);
-            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage" })
+            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls" })
                 Folder(DataRoot + "/Building", area);
             Folder("Assets", "Scenes");
             Folder("Assets", "Art");
@@ -362,6 +362,8 @@ namespace KingdomGame.EditorTools
             {
                 Door("WoodenDoor", "Wooden door", FurnitureArt.WoodDoor, 20, 0, 5f, 250f),
                 Door("HeavyDoor", "Heavy door", FurnitureArt.HeavyDoor, 30, 20, 8f, 700f),
+                Climb("Ladder", "Ladder", FurnitureArt.Ladder, 6, 0, 2f, 60f),
+                Climb("StoneStairs", "Stone stairs", FurnitureArt.StoneStairs, 0, 20, 6f, 400f),
                 Asset<BuildingConfig>("Building/Floors/WoodFloor", b =>
                 {
                     b.displayName = "Wood floor"; b.kind = BuildingKind.Floor; b.category = BuildCategory.Floors; b.art = FurnitureArt.WoodFloor;
@@ -411,6 +413,16 @@ namespace KingdomGame.EditorTools
                 b.displayName = displayName; b.kind = BuildingKind.Door; b.category = BuildCategory.Walls; b.art = art;
                 b.size = Vector2Int.one; b.rotations = 2; b.woodCost = wood; b.stoneCost = stone; b.buildSeconds = seconds;
                 b.health = health; b.height = 0.2f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None;
+            });
+
+        // A ladder or stairs: leans on the wall it faces; the ruler climbs onto the wall there (E).
+        static BuildingConfig Climb(string file, string displayName, string art, int wood, int stone, float seconds, float health) =>
+            Asset<BuildingConfig>("Building/Walls/" + file, b =>
+            {
+                b.displayName = displayName; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Walls; b.art = art;
+                b.size = Vector2Int.one; b.rotations = 4; b.woodCost = wood; b.stoneCost = stone; b.buildSeconds = seconds;
+                b.climb = true; b.blocksMovement = false; b.health = health; b.height = 0.35f; b.roomTag = RoomTag.None;
+                b.dragToPlaceLines = false;
             });
 
         static BuildingConfig Furnish(string file, string displayName, string art, BuildCategory category, Vector2Int size, int rotations,

@@ -35,6 +35,8 @@ namespace KingdomGame
         /// <summary>Size of the body, in tiles from its middle (for shots and blasts).</summary>
         public float Radius { get; private set; }
         public bool IsCreature { get; private set; }
+        /// <summary>Up on a wall (or somewhere else zombies can't climb): zombies don't go for it and doors don't open for it.</summary>
+        public bool OutOfReach { get; set; }
         public bool Dead => Current <= 0f;
         public float Fraction => Max > 0f ? Current / Max : 0f;
         /// <summary>When it was last hurt (Time.time), for healing only after a while.</summary>

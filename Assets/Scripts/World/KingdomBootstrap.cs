@@ -136,7 +136,7 @@ namespace KingdomGame.World
             if (survival)
             {
                 waves = gameObject.AddComponent<SurvivalDirector>();
-                waves.Setup(content.survival, zombies, kingdom);
+                waves.Setup(content.survival, zombies, kingdom, dayNight);
                 rulerController.Health.Died += _ => waves.RulerFell();
             }
 

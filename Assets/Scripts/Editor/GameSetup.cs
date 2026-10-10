@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 10;
+        const int SettingsVersion = 11;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -92,6 +92,7 @@ namespace KingdomGame.EditorTools
             bool biggerMap = oldContent != null && oldContent.settingsVersion < 8;
             bool minesUpdate = oldContent != null && oldContent.settingsVersion < 9;
             bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
+            bool nightHordes = oldContent != null && oldContent.settingsVersion < 11;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -413,6 +414,15 @@ namespace KingdomGame.EditorTools
                     EditorUtility.SetDirty(content.progression);
                 }
                 Debug.Log("Ages now take days of research, with ore and villagers (survival too). Your other settings were kept.");
+            }
+
+            if (nightHordes && content.survival != null)
+            {
+                // Survival hordes come at night now, two minutes after each one is beaten.
+                content.survival.hordesAtNight = true;
+                content.survival.breakSeconds = 120f;
+                EditorUtility.SetDirty(content.survival);
+                Debug.Log("Survival hordes now come at night, 2 minutes apart. Your other settings were kept.");
             }
 
             // The pictures, at full detail (the first time takes a few minutes).

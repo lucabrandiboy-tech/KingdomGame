@@ -49,6 +49,16 @@ namespace KingdomGame.World
             Apply();
         }
 
+        /// <summary>Real seconds until it's night (<see cref="IsNight"/>), 0 if it is.</summary>
+        public float SecondsUntilNight()
+        {
+            if (config == null || IsNight) return 0f;
+            // Daylight drops below a quarter a little after sunset (see Apply).
+            float nightStarts = config.sunset + 0.174f * config.twilightHours;
+            float hours = Mathf.Repeat(nightStarts - hour, 24f);
+            return hours * config.minutesPerDay * 60f / 24f;
+        }
+
         /// <summary>Sets the day and the time (loading a saved game).</summary>
         public void SetTime(int day, float hourOfDay)
         {

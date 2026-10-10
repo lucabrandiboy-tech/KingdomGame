@@ -26,8 +26,12 @@ namespace KingdomGame.Zombies
         [Min(1)] public float growth = 1.05f;
         [Tooltip("Zombies have this much more health each wave (0.06 = 6% more).")]
         [Min(0)] public float toughnessPerWave = 0.06f;
-        [Tooltip("Seconds of calm between waves (N calls the next one early).")]
-        [Min(0)] public float breakSeconds = 45f;
+        [Tooltip("Seconds of calm after a horde is beaten before the next one comes (N calls it early).")]
+        [Min(0)] public float breakSeconds = 120f;
+        [Tooltip("Hordes only come at night: the first a few seconds after dark, then another Break Seconds after each is beaten, until dawn. Days are for building (zombies still out keep fighting). Off: waves come day and night.")]
+        public bool hordesAtNight = true;
+        [Tooltip("Seconds after dark before the night's first horde.")]
+        [Min(0)] public float nightfallDelay = 5f;
         [Tooltip("How many zombies come out of the dark per second while a wave arrives.")]
         [Min(0.1f)] public float spawnPerSecond = 2f;
         [Tooltip("Most zombies alive at once; the rest of the wave waits its turn. Lower it if the game slows down.")]

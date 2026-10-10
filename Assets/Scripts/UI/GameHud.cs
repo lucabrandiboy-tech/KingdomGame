@@ -224,6 +224,10 @@ namespace KingdomGame.UI
             text.Clear();
             switch (waves.Now)
             {
+                case SurvivalDirector.Phase.Preparing when waves.WaitingForNight:
+                case SurvivalDirector.Phase.Calm when waves.WaitingForNight:
+                    text.Append($"<b>Day: the next horde comes at nightfall, in {Clock(waves.TimeLeft)}</b>\nBuild and repair!  (N: call it now)");
+                    break;
                 case SurvivalDirector.Phase.Preparing:
                     text.Append($"<b>The first wave comes in {Clock(waves.TimeLeft)}</b>\nBuild walls and doors!  (N: call it now)");
                     break;

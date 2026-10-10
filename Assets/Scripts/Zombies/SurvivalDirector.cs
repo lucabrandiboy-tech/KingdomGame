@@ -28,6 +28,7 @@ namespace KingdomGame.Zombies
         SurvivalConfig config;
         ZombieDirector zombies;
         Kingdom kingdom;
+        World.DayNightCycle dayNight;
         readonly List<float> entries = new List<float>();
         int[] firstWaves = new int[0];
         float[] weights = new float[0];
@@ -47,12 +48,15 @@ namespace KingdomGame.Zombies
         public float SecondsSurvived { get; private set; }
         /// <summary>A big message for the middle of the screen ("Wave 3 is coming from the north!"), or null.</summary>
         public string Announcement { get; private set; }
+        /// <summary>Daytime with hordes only at night: the next one comes at nightfall (<see cref="TimeLeft"/> is the time till then).</summary>
+        public bool WaitingForNight { get; private set; }
 
-        public void Setup(SurvivalConfig survival, ZombieDirector director, Kingdom owner)
+        public void Setup(SurvivalConfig survival, ZombieDirector director, Kingdom owner, World.DayNightCycle clock = null)
         {
             config = survival;
             zombies = director;
             kingdom = owner;
+            dayNight = clock;
             var kinds = config.zombies ?? new ZombieConfig[0];
             firstWaves = new int[kinds.Length];
             weights = new float[kinds.Length];
@@ -64,7 +68,8 @@ namespace KingdomGame.Zombies
             if (kinds.Length == 0) Debug.LogError("The Survival Config has no zombies. Run KingdomGame > Build Game Scenes again.", config);
             Now = Phase.Preparing;
             TimeLeft = config.prepSeconds;
-            Announce($"Build your defences! The dead come in {Mathf.CeilToInt(TimeLeft)} seconds.", 6f);
+            Announce(config.hordesAtNight && dayNight != null ? "Build your defences! The dead come at nightfall."
+                : $"Build your defences! The dead come in {Mathf.CeilToInt(TimeLeft)} seconds.", 6f);
         }
 
         void Update()
@@ -78,10 +83,27 @@ namespace KingdomGame.Zombies
             {
                 case Phase.Preparing:
                 case Phase.Calm:
-                    if (GameInput.Pressed(KeyCode.N) && Time.timeScale > 0f) TimeLeft = 0f;
+                {
+                    bool callNow = GameInput.Pressed(KeyCode.N) && Time.timeScale > 0f;
+                    if (config.hordesAtNight && dayNight != null && !dayNight.IsNight && !callNow)
+                    {
+                        // Day: building time. The next horde comes at nightfall.
+                        WaitingForNight = true;
+                        TimeLeft = dayNight.SecondsUntilNight() + config.nightfallDelay;
+                        break;
+                    }
+                    if (WaitingForNight && !callNow)
+                    {
+                        WaitingForNight = false;
+                        TimeLeft = config.nightfallDelay;
+                        Announce("Night falls. The dead are coming!", 4f);
+                    }
+                    WaitingForNight = false;
+                    if (callNow) TimeLeft = 0f;
                     TimeLeft -= dt;
                     if (TimeLeft <= 0f) StartWave(Wave + 1);
                     break;
+                }
                 case Phase.Fighting:
                     SpawnSome(dt);
                     if (ToCome <= 0 && zombies.Alive == 0) EndWave();

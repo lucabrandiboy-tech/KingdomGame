@@ -35,8 +35,9 @@ namespace KingdomGame.UI
             "Left click  rifle (barely scratches stone)\n" +
             "Right click  rocket          G  throw C4\n" +
             "Your shots fly over a wall you stand right behind\n" +
-            "E  use what's next to you: the throne, a storehouse, a ladder,\n" +
-            "    a blueprint (hold), a tree/rock/bush (hold to gather)\n" +
+            "E  use what's next to you: the throne, a house's door, a storehouse,\n" +
+            "    a ladder, a blueprint (hold), a tree/rock/bush (hold to gather)\n" +
+            "In a house: B furnish it, U upgrade it (once you reach the next age)\n" +
             "On the walls: walk along them, shoot over them; E climbs down\n" +
             "Walk over loot bags to pick them up\n" +
             "Esc  pause          F3  performance info          H  hide this";
@@ -50,9 +51,20 @@ namespace KingdomGame.UI
             "Left click  place  (walls: drag for a line, floors and roofs: drag for an area)\n" +
             "Right click  stop placing / cancel a blueprint / tear down\n" +
             "Shift + right click  take a roof off\n" +
+            "Over a house:  F look inside and furnish it,  U upgrade it\n" +
             "A house: walls and a door round a room, furniture in it, a roof on top\n" +
             "WASD  move the view          Wheel  zoom\n" +
             "E or Esc  stand up          H  hide this";
+
+        const string FurnishControls =
+            "Furnishing a house: furniture, lights, chests, floors and rugs\n" +
+            "Tab or click a tab  the tabs          [ and ]  earlier / later ages\n" +
+            "1-9 or click  pick something (again = put away)     R  turn it\n" +
+            "Left click  place  (floors: drag for an area)\n" +
+            "Right click  stop placing / cancel a blueprint / take something out\n" +
+            "Builders come in through the door to build it\n" +
+            "WASD  move the view          Wheel  zoom\n" +
+            "Esc (or B, or E)  done          H  hide this";
 
         public void Setup(RulerController player, DayNightCycle cycle, Kingdom owner, BuildController build, CameraRig cameraRig,
             SurvivalDirector survival = null)
@@ -132,7 +144,8 @@ namespace KingdomGame.UI
 
             if (showControls)
             {
-                string controls = throne ? ThroneControls : WalkControls + (waves != null ? SurvivalKeys : "");
+                string controls = throne ? (builder.Furnishing != null ? FurnishControls : ThroneControls)
+                    : WalkControls + (waves != null ? SurvivalKeys : "");
                 Draw(controls, box, Corner.BottomLeft);
             }
         }
@@ -333,6 +346,7 @@ namespace KingdomGame.UI
                 case BuildCategory.Lights: return "Lights";
                 case BuildCategory.Traps: return "Traps";
                 case BuildCategory.Towers: return "Towers";
+                case BuildCategory.Houses: return "Houses";
                 default: return "Storage";
             }
         }

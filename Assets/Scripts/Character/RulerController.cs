@@ -67,6 +67,11 @@ namespace KingdomGame.Character
         public bool RespawnOnDeath { get; set; } = true;
         /// <summary>Up on the walls (climbed a ladder or stairs).</summary>
         public bool OnWalls { get; private set; }
+        /// <summary>The house the ruler is inside, or null.</summary>
+        public House Inside { get; private set; }
+        /// <summary>Furnishing a house (standing still while the build bar is open).</summary>
+        public bool Busy { get; private set; }
+        Vector2 cameOutAt;   // where to come out if the house goes while the ruler is inside
 
         public void Setup(PlayerConfig playerConfig, WeaponConfig primary, WeaponConfig secondary, ExplosiveConfig thrown,
             Transform gunTransform, Projectiles shots, Explosives charges)
@@ -141,7 +146,15 @@ namespace KingdomGame.Character
                 Say("The wall gave way under you!");
                 if (Dead) return;
             }
-            if (Seated)
+            // The house they were in was torn down or broken: out they come.
+            if ((object)Inside != null && (Inside == null || Inside.Interior == null))
+            {
+                LeaveHouse();
+                Say("The house you were in is gone!");
+            }
+            // The room grows when the house is upgraded: the camera may go further.
+            if (Inside != null && Inside.Interior != null && rig != null && !Busy) rig.Inside = RoomRect(Inside.Interior);
+            if (Seated || Busy)
             {
                 if (look != null) look.Show(Vector2.zero, Vector2.down, config.moveSpeed, config.stepsPerSecond, holdingGun: false);
                 return;
@@ -180,13 +193,14 @@ namespace KingdomGame.Character
             }
 
             PickUpLoot();
+            if (Inside != null && Kingdom.Current != null && InsideKeys(Kingdom.Current)) return;
             Interact(now);
             if (now > noticeUntil) Notice = null;
         }
 
         void FixedUpdate()
         {
-            if (config == null || Seated || Dead) return;
+            if (config == null || Seated || Busy || Dead) return;
             Velocity = Vector2.MoveTowards(Velocity, wantedVelocity, config.acceleration * Time.fixedDeltaTime);
             if (OnWalls) StayOnWalls();
             else KeepOutOfZombies();
@@ -322,7 +336,7 @@ namespace KingdomGame.Character
 
         void OnDied(Health h)
         {
-            if (Seated)
+            if (Seated || Busy)
             {
                 var builder = Kingdom.Current != null ? Kingdom.Current.GetComponent<BuildController>() : null;
                 if (builder != null) builder.Leave();
@@ -342,6 +356,11 @@ namespace KingdomGame.Character
         {
             var throne = Kingdom.Current != null ? Kingdom.Current.Throne : null;
             Vector2 at = throne != null ? throne.Front : (Vector2)transform.position;
+            if ((object)Inside != null)
+            {
+                Inside = null;
+                if (rig != null) rig.Inside = default;
+            }
             body.simulated = true;
             GetDown(at);
             Health.Revive();
@@ -410,8 +429,29 @@ namespace KingdomGame.Character
             Blueprint blueprint = null;
             ResourceNode node = null;
             Furniture ladder = null;
+            House door = null;
             if (kingdom != null)
             {
+                // A house's door: in from outside, out from inside (the door wins over anything else in reach).
+                if (Inside != null && Inside.Interior != null)
+                {
+                    if (BuildingLook.Distance(new RectInt(Inside.Interior.DoorCell, Vector2Int.one), here) <= reach) door = Inside;
+                }
+                else
+                {
+                    float nearest = reach;
+                    foreach (var h in kingdom.Houses)
+                    {
+                        if (h == null) continue;
+                        float d = (h.DoorPoint - here).magnitude;
+                        if (d <= nearest) { nearest = d; door = h; }
+                    }
+                }
+                if (door != null)
+                {
+                    UseHouseDoor(door);
+                    return;
+                }
                 if (kingdom.Throne != null && Closer(BuildingLook.Distance(kingdom.Throne.Cells, here), reach, ref best)) throne = kingdom.Throne;
                 foreach (var f in kingdom.AllFurniture)
                     if (f != null && f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; throne = null; }
@@ -431,7 +471,92 @@ namespace KingdomGame.Character
             else if (storage != null) UseStorage(storage);
             else if (blueprint != null) UseBlueprint(blueprint, now);
             else if (node != null) Gather(node, now);
-            else Hint = null;
+            else Hint = Inside != null && kingdom != null ? InsideHint(kingdom) : null;
+        }
+
+        // ------------------------------------------------------------ houses --
+
+        void UseHouseDoor(House house)
+        {
+            if (Inside == house)
+            {
+                Hint = $"E: go outside";
+                if (GameInput.Pressed(KeyCode.E)) LeaveHouse();
+                return;
+            }
+            string upgrading = house.Upgrade != null ? " (being upgraded)" : "";
+            Hint = $"E: go into the {house.Name.ToLowerInvariant()}{upgrading}";
+            if (GameInput.Pressed(KeyCode.E)) EnterHouse(house);
+        }
+
+        /// <summary>Goes in through a house's door: the view moves to the room inside.</summary>
+        public void EnterHouse(House house)
+        {
+            if (house == null || house.Interior == null) return;
+            cameOutAt = house.Outside;
+            Inside = house;
+            MoveTo(house.Interior.Entrance);
+            if (rig != null)
+            {
+                rig.Inside = RoomRect(house.Interior);
+                rig.Follow(transform, true);
+            }
+        }
+
+        static Rect RoomRect(Interior inside)
+        {
+            var b = inside.Bounds;
+            return new Rect(b.xMin, b.yMin, b.width, b.height);
+        }
+
+        /// <summary>Comes out of the house's door onto the map.</summary>
+        public void LeaveHouse()
+        {
+            var at = Inside != null ? Inside.Outside : cameOutAt;
+            Inside = null;
+            MoveTo(at);
+            if (rig != null)
+            {
+                rig.Inside = default;
+                rig.Follow(transform, true);
+            }
+        }
+
+        // Inside a house: B furnishes it, U upgrades it. True if one was pressed.
+        bool InsideKeys(Kingdom kingdom)
+        {
+            if (Time.frameCount == stoodUpFrame) return false;
+            if (GameInput.Pressed(KeyCode.B))
+            {
+                var builder = kingdom.GetComponent<BuildController>();
+                if (builder != null) builder.Furnish(Inside, false);
+                return true;
+            }
+            if (GameInput.Pressed(KeyCode.U))
+            {
+                Say(kingdom.StartUpgrade(Inside));
+                return true;
+            }
+            return false;
+        }
+
+        string InsideHint(Kingdom kingdom)
+        {
+            var next = Inside.Next;
+            string upgrade = Inside.Upgrade != null ? BuildController.Describe(Inside.Upgrade)
+                : next == null ? "it's as good as it gets"
+                : kingdom.UpgradeLockedReason(Inside) ?? $"U: upgrade to a {next.displayName.ToLowerInvariant()} ({next.inside.x} x {next.inside.y} inside)";
+            return $"B: furnish the {Inside.Name.ToLowerInvariant()}          {upgrade}";
+        }
+
+        /// <summary>Stands still while the build bar is open inside a house (or walks again).</summary>
+        public void SetBusy(bool busy)
+        {
+            Busy = busy;
+            wantedVelocity = Vector2.zero;
+            Velocity = Vector2.zero;
+            if (busy) Hint = null;
+            else stoodUpFrame = Time.frameCount;   // the key that closed the build bar mustn't do anything else
         }
 
         static bool Closer(float distance, float reach, ref float best)

@@ -75,12 +75,12 @@ namespace KingdomGame.Art
         /// One whole roof. <paramref name="cells"/> is a <paramref name="w"/> x <paramref name="h"/>
         /// grid of the cells it covers (leave at least one empty cell round them, for the eaves).
         /// The picture covers the whole grid at <paramref name="ppt"/> pixels per tile; its pivot is
-        /// the bottom-left corner.
+        /// the bottom-left corner. <paramref name="eave"/>: how far it reaches past its cells (0..1 tiles).
         /// </summary>
-        public static PixelImage Roof(bool[] cells, int w, int h, int ppt, RoofStyle style, uint seed)
+        public static PixelImage Roof(bool[] cells, int w, int h, int ppt, RoofStyle style, uint seed, float eave = Eave)
         {
             int W = w * ppt, H = h * ppt;
-            var inside = Outline(cells, w, h, ppt);
+            var inside = Outline(cells, w, h, ppt, eave);
             var st = StyleOf(style);
             bool flat = st.Slope <= 0f;
 
@@ -114,9 +114,9 @@ namespace KingdomGame.Art
         }
 
         /// <summary>A soft shadow of the roof's outline, at <paramref name="ppt"/> pixels per tile (pivot: bottom-left of the grid).</summary>
-        public static PixelImage Shadow(bool[] cells, int w, int h, int ppt)
+        public static PixelImage Shadow(bool[] cells, int w, int h, int ppt, float eave = Eave)
         {
-            var inside = Outline(cells, w, h, ppt);
+            var inside = Outline(cells, w, h, ppt, eave);
             var img = new PixelImage(w * ppt, h * ppt) { Pivot = Vector2.zero };
             for (int i = 0; i < inside.Length; i++)
                 if (inside[i]) img.Pixels[i] = new Color32(0, 0, 0, 255);
@@ -149,8 +149,8 @@ namespace KingdomGame.Art
 
         // ------------------------------------------------------------ shape --
 
-        // Which pixels the roof covers: its cells, and Eave tiles past them on every open side.
-        static bool[] Outline(bool[] cells, int w, int h, int ppt)
+        // Which pixels the roof covers: its cells, and `eave` tiles past them on every open side.
+        static bool[] Outline(bool[] cells, int w, int h, int ppt, float eave)
         {
             int W = w * ppt, H = h * ppt;
             var inside = new bool[W * H];
@@ -167,7 +167,7 @@ namespace KingdomGame.Art
                             if (nx < 0 || ny < 0 || nx >= w || ny >= h || !cells[ny * w + nx]) continue;
                             float ex = dx < 0 ? u : dx > 0 ? 1f - u : 0f;
                             float ey = dy < 0 ? v : dy > 0 ? 1f - v : 0f;
-                            covered = Mathf.Max(ex, ey) <= Eave;
+                            covered = Mathf.Max(ex, ey) <= eave;
                         }
                     inside[y * W + x] = covered;
                 }
@@ -224,6 +224,7 @@ namespace KingdomGame.Art
                     source[i] = i;
                     bool line = inside[i] && (face[i] == Ridge
                         || Differs(face, inside, W, H, i, x + 1, y) || Differs(face, inside, W, H, i, x, y + 1));
+                    // (A Ridge pixel never marks its neighbours either: see Differs.)
                     dist[i] = line ? 0 : Far;
                 }
             Chamfer(dist, source, W, H);
@@ -250,11 +251,14 @@ namespace KingdomGame.Art
             return 1f + lit * 0.6f;
         }
 
+        // Where two slopes meet between this pixel and the next. Pixels that are themselves on the line
+        // (a ridge exactly between pixel rows) are the line already, so they don't mark their neighbours:
+        // every ridge and hip comes out the same width.
         static bool Differs(byte[] face, bool[] inside, int W, int H, int i, int x, int y)
         {
             if (x >= W || y >= H) return false;
             int j = y * W + x;
-            return inside[j] && face[j] != face[i];
+            return inside[j] && face[j] != face[i] && face[j] != Ridge;
         }
 
         // ------------------------------------------------------------ paint --

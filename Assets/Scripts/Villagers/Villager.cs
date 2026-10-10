@@ -23,7 +23,8 @@ namespace KingdomGame.Villagers
     /// <see cref="NavGrid"/> and finds a new way if a wall goes up in front of it.
     ///
     /// Villagers have no physics body: they never get stuck on corners, and the
-    /// ruler can walk through them. When they see a zombie close by they drop
+    /// ruler can walk through them. To build inside a house they walk to its door
+    /// and step in (and out again the same way). When they see a zombie close by they drop
     /// their work and run (to the throne if that's away from it), and wait until
     /// it's safe. Zombies can kill them. (Needs like food and sleep come later.)
     /// </summary>
@@ -36,7 +37,11 @@ namespace KingdomGame.Villagers
 
         VillagerConfig config;
         Kingdom kingdom;
-        NavGrid nav;
+        NavGrid mapNav;
+        Interior space;          // the house it's inside, or null on the map
+        Interior portal;         // the house door it's walking to, to go in or out of
+        // Where it finds its way: inside the house it's in, or on the map.
+        NavGrid nav => space != null && space.Nav != null ? space.Nav : mapNav;
         VillagerSprites sprites;
         Transform body;
         SpriteRenderer bodyRenderer, shadow;
@@ -88,7 +93,7 @@ namespace KingdomGame.Villagers
         {
             config = villagerConfig;
             kingdom = owner;
-            nav = grid;
+            mapNav = grid;
             sprites = villagerSprites;
 
             shadow = Look.AddShadow(transform, sprites.Shadow, 0.1f);
@@ -244,6 +249,10 @@ namespace KingdomGame.Villagers
             {
                 FollowPath();
             }
+            else if ((object)portal != null)   // (a house that went meanwhile counts too: GoThrough drops the job)
+            {
+                GoThrough();
+            }
             else
             {
                 Arrive();
@@ -371,7 +380,51 @@ namespace KingdomGame.Villagers
             goal = target;
             goalBeside = beside;
             pathIndex = 0;
-            return nav.FindPath(Position, target, beside, path);
+            portal = null;
+            var there = kingdom.InteriorAt(target.position);
+            if (there == space) return nav.FindPath(Position, target, beside, path);
+            if (space != null)
+            {
+                // Out of this house first: to the door, inside.
+                portal = space;
+                return space.Nav != null && space.Nav.FindPath(Position, new RectInt(space.EntranceCell, Vector2Int.one), false, path);
+            }
+            // On the map, going into a house: to its door.
+            portal = there;
+            return mapNav.FindPath(Position, new RectInt(there.House.OutsideCell, Vector2Int.one), false, path);
+        }
+
+        // At a house's door: in (or out), then on towards the goal.
+        void GoThrough()
+        {
+            var through = portal;
+            portal = null;
+            if (through == null || through.House == null)
+            {
+                // The house went while it was on its way.
+                Abandon();
+                return;
+            }
+            if (space == through)
+            {
+                space = null;
+                transform.position = through.House.Outside;
+            }
+            else
+            {
+                space = through;
+                transform.position = through.Entrance;
+            }
+            if (!Walk(goal, goalBeside)) Abandon();
+        }
+
+        /// <summary>Its house is gone (torn down, broken): it's put out by the door and drops what it was doing.</summary>
+        public void PutOutside(Vector2 at)
+        {
+            space = null;
+            portal = null;
+            transform.position = at;
+            Abandon();
         }
 
         void Animate(Vector2 velocity)

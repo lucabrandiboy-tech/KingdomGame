@@ -60,6 +60,7 @@ namespace KingdomGame.Zombies
         readonly Dictionary<ZombieConfig, ZombieSprites> sprites = new Dictionary<ZombieConfig, ZombieSprites>();
         readonly List<int> targets = new List<int>();
         readonly List<float> headStarts = new List<float>();
+        readonly HashSet<House> housesWithPeople = new HashSet<House>();
 
         public static ZombieDirector Current { get; private set; }
 
@@ -259,9 +260,18 @@ namespace KingdomGame.Zombies
             UpdateCosts();
             targets.Clear();
             headStarts.Clear();
+            housesWithPeople.Clear();
             foreach (var h in Health.Creatures)
             {
                 if (h == null || h.Dead || h.Team != Team.Friendly) continue;
+                // Hiding in a house: they go for the house, and break it down to get in.
+                var inside = kingdom != null ? kingdom.InteriorAt(h.Position) : null;
+                if (inside != null)
+                {
+                    if (inside.House != null && housesWithPeople.Add(inside.House))
+                        foreach (var houseCell in inside.House.Cells.allPositionsWithin) AddTarget(houseCell, h == rulerHealth ? 0f : VillagerHeadStart);
+                    continue;
+                }
                 if (SeatedRuler(h))
                 {
                     // On the throne: reached from the cells along its sides (through a wall there, if need be).
@@ -311,6 +321,8 @@ namespace KingdomGame.Zombies
                 if (s != null) SetArea(s.Cells, s.Health != null ? 1.5f + s.Health.Current / HealthPerTile : 0f);
             foreach (var d in kingdom.Doors)
                 if (d != null) SetArea(d.Cells, d.IsOpen || d.Health == null ? 1f : 1.5f + d.Health.Current / HealthPerTile);
+            foreach (var house in kingdom.Houses)
+                if (house != null && house.Health != null) SetArea(house.Cells, 1.5f + house.Health.Current / (HealthPerTile * house.Cells.width * house.Cells.height));
             foreach (var f in kingdom.AllFurniture)
             {
                 if (f == null || !f.Config.blocksMovement || f.Config.flat) continue;
@@ -351,6 +363,7 @@ namespace KingdomGame.Zombies
                 case Door door: return door.IsOpen;
                 case Throne _:
                 case Storage _:
+                case House _:
                     return false;
                 case Furniture piece: return !piece.Config.blocksMovement || piece.Config.flat;
                 default: return true;
@@ -494,7 +507,8 @@ namespace KingdomGame.Zombies
             }
             if (kingdom == null) return;
             var thing = kingdom.ThingAt(cell);
-            var target = thing is Door door ? door.Health : thing is Furniture piece ? piece.Health : null;
+            var target = thing is Door door ? door.Health : thing is Furniture piece ? piece.Health : thing is House house ? house.Health
+                : thing is Storage store ? store.Health : null;
             if (target == null) return;
             target.Damage(z.Config.structureDamage * damage, z.Position);
             if (!target.Dead) ShowBar(target, null, target);

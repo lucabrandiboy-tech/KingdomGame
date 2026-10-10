@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using KingdomGame.Art;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
+using KingdomGame.Progression;
 using KingdomGame.Villagers;
 using UnityEngine;
 
@@ -48,6 +49,12 @@ namespace KingdomGame.Building
         readonly List<Villager> villagers = new List<Villager>();
         readonly List<Door> doors = new List<Door>();
         readonly List<Furniture> furniture = new List<Furniture>();
+        readonly List<House> houses = new List<House>();
+        readonly HashSet<int> usedSlots = new HashSet<int>();
+        readonly Dictionary<(BuildingConfig, int, int), Sprite> houseLooks = new Dictionary<(BuildingConfig, int, int), Sprite>();
+        readonly Dictionary<(BuildingConfig, int), Sprite> houseShadows = new Dictionary<(BuildingConfig, int), Sprite>();
+        readonly Dictionary<(BuildingConfig, int), BuildingConfig> upgradeJobs = new Dictionary<(BuildingConfig, int), BuildingConfig>();
+        readonly Dictionary<StructureMaterial, Sprite> wallPictures = new Dictionary<StructureMaterial, Sprite>();
         // The three layers (see the class summary).
         readonly Dictionary<Vector2Int, Component> occupied = new Dictionary<Vector2Int, Component>();
         readonly Dictionary<Vector2Int, Component> floors = new Dictionary<Vector2Int, Component>();
@@ -78,6 +85,9 @@ namespace KingdomGame.Building
         public IReadOnlyList<Villager> Villagers => villagers;
         public IReadOnlyList<Door> Doors => doors;
         public IReadOnlyList<Furniture> AllFurniture => furniture;
+        public IReadOnlyList<House> Houses => houses;
+        /// <summary>Where the insides of houses are: far off the map, one square each.</summary>
+        public static readonly Vector2Int InsideOrigin = new Vector2Int(4000, 4000);
         public IReadOnlyList<BuildingConfig> BuildMenu => menu;
         public IReadOnlyList<Room> Rooms => rooms;
         /// <summary>A plain white square sprite (for markers and bars).</summary>
@@ -114,6 +124,8 @@ namespace KingdomGame.Building
                 Destroy(sprite.texture);
                 Destroy(sprite);
             }
+            foreach (var job in upgradeJobs.Values)
+                if (job != null) Destroy(job);
         }
 
         /// <summary>
@@ -173,6 +185,9 @@ namespace KingdomGame.Building
                         break;
                     case BuildingKind.Floor:
                         for (int v = 0; v < FloorVariants; v++) look[v] = ArtSprites.Get(ArtKeys.FloorTile(b.art, v));
+                        break;
+                    case BuildingKind.House:
+                        for (int r = 0; r < turns; r++) look[r] = HouseLook(b, 0, r);
                         break;
                     case BuildingKind.Roof:
                         // A sample of the roof (the ghost while placing it); the roofs themselves are drawn for their shape.
@@ -246,6 +261,40 @@ namespace KingdomGame.Building
             return Made(PixelTextures.ToSprite(image, material.name, false, 128));
         }
 
+        /// <summary>A house of level <paramref name="level"/> facing <paramref name="rotation"/> (drawn the first time it's needed, then shared).</summary>
+        public Sprite HouseLook(BuildingConfig b, int level, int rotation)
+        {
+            if (b == null) return White;
+            if (houseLooks.TryGetValue((b, level, rotation), out var sprite)) return sprite;
+            var l = b.house != null ? b.house.Level(level) : new HouseLevel();
+            bool heavy = l.doorArt == FurnitureArt.HeavyDoor;
+            var image = HouseArt.Exterior(b.size, rotation, l.roof, l.chimney, heavy ? PixelImage.Rgb(84, 70, 58) : PixelImage.Rgb(104, 72, 44), 64, 17u + (uint)level * 7u);
+            sprite = Made(PixelTextures.ToSprite(image, $"{l.displayName} {rotation}", false, 64));
+            houseLooks[(b, level, rotation)] = sprite;
+            return sprite;
+        }
+
+        /// <summary>A house's shadow on the ground.</summary>
+        public Sprite HouseShadow(BuildingConfig b, int rotation)
+        {
+            if (b == null) return null;
+            if (houseShadows.TryGetValue((b, rotation), out var sprite)) return sprite;
+            sprite = Made(PixelTextures.ToSprite(HouseArt.Shadow(b.size, rotation, 8), $"{b.displayName} shadow {rotation}", false, 8));
+            houseShadows[(b, rotation)] = sprite;
+            return sprite;
+        }
+
+        /// <summary>A wall tile's picture for the walls inside houses (the baked one, or one drawn here).</summary>
+        public Sprite WallSprite(StructureMaterial material, Vector2Int cell)
+        {
+            if (material == null) return null;
+            int variants = Mathf.Clamp(material.variants, 1, 8);
+            var baked = ArtSprites.Get(ArtKeys.Wall(material.name, (int)(DamageShape.Hash(0x51u, cell.x, cell.y) % (uint)variants)));
+            if (baked != null) return baked;
+            if (!wallPictures.TryGetValue(material, out var sprite)) wallPictures[material] = sprite = WallPicture(material);
+            return sprite;
+        }
+
         /// <summary>The picture for a building facing <paramref name="rotation"/> (its blueprint ghost uses it too).</summary>
         public Sprite LookOf(BuildingConfig b, int rotation = 0)
         {
@@ -286,7 +335,7 @@ namespace KingdomGame.Building
             if (b == null || string.IsNullOrEmpty(b.art)) storage.AddLantern(brazier);
             storages.Add(storage);
             Occupy(occupied, cells, storage);
-            Nav.Block(cells);
+            NavFor(cells).Block(cells);
             roomsDirty = true;
             Changed?.Invoke();
             return storage;
@@ -336,6 +385,37 @@ namespace KingdomGame.Building
 
         /// <summary>What stands on the top layer of a cell: the throne, a storehouse, a door, furniture or a blueprint (null = nothing).</summary>
         public Component ThingAt(Vector2Int cell) => occupied.TryGetValue(cell, out var thing) ? thing : null;
+
+        /// <summary>The inside of a house that this cell is in (its floor or walls), or null on the map.</summary>
+        public Interior InteriorAt(Vector2Int cell)
+        {
+            if (cell.x < InsideOrigin.x || cell.y < InsideOrigin.y) return null;
+            foreach (var h in houses)
+                if (h != null && h.Interior != null && h.Interior.Contains(cell)) return h.Interior;
+            return null;
+        }
+
+        public Interior InteriorAt(Vector2 position) => InteriorAt(NavGrid.CellAt(position));
+
+        /// <summary>The house standing on this cell of the map, or null.</summary>
+        public House HouseAt(Vector2Int cell) => occupied.TryGetValue(cell, out var thing) ? thing as House : null;
+
+        /// <summary>Where walkers find their way in these cells: inside a house, or the map.</summary>
+        public NavGrid NavFor(RectInt cells)
+        {
+            var inside = InteriorAt(cells.position);
+            return inside != null ? inside.Nav : Nav;
+        }
+
+        /// <summary>A house's room was made (again): what's built in it stands in the way of walkers there.</summary>
+        public void BlockInside(Interior inside)
+        {
+            if (inside == null || inside.Nav == null) return;
+            foreach (var f in furniture)
+                if (f != null && f.Config.blocksMovement && !f.Config.flat && inside.Contains(f.Cells.position)) inside.Nav.Block(f.Cells);
+            foreach (var s in storages)
+                if (s != null && inside.Contains(s.Cells.position)) inside.Nav.Block(s.Cells);
+        }
 
         /// <summary>The roof over a cell (built, not planned), or null.</summary>
         public RoofTile RoofAt(Vector2Int cell) => roofs.TryGetValue(cell, out var r) ? r as RoofTile : null;
@@ -462,9 +542,20 @@ namespace KingdomGame.Building
         public bool CanPlace(BuildingConfig b, Vector2Int cell, int rotation, out string reason)
         {
             var cells = new RectInt(cell, b.SizeFacing(b.ClampRotation(rotation)));
+            var inside = InteriorAt(cell);
+            if (inside != null) return CanPlaceInside(b, cells, inside, out reason);
             if (b.kind == BuildingKind.Roof) return CanRoof(cells, out reason);
             var map = Nav.Cells;
             var layer = LayerOf(b);
+            if (b.kind == BuildingKind.House)
+            {
+                var front = House.FrontCell(cells, b.ClampRotation(rotation));
+                if (!Nav.Walkable(front) || occupied.ContainsKey(front))
+                {
+                    reason = "The door would open onto something (R turns it)";
+                    return false;
+                }
+            }
             foreach (var c in cells.allPositionsWithin)
             {
                 if (c.x < map.xMin + 1 || c.y < map.yMin + 1 || c.x >= map.xMax - 1 || c.y >= map.yMax - 1)
@@ -491,6 +582,11 @@ namespace KingdomGame.Building
                     reason = "There's a wall here";
                     return false;
                 }
+                if (NeedsClearSpot(b) && InFrontOfHouse(c))
+                {
+                    reason = "Keep the house's door clear";
+                    return false;
+                }
                 if (b.climb && !WallLike(LeansOn(cells, b.ClampRotation(rotation))))
                 {
                     reason = "A ladder has to lean on a wall (R turns it)";
@@ -501,6 +597,52 @@ namespace KingdomGame.Building
                     reason = node.Config != null && node.Config.look == NodeLook.Rock ? "A rock is in the way (gather it first: hold E)"
                         : node.Config != null && node.Config.look == NodeLook.Tree ? "A tree is in the way (chop it first: hold E)"
                         : "A bush is in the way (pick it first: hold E)";
+                    return false;
+                }
+            }
+            reason = null;
+            return true;
+        }
+
+        // The cell in front of a house's door (walls and furniture mustn't block it).
+        bool InFrontOfHouse(Vector2Int cell)
+        {
+            foreach (var h in houses)
+                if (h != null && h.OutsideCell == cell) return true;
+            return false;
+        }
+
+        /// <summary>Whether something can be built inside a house (furniture, lights, chests, floors and rugs can).</summary>
+        public static bool BuildsInside(BuildingConfig b) =>
+            b != null && !b.climb && (b.kind == BuildingKind.Furniture || b.kind == BuildingKind.Floor
+                || (b.kind == BuildingKind.Storage && !string.IsNullOrEmpty(b.art)));
+
+        bool CanPlaceInside(BuildingConfig b, RectInt cells, Interior inside, out string reason)
+        {
+            if (!BuildsInside(b))
+            {
+                reason = $"A {b.displayName.ToLowerInvariant()} can't go inside a house";
+                return false;
+            }
+            var layer = LayerOf(b);
+            foreach (var c in cells.allPositionsWithin)
+            {
+                if (!inside.Inner.Contains(c))
+                {
+                    reason = "That's the wall";
+                    return false;
+                }
+                if (layer.TryGetValue(c, out var thing) && thing != null)
+                {
+                    reason = thing is Blueprint ? "Already planned here"
+                        : b.kind == BuildingKind.Floor ? "There's already a floor here"
+                        : b.kind == BuildingKind.Furniture && b.flat ? "There's already a rug here"
+                        : "Something is already built here";
+                    return false;
+                }
+                if (c == inside.EntranceCell && NeedsClearSpot(b))
+                {
+                    reason = "Keep the way in clear";
                     return false;
                 }
             }
@@ -589,6 +731,7 @@ namespace KingdomGame.Building
             if (blueprint == null || blueprint.Cancelled) return null;
             blueprint.MarkCancelled();
             blueprints.Remove(blueprint);
+            if (blueprint.Upgrades != null) blueprint.Upgrades.Upgrade = null;
             Free(LayerOf(blueprint.Config), blueprint.Cells, blueprint);
             int lost = 0;
             for (int i = 0; i < Inventory.TypeCount; i++)
@@ -607,6 +750,7 @@ namespace KingdomGame.Building
         public string TearDownText(Vector2Int cell)
         {
             var thing = BuiltAt(cell);
+            if (thing is House house) return $"Right click: tear down the {house.Name} and everything inside (half the cost back)";
             if (thing != null) return $"Right click: tear down the {thing.Config.displayName} (half its cost back)";
             var wall = world != null ? world.ChunkAt(cell) : null;
             return wall != null ? "Right click: tear down this wall (half its cost back)" : null;
@@ -634,6 +778,14 @@ namespace KingdomGame.Building
                     if (LootBag.Drop(storage.Center, left[(int)ResourceType.Wood], left[(int)ResourceType.Stone], left[(int)ResourceType.Food]) != null)
                         spilled = ". The other storehouses are full: the rest is in a bag on the ground";
                 }
+                if (thing is House house)
+                {
+                    int things = ClearInside(house, true);
+                    Forget(house);
+                    RefundHouse(house);
+                    house.Remove();
+                    return $"Tore down the {house.Name}" + (things > 0 ? $" and the {things} things inside (half their cost back)" : "");
+                }
                 // Off the books first, so the refund doesn't go into the thing being torn down.
                 Forget(thing);
                 Refund(thing.Config, 1, thing.Cells.center);
@@ -648,6 +800,113 @@ namespace KingdomGame.Building
             if (wallConfig != null) Refund(wallConfig, structure.Cells.width * structure.Cells.height, structure.Cells.center);
             structure.Remove();
             return "Tore down the wall";
+        }
+
+        // Half of what a house cost: the house itself and every upgrade it had.
+        void RefundHouse(House house)
+        {
+            Refund(house.Config, 1, house.Center);
+            if (house.Config.house == null) return;
+            for (int l = 1; l <= house.Level; l++)
+            {
+                var level = house.Config.house.Level(l);
+                Store(ResourceType.Wood, level.woodCost / 2, house.Center);
+                Store(ResourceType.Stone, level.stoneCost / 2, house.Center);
+                Store(ResourceType.Food, level.foodCost / 2, house.Center);
+            }
+        }
+
+        /// <summary>
+        /// Empties a house that's going (torn down or broken): whoever is inside comes out of the
+        /// door, plans inside are cancelled, and what's built inside goes (half its cost back if
+        /// <paramref name="refund"/>; what chests held is left in a bag by the door either way).
+        /// Returns how many things went.
+        /// </summary>
+        int ClearInside(House house, bool refund)
+        {
+            var inside = house.Interior;
+            if (house.Upgrade != null) Cancel(house.Upgrade);
+            if (inside == null) return 0;
+            var bounds = inside.Bounds;
+            foreach (var v in villagers)
+                if (v != null && bounds.Contains(NavGrid.CellAt(v.Position))) v.PutOutside(house.Outside);
+            foreach (var b in blueprints.ToArray())
+                if (b != null && bounds.Contains(b.Cells.position)) Cancel(b);
+            var things = new List<IBuilt>();
+            foreach (var f in furniture) if (f != null && bounds.Contains(f.Cells.position)) things.Add(f);
+            foreach (var s in storages) if (s != null && bounds.Contains(s.Cells.position)) things.Add(s);
+            foreach (var layer in new[] { floors, rugs })
+                foreach (var pair in layer)
+                    if (bounds.Contains(pair.Key) && pair.Value is IBuilt built && !(pair.Value is Blueprint) && !things.Contains(built)) things.Add(built);
+            int wood = 0, stone = 0, food = 0;
+            foreach (var thing in things)
+            {
+                if (thing is Storage chest && chest.Stock != null)
+                {
+                    wood += chest.Stock.Get(ResourceType.Wood);
+                    stone += chest.Stock.Get(ResourceType.Stone);
+                    food += chest.Stock.Get(ResourceType.Food);
+                }
+                Forget(thing);
+                if (refund) Refund(thing.Config, 1, house.Outside);
+                thing.Remove();
+            }
+            if (wood + stone + food > 0) LootBag.Drop(house.Outside, wood, stone, food);
+            return things.Count;
+        }
+
+        /// <summary>
+        /// Starts upgrading a house to its next level: builders bring what it costs and work on it.
+        /// Returns a message for the player (why not, or that it's started).
+        /// </summary>
+        public string StartUpgrade(House house)
+        {
+            if (house == null) return null;
+            if (house.Upgrade != null) return $"The {house.Name} is already being upgraded";
+            var next = house.Next;
+            if (next == null) return $"The {house.Name} is as good as it gets";
+            string wait = UpgradeLockedReason(house);
+            if (wait != null) return wait;
+            var job = UpgradeJob(house.Config, house.Level + 1);
+            var go = new GameObject($"Upgrade: {house.Name}");
+            go.transform.SetParent(transform, false);
+            var blueprint = go.AddComponent<Blueprint>();
+            blueprint.Setup(job, house.Cells, house.Rotation, HouseLook(house.Config, house.Level + 1, house.Rotation), White);
+            blueprint.Upgrades = house;
+            house.Upgrade = blueprint;
+            blueprints.Add(blueprint);
+            return $"Builders will upgrade the {house.Name} to a {next.displayName} ({job.CostText()})";
+        }
+
+        /// <summary>Why a house can't be upgraded yet (its next level is from an age the kingdom hasn't reached), or null.</summary>
+        public string UpgradeLockedReason(House house)
+        {
+            var next = house != null ? house.Next : null;
+            var research = Research.Current;
+            if (next == null || research == null || research.AgeCount == 0 || research.Mode == Research.Unlocking.Everything) return null;
+            if (research.Age >= next.age) return null;
+            var age = research.AgeAt(next.age);
+            return $"A {next.displayName} needs the {(age != null ? age.displayName : "next age")}";
+        }
+
+        // The builders' job for upgrading to `level`: its cost and work, as a building.
+        BuildingConfig UpgradeJob(BuildingConfig houseConfig, int level)
+        {
+            if (upgradeJobs.TryGetValue((houseConfig, level), out var job) && job != null) return job;
+            var l = houseConfig.house.Level(level);
+            job = ScriptableObject.CreateInstance<BuildingConfig>();
+            job.name = $"{houseConfig.name} upgrade {level}";
+            job.displayName = $"Upgrade to {l.displayName}";
+            job.kind = BuildingKind.House;
+            job.category = houseConfig.category;
+            job.size = houseConfig.size;
+            job.woodCost = l.woodCost;
+            job.stoneCost = l.stoneCost;
+            job.foodCost = l.foodCost;
+            job.buildSeconds = l.buildSeconds;
+            job.health = 0f;
+            upgradeJobs[(houseConfig, level)] = job;
+            return job;
         }
 
         /// <summary>Takes off the whole roof over <paramref name="cell"/> (every touching cell of it) and gives half its cost back.</summary>
@@ -787,6 +1046,14 @@ namespace KingdomGame.Building
         public void Broke(IBuilt thing)
         {
             if (thing == null) return;
+            if (thing is House house)
+            {
+                ClearInside(house, false);
+                if (world != null) world.Burst(house.Center, new Color32(110, 92, 70, 255), 40, 4f);
+                Forget(house);
+                house.Remove();
+                return;
+            }
             // What was inside a broken storehouse or chest spills out in a bag.
             if (thing is Storage storage && storage.Stock != null)
             {
@@ -811,6 +1078,12 @@ namespace KingdomGame.Building
             if (thing is Storage s)
             {
                 storages.Remove(s);
+                NavFor(thing.Cells).Unblock(thing.Cells);
+            }
+            else if (thing is House h)
+            {
+                houses.Remove(h);
+                usedSlots.Remove(h.Slot);
                 Nav.Unblock(thing.Cells);
             }
             else if (thing is Door d)
@@ -825,7 +1098,7 @@ namespace KingdomGame.Building
             else if (thing is Furniture f)
             {
                 furniture.Remove(f);
-                if (f.Config.blocksMovement && !f.Config.flat) Nav.Unblock(thing.Cells);
+                if (f.Config.blocksMovement && !f.Config.flat) NavFor(thing.Cells).Unblock(thing.Cells);
                 if (f.Config.sleeps > 0) Beds = Mathf.Max(0, Beds - f.Config.sleeps);
             }
             roomsDirty = true;
@@ -910,10 +1183,23 @@ namespace KingdomGame.Building
 
         // Walls, storehouses and things you can't walk through can't appear on top of someone.
         static bool NeedsClearSpot(BuildingConfig b) =>
-            b.kind == BuildingKind.Wall || b.kind == BuildingKind.Storage || (b.kind == BuildingKind.Furniture && b.blocksMovement && !b.flat);
+            b.kind == BuildingKind.Wall || b.kind == BuildingKind.Storage || b.kind == BuildingKind.House
+            || (b.kind == BuildingKind.Furniture && b.blocksMovement && !b.flat);
 
         void TryComplete(Blueprint b)
         {
+            if (b.Upgrades != null)
+            {
+                // An upgrade: the house gets its next level (a bigger room inside, the new look).
+                var house = b.Upgrades;
+                blueprints.Remove(b);
+                house.Upgrade = null;
+                house.SetLevel(house.Level + 1);
+                Destroy(b.gameObject);
+                roomsDirty = true;
+                Changed?.Invoke();
+                return;
+            }
             if (b.Config.kind == BuildingKind.Roof)
             {
                 foreach (var c in b.Cells.allPositionsWithin)
@@ -988,6 +1274,23 @@ namespace KingdomGame.Building
                         made = tile;
                     }
                     break;
+                case BuildingKind.House:
+                {
+                    var go = new GameObject(config.displayName);
+                    go.transform.SetParent(transform, false);
+                    var house = go.AddComponent<House>();
+                    int slot = 0;
+                    while (usedSlots.Contains(slot)) slot++;
+                    usedSlots.Add(slot);
+                    var origin = InsideOrigin + new Vector2Int(slot % 64, slot / 64) * Interior.SlotSize;
+                    // On the books before its room is made, so the room finds its own floor.
+                    houses.Add(house);
+                    house.Setup(config, cells, rotation, slot, origin, this);
+                    Occupy(occupied, cells, house);
+                    Nav.Block(cells);
+                    made = house;
+                    break;
+                }
                 case BuildingKind.Roof:
                     foreach (var c in cells.allPositionsWithin)
                     {
@@ -1029,7 +1332,7 @@ namespace KingdomGame.Building
                     piece.Setup(config, cells, rotation, LookOf(config, rotation), ShadowOf(config, rotation), flame, this);
                     furniture.Add(piece);
                     Occupy(LayerOf(config), cells, piece);
-                    if (config.blocksMovement && !config.flat) Nav.Block(cells);
+                    if (config.blocksMovement && !config.flat) NavFor(cells).Block(cells);
                     Beds += config.sleeps;
                     made = piece;
                     break;
@@ -1113,6 +1416,31 @@ namespace KingdomGame.Building
                     float d = (at - middle).sqrMagnitude;
                     if (d < best) { best = d; room.LabelAt = at; }
                 }
+                rooms.Add(room);
+            }
+
+            // Each house's inside is a room of its own, named after the house and what's in it.
+            foreach (var house in houses)
+            {
+                var inside = house != null ? house.Interior : null;
+                if (inside == null) continue;
+                var room = new Room();
+                seen.Clear();
+                tags.Clear();
+                foreach (var cell in inside.Inner.allPositionsWithin)
+                {
+                    room.Cells.Add(cell);
+                    roomAt[cell] = room;
+                    foreach (var layer in new[] { occupied, rugs })
+                    {
+                        if (!layer.TryGetValue(cell, out var thing) || thing == null || !seen.Add(thing)) continue;
+                        if (thing is IBuilt built && !(thing is Blueprint) && built.Config != null)
+                            tags[built.Config.roomTag] = (tags.TryGetValue(built.Config.roomTag, out int n) ? n : 0) + 1;
+                    }
+                }
+                string what = NameOf(room.Size, false, tags);
+                room.Name = what == "Empty room" || what == "Small room" ? house.Name : $"{house.Name}: {what.ToLowerInvariant()}";
+                room.LabelAt = inside.Inner.center;
                 rooms.Add(room);
             }
         }

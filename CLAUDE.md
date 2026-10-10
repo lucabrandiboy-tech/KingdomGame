@@ -72,9 +72,13 @@ top-down), 2B (throne view, grid building, storehouses, builder villagers) and
 2C (villager needs, zombies, health and respawn). The user then asked for a
 **castle and survival update** before testing (rooms, doors, floors,
 furniture, lights; main menu with Survival = endless zombie waves, and Free
-build). 2A, 2B and that update are written and compile-checked but **not yet
+build), then ages with real-time research, roofs, and **houses** you go into
+(bigger inside, one level per age, upgraded by builders; `Building/House.cs`,
+`Interior.cs`: each house's inside is a room far off the map at
+`Kingdom.InsideOrigin`, reached through the door; villagers walk through doors
+in `Villager.Walk`). 2A, 2B and these updates are written and compile-checked but **not yet
 run in Unity**; the user tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
-(plus `docs/PHASE-2B-TEST.md` for the details). Don't start 2C before they
+and `docs/HOUSES-TEST.md` (plus `docs/PHASE-2B-TEST.md` for the details). Don't start 2C before they
 confirm. See `docs/ROADMAP.md` and `docs/DECISIONS.md` sections 14-15.
 The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 

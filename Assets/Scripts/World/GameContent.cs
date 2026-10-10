@@ -69,7 +69,12 @@ namespace KingdomGame.World
             Add(wood);
             if (buildMenu != null)
                 foreach (var b in buildMenu)
-                    if (b != null) Add(b.wallMaterial);
+                    if (b != null)
+                    {
+                        Add(b.wallMaterial);
+                        if (b.house != null && b.house.levels != null)
+                            foreach (var level in b.house.levels) if (level != null) Add(level.walls);
+                    }
             return list;
         }
     }

@@ -145,6 +145,29 @@ static class Program
             }
             SaveImage(img, Path.Combine(dir, $"roof_{style}.png"));
         }
+
+        // The houses (HouseArt, like Kingdom.HouseLook): every level facing down, and the first one every way, on grass.
+        var styles = new[] { RoofStyle.Thatch, RoofStyle.WoodShingles, RoofStyle.ClayTiles, RoofStyle.Slate, RoofStyle.Copper,
+            RoofStyle.CorrugatedIron, RoofStyle.TarFelt, RoofStyle.Concrete };
+        var chimneys = new[] { PixelImage.Rgb(112, 108, 100), PixelImage.Rgb(112, 108, 100), PixelImage.Rgb(112, 108, 100), PixelImage.Rgb(112, 108, 100),
+            PixelImage.Rgb(140, 72, 52), PixelImage.Rgb(140, 72, 52), PixelImage.Rgb(118, 118, 114), PixelImage.Rgb(118, 118, 114) };
+        const int cell = 64 * 5;
+        var sheet = new PixelImage(cell * 6, cell * 2);
+        for (int i = 0; i < sheet.Pixels.Length; i++) sheet.Pixels[i] = PixelImage.Rgb(70, 84, 52);
+        for (int i = 0; i < 12; i++)
+        {
+            int level = i < 8 ? i : 0, rotation = i < 8 ? 0 : i - 8;
+            var house = HouseArt.Exterior(new Vector2Int(3, 3), rotation, styles[level], chimneys[level],
+                level >= 3 ? PixelImage.Rgb(84, 70, 58) : PixelImage.Rgb(104, 72, 44), 64, 17u + (uint)level * 7u);
+            int ox = (i % 6) * cell, oy = (1 - i / 6) * cell;
+            for (int y = 0; y < house.Height; y++)
+                for (int x = 0; x < house.Width; x++)
+                {
+                    var c = house.Pixels[y * house.Width + x];
+                    if (c.a > 0) sheet.Pixels[(oy + y) * sheet.Width + ox + x] = c;
+                }
+        }
+        SaveImage(sheet, Path.Combine(dir, "houses.png"));
     }
 
     // ------------------------------------------------------------- world --

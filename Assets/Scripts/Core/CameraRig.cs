@@ -29,6 +29,8 @@ namespace KingdomGame
 
         /// <summary>The area the camera's middle may move in (the map), or zero size for no limit.</summary>
         public Rect Bounds { get; set; }
+        /// <summary>Inside a house: the room, which the camera keeps to instead of <see cref="Bounds"/> (zero size = on the map).</summary>
+        public Rect Inside { get; set; }
         public bool IsFree => free;
         public float Zoom => zoom;
         /// <summary>Set by other scripts (the HUD) while the mouse is over buttons, so the wheel doesn't zoom.</summary>
@@ -56,6 +58,15 @@ namespace KingdomGame
             free = true;
             center = at;
             zoom = Mathf.Clamp(View.throneZoom, View.throneZoomMin, View.throneZoomMax);
+        }
+
+        /// <summary>Stops following and looks at <paramref name="at"/> showing <paramref name="halfHeight"/> tiles above and below (a room inside a house).</summary>
+        public void FreeLook(Vector2 at, float halfHeight)
+        {
+            target = null;
+            free = true;
+            center = at;
+            zoom = Mathf.Clamp(halfHeight, View.walkZoomMin, View.throneZoomMax);
         }
 
         /// <summary>Moves the view by <paramref name="direction"/> (length 0..1) for this frame, scaled by the zoom.</summary>
@@ -123,8 +134,9 @@ namespace KingdomGame
 
             if (!free && target != null)
                 center = Vector2.Lerp(center, target.position, 1f - Mathf.Exp(-v.followSharpness * dt));
-            if (Bounds.width > 0f && Bounds.height > 0f)
-                center = new Vector2(Mathf.Clamp(center.x, Bounds.xMin, Bounds.xMax), Mathf.Clamp(center.y, Bounds.yMin, Bounds.yMax));
+            var limit = Inside.width > 0f && Inside.height > 0f ? Inside : Bounds;
+            if (limit.width > 0f && limit.height > 0f)
+                center = new Vector2(Mathf.Clamp(center.x, limit.xMin, limit.xMax), Mathf.Clamp(center.y, limit.yMin, limit.yMax));
 
             cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, zoom, 1f - Mathf.Exp(-v.zoomSharpness * dt));
 

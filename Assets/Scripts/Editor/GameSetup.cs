@@ -35,8 +35,9 @@ namespace KingdomGame.EditorTools
         /// new values (it normally keeps them, so your tuning survives).
         /// 1: the high-detail look (evening start, fires, softer night, wall colors, color grading).
         /// 2: the castle and survival update (furniture on the build bar, zombie numbers for walls and weapons).
+        /// 3: houses (a house you go into, bigger inside, upgraded age by age).
         /// </summary>
-        const int SettingsVersion = 2;
+        const int SettingsVersion = 3;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -64,7 +65,7 @@ namespace KingdomGame.EditorTools
             Folder("Assets", "Data");
             foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies" })
                 Folder(DataRoot, area);
-            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls" })
+            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses" })
                 Folder(DataRoot + "/Building", area);
             Folder("Assets", "Scenes");
             Folder("Assets", "Art");
@@ -75,6 +76,8 @@ namespace KingdomGame.EditorTools
             bool newLook = oldContent != null && oldContent.settingsVersion < 1;
             // Settings from before the castle and survival update get its new numbers (and keep the rest).
             bool castleUpdate = oldContent != null && oldContent.settingsVersion < 2;
+            // ...and from before houses.
+            bool housesUpdate = oldContent != null && oldContent.settingsVersion < 3;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -217,6 +220,7 @@ namespace KingdomGame.EditorTools
                 b.roomTag = RoomTag.Storage; b.height = 0.3f; b.health = 1200f;
             });
             var castle = CastleBuildings();
+            var house = House(stone, wood);
             var kingdomConfig = Asset<KingdomConfig>("Building/KingdomConfig", k => { });
             var villagerConfig = Asset<VillagerConfig>("Villagers/VillagerConfig", v => { });
 
@@ -258,6 +262,7 @@ namespace KingdomGame.EditorTools
             menu.AddRange(castle);
             int firstStorage = castle.FindIndex(b => b != null && b.category == BuildCategory.Storage);
             menu.Insert(firstStorage >= 0 ? firstStorage + 2 : menu.Count, storehouse);
+            menu.Add(house);
             if (content.buildMenu == null || content.buildMenu.Length == 0)
                 content.buildMenu = menu.ToArray();
             if (castleUpdate)
@@ -284,6 +289,13 @@ namespace KingdomGame.EditorTools
                 foreach (var changed in new UnityEngine.Object[] { storehouse, stoneWallBuilding, woodWallBuilding, stone, wood, rifle, rockets, rocketBlast, c4Blast })
                     EditorUtility.SetDirty(changed);
                 Debug.Log("Added the castle furniture to your build bar and set up the zombies (survival). Your other settings were kept.");
+            }
+
+            if (housesUpdate && Array.IndexOf(content.buildMenu, house) < 0)
+            {
+                var list = new List<BuildingConfig>(content.buildMenu) { house };
+                content.buildMenu = list.ToArray();
+                Debug.Log("Added houses to your build bar (the Houses tab). Your other settings were kept.");
             }
 
             // The pictures, at full detail (the first time takes a few minutes).
@@ -406,6 +418,42 @@ namespace KingdomGame.EditorTools
             };
             return list;
         }
+
+        // A house you go into: bigger inside than out, and a level for each age (a hut up to a concrete house).
+        static BuildingConfig House(StructureMaterial stone, StructureMaterial wood)
+        {
+            var levels = Asset<HouseConfig>("Building/Houses/HouseLevels", h =>
+            {
+                var brick = new Color32(140, 72, 52, 255);
+                var grey = new Color32(118, 118, 114, 255);
+                var fieldstone = new Color32(112, 108, 100, 255);
+                h.levels = new[]
+                {
+                    Level("Hut", 0, 5, 4, 600f, RoofStyle.Thatch, wood, FurnitureArt.WoodFloor, FurnitureArt.WoodDoor, fieldstone, 0, 0, 0, 0f),
+                    Level("Mudbrick house", 1, 7, 5, 900f, RoofStyle.WoodShingles, stone, FurnitureArt.WoodFloor, FurnitureArt.WoodDoor, fieldstone, 60, 40, 10, 60f),
+                    Level("Timber house", 2, 9, 6, 1300f, RoofStyle.ClayTiles, wood, FurnitureArt.WoodFloor, FurnitureArt.WoodDoor, fieldstone, 100, 80, 20, 90f),
+                    Level("Stone house", 3, 11, 7, 1800f, RoofStyle.Slate, stone, FurnitureArt.StoneFloor, FurnitureArt.HeavyDoor, fieldstone, 120, 160, 30, 120f),
+                    Level("Manor", 4, 13, 8, 2400f, RoofStyle.Copper, stone, FurnitureArt.WoodFloor, FurnitureArt.HeavyDoor, brick, 160, 240, 40, 150f),
+                    Level("Brick townhouse", 5, 15, 9, 3000f, RoofStyle.CorrugatedIron, stone, FurnitureArt.WoodFloor, FurnitureArt.HeavyDoor, brick, 200, 320, 50, 180f),
+                    Level("Concrete house", 6, 17, 10, 3800f, RoofStyle.TarFelt, stone, FurnitureArt.StoneFloor, FurnitureArt.HeavyDoor, grey, 220, 420, 60, 210f),
+                    Level("Bunker house", 7, 19, 11, 4800f, RoofStyle.Concrete, stone, FurnitureArt.StoneFloor, FurnitureArt.HeavyDoor, grey, 260, 560, 80, 240f),
+                };
+            });
+            return Asset<BuildingConfig>("Building/Houses/House", b =>
+            {
+                b.displayName = "House"; b.kind = BuildingKind.House; b.category = BuildCategory.Houses; b.house = levels;
+                b.size = new Vector2Int(3, 3); b.rotations = 4; b.woodCost = 40; b.stoneCost = 10; b.foodCost = 5; b.buildSeconds = 25f;
+                b.health = 600f; b.height = 0.6f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None;
+            });
+        }
+
+        static HouseLevel Level(string displayName, int age, int width, int height, float health, RoofStyle roof, StructureMaterial walls,
+            string floor, string door, Color32 chimney, int wood, int stone, int food, float seconds) => new HouseLevel
+        {
+            displayName = displayName, age = age, inside = new Vector2Int(width, height), health = health, roof = roof, walls = walls,
+            floorArt = floor, doorArt = door, chimney = chimney, woodCost = wood, stoneCost = stone, foodCost = food,
+            buildSeconds = Mathf.Max(0.1f, seconds),
+        };
 
         static BuildingConfig Door(string file, string displayName, string art, int wood, int stone, float seconds, float health) =>
             Asset<BuildingConfig>("Building/Doors/" + file, b =>

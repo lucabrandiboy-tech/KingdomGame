@@ -34,6 +34,8 @@ namespace KingdomGame.Building
         /// <summary>Why it isn't finished yet, for the throne view's info box (null = no problem).</summary>
         public string Problem { get; set; }
         public bool Cancelled { get; private set; }
+        /// <summary>The house this upgrades (an upgrade isn't a new building: it doesn't take up any cells of its own), or null.</summary>
+        public House Upgrades { get; set; }
 
         public void Setup(BuildingConfig config, RectInt cells, int rotation, Sprite look, Sprite white)
         {

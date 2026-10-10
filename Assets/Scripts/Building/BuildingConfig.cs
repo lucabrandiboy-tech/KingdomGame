@@ -19,6 +19,8 @@ namespace KingdomGame.Building
         Furniture,
         /// <summary>A roof over a cell: placed by dragging an area, drawn as one roof over the whole house.</summary>
         Roof,
+        /// <summary>A house you go into: a room inside, bigger than it looks, that grows when it's upgraded.</summary>
+        House,
     }
 
     /// <summary>The tabs of the build bar (new ones go at the end: assets store the number).</summary>
@@ -31,6 +33,7 @@ namespace KingdomGame.Building
         Storage,
         Traps,
         Towers,
+        Houses,
     }
 
     /// <summary>What a piece of furniture counts as, for naming the room it's in.</summary>
@@ -108,6 +111,10 @@ namespace KingdomGame.Building
         [Header("Roofs")]
         [Tooltip("What the roof is covered with (each age has its own).")]
         public RoofStyle roofStyle = RoofStyle.Thatch;
+
+        [Header("Houses")]
+        [Tooltip("A house's levels, one per age (Houses only).")]
+        public HouseConfig house;
 
         [Header("Storage")]
         [Tooltip("How much it holds, all resources together.")]

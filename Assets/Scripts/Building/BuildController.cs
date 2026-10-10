@@ -17,7 +17,10 @@ namespace KingdomGame.Building
     /// <item>Left click places it. Walls: hold and drag for a straight line. Floors: drag for a whole area.</item>
     /// <item>Right click: stop placing; with nothing picked, cancel the blueprint under the mouse or tear down what's built there (half its cost back).</item>
     /// <item>WASD moves the view, the mouse wheel zooms, E or Esc stands up.</item>
+    /// <item>Over a house: F looks inside it to furnish it, U upgrades it.</item>
     /// </list>
+    /// The same build bar furnishes a house from inside (<see cref="Furnish"/>): B in a house,
+    /// or F over it on the throne. Then only what fits in a house is on it.
     /// The world keeps running while you sit there.
     /// </summary>
     public sealed class BuildController : MonoBehaviour
@@ -55,8 +58,12 @@ namespace KingdomGame.Building
         readonly List<SpriteRenderer> ghosts = new List<SpriteRenderer>();
         readonly List<SpriteRenderer> outlines = new List<SpriteRenderer>();
         float messageUntil;
+        House furnishing;          // the house being furnished, or null
+        bool furnishFromThrone;    // ...looked into from the throne (Esc goes back there)
 
         public bool Active { get; private set; }
+        /// <summary>The house whose inside is being furnished, or null.</summary>
+        public House Furnishing => furnishing;
         /// <summary>The frame the ruler last stood up (so the Esc that did it doesn't also open the pause menu).</summary>
         public int LeftFrame { get; private set; } = -1;
         /// <summary>The build bar's tabs: only the ones that have something on them.</summary>
@@ -89,12 +96,54 @@ namespace KingdomGame.Building
             canopies = fader;
             viewConfig = look;
             view = rig != null ? rig.GetComponent<Camera>() : Camera.main;
+            agePage = OpeningPage;
+            RefreshCategories();
+        }
+
+        // The tabs that have something on them (in a house: only what fits in a house).
+        void RefreshCategories()
+        {
             categories.Clear();
             foreach (BuildCategory c in System.Enum.GetValues(typeof(BuildCategory)))
                 foreach (var b in kingdom.BuildMenu)
-                    if (b != null && b.category == c) { categories.Add(c); break; }
-            agePage = OpeningPage;
-            if (categories.Count > 0) SelectCategory(categories[0]);
+                    if (b != null && b.category == c && Fits(b)) { categories.Add(c); break; }
+            if (categories.Count == 0) { items.Clear(); selected = -1; return; }
+            SelectCategory(categories.Contains(category) ? category : categories[0]);
+        }
+
+        bool Fits(BuildingConfig b) => furnishing == null || Kingdom.BuildsInside(b);
+
+        /// <summary>
+        /// Opens the build bar on a house's inside: from inside it (B: the ruler stands still meanwhile),
+        /// or from the throne (F over the house). Esc goes back.
+        /// </summary>
+        public void Furnish(House house, bool fromThrone)
+        {
+            if (house == null || house.Interior == null || kingdom == null) return;
+            if (!fromThrone)
+            {
+                if (Active) return;
+                Active = true;
+                enteredFrame = Time.frameCount;
+                ruler.SetBusy(true);
+            }
+            furnishing = house;
+            furnishFromThrone = fromThrone;
+            kingdom.ThroneView = true;
+            selected = -1;
+            dragging = false;
+            ShowPlacements(0);
+            Hover = null;
+            var inside = house.Interior;
+            if (rig != null)
+            {
+                var b = inside.Bounds;
+                rig.Inside = new Rect(b.xMin, b.yMin, b.width, b.height);
+                float aspect = view != null ? Mathf.Max(0.5f, view.aspect) : 1.6f;
+                rig.FreeLook(inside.Center, Mathf.Max(b.height * 0.5f + 1.5f, b.width * 0.5f / aspect + 1f));
+            }
+            RefreshCategories();
+            Say($"Furnishing the {house.Name.ToLowerInvariant()}: {inside.Inner.width} x {inside.Inner.height} tiles inside");
         }
 
         /// <summary>Turns the build bar to an age's page (0 = the first age).</summary>
@@ -121,10 +170,35 @@ namespace KingdomGame.Building
             if (canopies != null && viewConfig != null) canopies.FarAlpha = viewConfig.throneCanopyAlpha;
         }
 
-        /// <summary>Stands the ruler up and brings the camera back to them.</summary>
+        /// <summary>Stands the ruler up and brings the camera back to them (furnishing a house: back to the throne, or to walking about inside).</summary>
         public void Leave()
         {
             if (!Active) return;
+            if ((object)furnishing != null)
+            {
+                furnishing = null;
+                selected = -1;
+                dragging = false;
+                ShowPlacements(0);
+                Hover = null;
+                if (furnishFromThrone)
+                {
+                    if (rig != null)
+                    {
+                        rig.Inside = default;
+                        if (kingdom.Throne != null) rig.FreeLook(kingdom.Throne.Center);
+                    }
+                    RefreshCategories();
+                    return;
+                }
+                Active = false;
+                kingdom.ThroneView = false;
+                LeftFrame = Time.frameCount;
+                ruler.SetBusy(false);
+                if (rig != null) rig.Follow(ruler.transform, true);   // still inside: the camera keeps to the room
+                RefreshCategories();
+                return;
+            }
             Active = false;
             kingdom.ThroneView = false;
             LeftFrame = Time.frameCount;
@@ -144,7 +218,7 @@ namespace KingdomGame.Building
             items.Clear();
             var research = Research.Current;
             foreach (var b in kingdom.BuildMenu)
-                if (b != null && b.category == c && (research == null || research.AgeOf(b) == agePage)) items.Add(b);
+                if (b != null && b.category == c && Fits(b) && (research == null || research.AgeOf(b) == agePage)) items.Add(b);
             selected = -1;
             dragging = false;
         }
@@ -181,8 +255,26 @@ namespace KingdomGame.Building
                 if (kingdom != null) SelectCategory(category);
             }
             if (!Active || kingdom == null || view == null || Time.timeScale <= 0f || UiFocus.TakesEscape) return;
+            // The house being furnished was torn down or broken.
+            if ((object)furnishing != null && (furnishing == null || furnishing.Interior == null))
+            {
+                Leave();
+                return;
+            }
+
+            if (furnishing != null && rig != null)
+            {
+                // The room grows when the house is upgraded: the view may go further.
+                var room = furnishing.Interior.Bounds;
+                rig.Inside = new Rect(room.xMin, room.yMin, room.width, room.height);
+            }
 
             bool firstFrame = Time.frameCount == enteredFrame;
+            if (!firstFrame && furnishing != null && !furnishFromThrone && GameInput.Pressed(KeyCode.B))
+            {
+                Leave();
+                return;
+            }
             if (!firstFrame && GameInput.Pressed(KeyCode.Escape))
             {
                 if (selected >= 0) Select(-1);
@@ -286,6 +378,20 @@ namespace KingdomGame.Building
                 }
             }
 
+            var house = kingdom.HouseAt(cell);
+            if (house != null)
+            {
+                Hover = AboutHouse(house, cell) + roomText;
+                if (GameInput.Pressed(KeyCode.F))
+                {
+                    Furnish(house, true);
+                    return;
+                }
+                if (GameInput.Pressed(KeyCode.U)) Say(kingdom.StartUpgrade(house));
+                if (rightClick) Say(house.Upgrade != null ? kingdom.Cancel(house.Upgrade) : kingdom.TearDown(cell));
+                return;
+            }
+
             var blueprint = kingdom.BlueprintAt(cell);
             if (blueprint != null)
             {
@@ -315,6 +421,19 @@ namespace KingdomGame.Building
                 return;
             }
             Hover = roomText.Length > 0 ? roomText.TrimStart('\n') : null;
+        }
+
+        string AboutHouse(House house, Vector2Int cell)
+        {
+            var inside = house.Interior.Inner;
+            string text = $"{house.Name} ({inside.width} x {inside.height} tiles inside, {Mathf.CeilToInt(house.Health.Current)}/{Mathf.CeilToInt(house.Health.Max)})";
+            if (house.Upgrade != null) return text + "\n" + Describe(house.Upgrade) + "\nF: look inside and furnish it\nRight click: cancel the upgrade (what was brought goes back to storage)";
+            var next = house.Next;
+            text += "\nF: look inside and furnish it";
+            if (next == null) text += "\nIt's as good as it gets";
+            else text += "\n" + (kingdom.UpgradeLockedReason(house)
+                ?? $"U: upgrade to a {next.displayName.ToLowerInvariant()} ({next.inside.x} x {next.inside.y} inside, {next.CostText()})");
+            return text + "\n" + kingdom.TearDownText(cell);
         }
 
         public static string Describe(Blueprint b)

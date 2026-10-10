@@ -40,3 +40,15 @@ build bar's new **Industry** tab and unlocks it with its age.
 - Belts carry in any direction (to the nearest storage they reach); there's no direction arrow yet.
 - No hint text when you walk up to a machine; darker means it's not working.
 - Online: machines only run in the host's own kingdom (like the rest of building so far).
+
+## Belts into and out of houses
+
+Every house has a belt hole in the middle of each of its four walls. A conveyor on the tile just
+outside the middle of a wall joins a conveyor on the edge tile just inside that wall (go in and
+look: it's the middle tile along that wall). Things ride through in either direction, so a quarry
+inside a house can send stone out to a storehouse, or a sawmill outside can send wood in to a chest
+inside. Machines inside a house get power from a generator within 10 tiles of the house's door.
+
+Test: build a house, a quarry inside it next to the inside-middle tile of a wall, a belt on that
+tile, a belt outside the middle of the same wall leading to a storehouse, and a generator near the
+house. Stone should go up in storage (the little rock jumps through the wall).

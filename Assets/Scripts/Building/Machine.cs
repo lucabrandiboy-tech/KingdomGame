@@ -95,8 +95,7 @@ namespace KingdomGame.Building
                 if (now < workAt) return;
                 workAt = now + 0.5f;
                 // Inside a house (far off the map): powered if the house is in a generator's reach.
-                var place = kingdom.PlaceAt((Vector2)transform.position);
-                bool on = PoweredAt(place != null ? place.Outside : (Vector2)transform.position);
+                bool on = PoweredAt(PowerSpot());
                 if (lamp != null && lamp.gameObject.activeSelf != on) lamp.gameObject.SetActive(on);
                 if (look != null) look.color = on ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
                 return;
@@ -137,7 +136,7 @@ namespace KingdomGame.Building
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
                 {
-                    if (held >= config.holds || !PoweredAt(at)) return false;
+                    if (held >= config.holds || !PoweredAt(PowerSpot())) return false;
                     if (config.kind == MachineKind.Quarry)
                     {
                         held += config.output;
@@ -165,6 +164,13 @@ namespace KingdomGame.Building
                 }
             }
             return false;
+        }
+
+        // Where power is measured from: here, or for a machine inside a house (far off the map), the house's door.
+        Vector2 PowerSpot()
+        {
+            var place = kingdom.PlaceAt((Vector2)transform.position);
+            return place != null ? place.Outside : (Vector2)transform.position;
         }
 
         ResourceType Makes => config.kind == MachineKind.Quarry ? ResourceType.Stone : ResourceType.Wood;
@@ -208,7 +214,9 @@ namespace KingdomGame.Building
                     parcels.RemoveAt(i);
                     continue;
                 }
-                if (p.Look != null) p.Look.position = Vector2.Lerp(p.Path[seg], p.Path[seg + 1], along - seg);
+                // (Through a house's wall hole the belt goes to its inside, far off the map: no flying across.)
+                if (p.Look != null) p.Look.position = (p.Path[seg + 1] - p.Path[seg]).sqrMagnitude > 4f ? p.Path[seg + 1]
+                    : Vector2.Lerp(p.Path[seg], p.Path[seg + 1], along - seg);
             }
         }
 
@@ -220,6 +228,19 @@ namespace KingdomGame.Building
             target = null;
             route.Clear();
             var storeAt = new Dictionary<Vector2Int, Storage>();
+            // Each house has a belt hole in the middle of each wall: a belt just outside it joins one on the
+            // inside edge tile there (both ways), so machines inside can send things out and the other way.
+            var holes = new Dictionary<Vector2Int, Vector2Int>();
+            foreach (var h in kingdom.Houses)
+            {
+                if (h == null || h.Interior == null) continue;
+                RectInt o = h.Cells, i = h.Interior.Inner;
+                void Hole(Vector2Int outside, Vector2Int inside) { holes[outside] = inside; holes[inside] = outside; }
+                Hole(new Vector2Int(o.xMax, o.y + o.height / 2), new Vector2Int(i.xMax - 1, i.y + i.height / 2));
+                Hole(new Vector2Int(o.x - 1, o.y + o.height / 2), new Vector2Int(i.x, i.y + i.height / 2));
+                Hole(new Vector2Int(o.x + o.width / 2, o.yMax), new Vector2Int(i.x + i.width / 2, i.yMax - 1));
+                Hole(new Vector2Int(o.x + o.width / 2, o.y - 1), new Vector2Int(i.x + i.width / 2, i.y));
+            }
             foreach (var s in kingdom.Storages)
                 if (s != null) foreach (var c in s.Cells.allPositionsWithin) storeAt[c] = s;
 
@@ -247,6 +268,11 @@ namespace KingdomGame.Building
             while (queue.Count > 0 && from.Count < MaxBelts)
             {
                 var c = queue.Dequeue();
+                if (holes.TryGetValue(c, out var other) && belts.Contains(other) && !from.ContainsKey(other))
+                {
+                    from[other] = c;
+                    queue.Enqueue(other);
+                }
                 foreach (var d in Sides)
                 {
                     var n = c + d;

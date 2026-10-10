@@ -50,6 +50,12 @@ namespace KingdomGame.Destruction
         [Tooltip("How much the camera shakes, in tiles.")]
         [Min(0)] public float screenShake = 0.03f;
 
+        [Header("Blast (zombies, people, doors and furniture)")]
+        [Tooltip("Damage to every creature, door and piece of furniture in the blast (a quarter of it at the edge). 0 = none. Careful: it hurts you and your villagers too.")]
+        [Min(0)] public float creatureDamage;
+        [Tooltip("How far the blast reaches, in tiles.")]
+        [Min(0)] public float blastRadius;
+
         public DamageShapeParams ToShape(int radiusOverride) => new DamageShapeParams
         {
             RadiusPx = radiusOverride > 0 ? radiusOverride : radiusPixels,

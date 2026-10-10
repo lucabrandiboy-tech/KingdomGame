@@ -37,7 +37,18 @@ namespace UnityEngine.InputSystem
         public KeyControl digit3Key => null;
         public KeyControl digit4Key => null;
         public KeyControl digit5Key => null;
+        public KeyControl digit6Key => null;
+        public KeyControl digit7Key => null;
+        public KeyControl digit8Key => null;
+        public KeyControl digit9Key => null;
+        public KeyControl digit0Key => null;
+        public KeyControl tabKey => null;
+        public KeyControl qKey => null;
+        public KeyControl fKey => null;
+        public KeyControl pKey => null;
+        public KeyControl enterKey => null;
         public KeyControl deleteKey => null;
+        public KeyControl nKey => null;
     }
 
     public class Pointer

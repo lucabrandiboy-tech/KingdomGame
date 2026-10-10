@@ -13,9 +13,10 @@ namespace KingdomGame.Character
     public sealed class RulerLook : MonoBehaviour
     {
         Transform body;
-        SpriteRenderer bodyRenderer, gunRenderer, shadow;
+        SpriteRenderer bodyRenderer, gunRenderer, shadow, fallen;
         Sprite[,] frames;     // [direction, frame]
         Sprite[] shadows;     // [frame]
+        Sprite[] dead;        // [direction]
         float stepClock;
 
         /// <summary>The turning part (body and gun). The ruler's own transform never turns.</summary>
@@ -46,8 +47,38 @@ namespace KingdomGame.Character
             gunRenderer = gun.gameObject.AddComponent<SpriteRenderer>();
             gunRenderer.sprite = ArtSprites.Get(ArtKeys.Rifle);
             gunRenderer.sortingOrder = SortOrder.Characters + 1;
+
+            dead = new Sprite[CharacterArt.DeadDirections];
+            for (int d = 0; d < dead.Length; d++) dead[d] = ArtSprites.Get(ArtKeys.RulerDead(d));
+            var lying = new GameObject("Fallen");
+            lying.transform.SetParent(transform, false);
+            fallen = lying.AddComponent<SpriteRenderer>();
+            fallen.sortingOrder = SortOrder.Corpses + 1;
+            fallen.enabled = false;
             return gun;
         }
+
+        /// <summary>The ruler has fallen: lying on their back, head away from <paramref name="facingDegrees"/>.</summary>
+        public void ShowDead(float facingDegrees)
+        {
+            if (fallen == null) return;
+            float a = facingDegrees + 180f;
+            fallen.sprite = dead[Direction(a, dead.Length)];
+            fallen.transform.localRotation = Quaternion.Euler(0f, 0f, a);
+            fallen.enabled = true;
+            bodyRenderer.enabled = gunRenderer.enabled = shadow.enabled = false;
+        }
+
+        /// <summary>Up again (respawned).</summary>
+        public void ShowAlive()
+        {
+            if (fallen == null) return;
+            fallen.enabled = false;
+            bodyRenderer.enabled = shadow.enabled = true;
+        }
+
+        /// <summary>Which way the body faces, in degrees.</summary>
+        public float FacingDegrees => body != null ? body.localEulerAngles.z : 0f;
 
         /// <summary>Called every frame by the controller. <paramref name="facing"/> is a direction.</summary>
         public void Show(Vector2 velocity, Vector2 facing, float maxSpeed, float stepsPerSecond, bool holdingGun = true)

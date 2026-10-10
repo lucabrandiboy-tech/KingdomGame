@@ -15,7 +15,13 @@ namespace KingdomGame.Art
         public const int RulerDirections = 16;
         public const int VillagerDirections = 8;
         public const int WalkFrames = 4;
-
+        public const int ZombieDirections = 8;
+        /// <summary>A zombie's pictures: walking frames 0-3, then 4 (winding up a blow) and 5 (striking).</summary>
+        public const int ZombieFrames = 6;
+        /// <summary>The fallen are drawn for this many directions (turned the rest of the way like the living).</summary>
+        public const int DeadDirections = 4;
+        /// <summary>The kinds of zombie (each has its own pictures; ArtKeys.Zombie).</summary>
+        public static readonly string[] ZombieKinds = { "Walker", "Runner", "Brute" };
         /// <summary>Picture width of the ruler and a villager, in tiles.</summary>
         public const float RulerSize = 0.72f, VillagerSize = 0.58f;
 
@@ -41,8 +47,128 @@ namespace KingdomGame.Art
 
         static float Stride(int frame) => frame == 1 ? 1f : frame == 3 ? -1f : 0f;
 
+        /// <summary>Picture width of each kind of zombie, in tiles.</summary>
+        public static float ZombieSize(string kind) => kind == "Brute" ? 0.9f : kind == "Runner" ? 0.62f : 0.64f;
+
+        /// <summary>
+        /// One picture of a zombie (<see cref="ZombieKinds"/>): walking frames 0-3, 4 winding
+        /// up a blow, 5 striking. Facing right and lit as if turned to <paramref name="facingDegrees"/>.
+        /// </summary>
+        public static PixelImage ZombieFrame(int ppu, string kind, float facingDegrees, int frame) =>
+            Zombie(ppu, ArtLight.For(facingDegrees), kind, frame);
+
+        /// <summary>A dead zombie lying on its back, head to the right, lit as if turned to <paramref name="facingDegrees"/>.</summary>
+        public static PixelImage ZombieDead(int ppu, string kind, float facingDegrees)
+        {
+            var (skin, cloth, k) = ZombieLook(kind);
+            return Lying(ppu, ArtLight.For(facingDegrees), skin, cloth, PixelImage.Rgb(34, 28, 24), Mat.Rot, Mat.Rag, k, null, PixelImage.Rgb(58, 50, 42));
+        }
+
+        /// <summary>A villager who didn't make it, lying on their back.</summary>
+        public static PixelImage VillagerDead(int ppu, float facingDegrees) =>
+            Lying(ppu, ArtLight.For(facingDegrees), Skin, PixelImage.Rgb(84, 64, 42), PixelImage.Rgb(46, 32, 22), Mat.Skin, Mat.Tunic, 0.9f, null, PixelImage.Rgb(70, 48, 30));
+
+        /// <summary>The fallen ruler, cape spread out under them.</summary>
+        public static PixelImage RulerDead(int ppu, float facingDegrees) =>
+            Lying(ppu, ArtLight.For(facingDegrees), Skin, PixelImage.Rgb(34, 44, 92), PixelImage.Rgb(40, 28, 20), Mat.Skin, Mat.Tunic, 1f, PixelImage.Rgb(104, 18, 28), PixelImage.Rgb(62, 40, 24));
+
+        // Skin and clothes colours and body size of each kind of zombie.
+        static (Color32 skin, Color32 cloth, float size) ZombieLook(string kind)
+        {
+            switch (kind)
+            {
+                case "Brute": return (PixelImage.Rgb(104, 98, 112), PixelImage.Rgb(48, 40, 36), 1.32f);
+                case "Runner": return (PixelImage.Rgb(122, 128, 104), PixelImage.Rgb(74, 58, 44), 0.92f);
+                default: return (PixelImage.Rgb(112, 124, 98), PixelImage.Rgb(52, 58, 72), 1f);
+            }
+        }
+
+        static PixelImage Zombie(int ppu, Vector3 light, string kind, int frame)
+        {
+            var (skin, cloth, k) = ZombieLook(kind);
+            bool brute = kind == "Brute", runner = kind == "Runner";
+            float step = frame < WalkFrames ? Stride(frame) : 0f;
+            float hunch = (runner ? 0.08f : brute ? 0.03f : 0.05f) + (frame == 5 ? 0.05f : 0f);
+            float stride = runner ? 0.1f : 0.075f;
+            var boot = PixelImage.Rgb(36, 30, 26);
+            var wound = PixelImage.Rgb(86, 20, 18);
+            var parts = new System.Collections.Generic.List<Part>();
+            // Shuffling feet.
+            parts.Add(Limb((0.02f + step * stride) * k, 0.065f * k, 0.05f, (0.1f + step * stride) * k, 0.072f * k, 0.05f, 0.03f * k, Mat.Boot, boot));
+            parts.Add(Limb((0.02f - step * stride) * k, -0.065f * k, 0.05f, (0.1f - step * stride) * k, -0.06f * k, 0.05f, 0.03f * k, Mat.Boot, boot));
+            // A hunched body in rags, with a wound or two.
+            parts.Add(Body(hunch * k, 0f, 1.17f, (brute ? 0.12f : 0.09f) * k, (brute ? 0.2f : 0.15f) * k, 0.19f, Mat.Rag, cloth));
+            parts.Add(Ball((hunch - 0.02f) * k, 0.07f * k, 1.31f, 0.03f * k, Mat.Wound, wound));
+            if (brute) parts.Add(Ball((hunch + 0.03f) * k, -0.11f * k, 1.29f, 0.035f * k, Mat.Wound, wound));
+
+            // Arms reaching out in front; swinging a little while walking; drawn back, then thrust out, to attack.
+            float arm = (brute ? 0.055f : 0.04f) * k, hand = (brute ? 0.045f : 0.03f) * k;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float sway = frame < WalkFrames ? side * step * 0.045f : 0f;
+                Vector3 shoulder = new Vector3(hunch * k, side * (brute ? 0.19f : 0.14f) * k, 1.29f);
+                Vector3 elbow, wrist;
+                if (frame == 4)
+                {
+                    elbow = new Vector3(0.04f * k, side * 0.21f * k, 1.38f);
+                    wrist = new Vector3(0.12f * k, side * 0.23f * k, 1.48f);
+                }
+                else if (frame == 5)
+                {
+                    elbow = new Vector3((hunch + 0.2f) * k, side * 0.12f * k, 1.24f);
+                    wrist = new Vector3((hunch + 0.4f) * k, side * 0.07f * k, 1.2f);
+                }
+                else
+                {
+                    elbow = new Vector3((0.16f + sway) * k, side * 0.15f * k, 1.23f);
+                    wrist = new Vector3((0.31f + sway * 1.6f) * k, side * 0.1f * k, 1.2f);
+                }
+                parts.Add(Limb(shoulder.x, shoulder.y, shoulder.z, elbow.x, elbow.y, elbow.z, arm, Mat.Rag, cloth));
+                parts.Add(Limb(elbow.x, elbow.y, elbow.z, wrist.x, wrist.y, wrist.z, arm * 0.85f, Mat.Rot, skin));
+                parts.Add(Ball(wrist.x + 0.02f * k, wrist.y, wrist.z, hand, Mat.Rot, skin));
+            }
+            // The head, pushed forward; patchy hair.
+            float headR = (brute ? 0.062f : 0.07f) * k;
+            parts.Add(Ball((hunch + 0.07f) * k, 0f, 1.47f, headR, Mat.Rot, skin));
+            parts.Add(Ball((hunch + 0.045f) * k, 0.015f * k, 1.49f, headR * 0.62f, Mat.Hair, PixelImage.Rgb(58, 50, 42)));
+            // The arms reach far out in front when it strikes, so the picture reaches further forward than back.
+            return Figure(ppu, 0.17f * k, 0.62f * k, 0.3f * k, light, parts);
+        }
+
+        // Someone lying on their back seen from above: head to the right, one arm flung out,
+        // the other at their side, legs a little apart.
+        static PixelImage Lying(int ppu, Vector3 light, Color32 skin, Color32 cloth, Color32 boot, Mat skinMat, Mat clothMat, float k, Color32? cape,
+            Color32 hair)
+        {
+            var parts = new System.Collections.Generic.List<Part>();
+            if (cape.HasValue) parts.Add(Body(-0.02f * k, 0.03f * k, 0.02f, 0.3f * k, 0.25f * k, 0.035f, Mat.Cape, cape.Value));
+            var legs = PixelImage.Scale(cloth, 0.8f);
+            // Legs: thigh and shin, boots pointing up.
+            foreach (var (hipY, kneeY, ankleY, footX) in new[] { (0.06f, 0.1f, 0.13f, -0.53f), (-0.06f, -0.07f, -0.05f, -0.5f) })
+            {
+                parts.Add(Limb(-0.1f * k, hipY * k, 0.1f, -0.29f * k, kneeY * k, 0.09f, 0.052f * k, clothMat, legs));
+                parts.Add(Limb(-0.29f * k, kneeY * k, 0.09f, (footX + 0.06f) * k, ankleY * k, 0.07f, 0.045f * k, clothMat, legs));
+                parts.Add(Limb((footX + 0.05f) * k, ankleY * k, 0.07f, footX * k, ankleY * k, 0.1f, 0.04f * k, Mat.Boot, boot));
+            }
+            parts.Add(Body(-0.07f * k, 0f, 0.1f, 0.09f * k, 0.12f * k, 0.07f, clothMat, PixelImage.Scale(cloth, 0.9f)));   // hips
+            parts.Add(Body(0.07f * k, 0f, 0.12f, 0.15f * k, 0.15f * k, 0.09f, clothMat, cloth));                           // belly and chest
+            parts.Add(Body(0.16f * k, 0f, 0.13f, 0.07f * k, 0.18f * k, 0.08f, clothMat, cloth));                           // shoulders
+            // One arm flung up past the head, the other down at the side.
+            parts.Add(Limb(0.17f * k, 0.15f * k, 0.12f, 0.27f * k, 0.3f * k, 0.08f, 0.043f * k, clothMat, cloth));
+            parts.Add(Limb(0.27f * k, 0.3f * k, 0.08f, 0.38f * k, 0.39f * k, 0.06f, 0.036f * k, skinMat, skin));
+            parts.Add(Ball(0.41f * k, 0.41f * k, 0.06f, 0.032f * k, skinMat, skin));
+            parts.Add(Limb(0.17f * k, -0.15f * k, 0.12f, 0.04f * k, -0.28f * k, 0.08f, 0.043f * k, clothMat, cloth));
+            parts.Add(Limb(0.04f * k, -0.28f * k, 0.08f, -0.09f * k, -0.33f * k, 0.06f, 0.036f * k, skinMat, skin));
+            parts.Add(Ball(-0.12f * k, -0.34f * k, 0.06f, 0.032f * k, skinMat, skin));
+            // Neck, head (face up) and hair around the back of it.
+            parts.Add(Limb(0.21f * k, 0f, 0.12f, 0.28f * k, 0.005f * k, 0.11f, 0.035f * k, skinMat, skin));
+            parts.Add(Ball(0.36f * k, 0.012f * k, 0.09f, 0.071f * k, Mat.Hair, hair));
+            parts.Add(Ball(0.33f * k, 0.01f * k, 0.12f, 0.066f * k, skinMat, skin));
+            return Figure(ppu, 0.6f * k, 0.5f * k, 0.48f * k, light, parts);
+        }
+
         // The materials people are made of.
-        enum Mat { Cape, Hem, Tunic, Gold, Steel, Fur, Hair, Skin, Glove, Boot, Sack, Rope, Cap }
+        enum Mat { Cape, Hem, Tunic, Gold, Steel, Fur, Hair, Skin, Glove, Boot, Sack, Rope, Cap, Rot, Rag, Wound }
 
         // One body part: a capsule (A to B, radius R; A = B for a ball) or an ellipsoid (A = middle,
         // B = radii), seen from above. Heights (z) are in tiles: the head is about 1.5 tiles up.
@@ -123,16 +249,25 @@ namespace KingdomGame.Art
         static PixelImage Figure(int ppu, float sizeTiles, Vector3 light, System.Collections.Generic.List<Part> parts, bool royal)
         {
             int size = Mathf.CeilToInt(sizeTiles * ppu);
-            var img = new PixelImage(size, size);
-            float c = size / 2f;
+            return Figure(ppu, size, size, size / 2f, size / 2f, light, parts, royal);
+        }
+
+        /// <summary>A figure whose parts reach <paramref name="back"/> tiles behind its middle, <paramref name="front"/> in front and <paramref name="side"/> to each side (the middle is the picture's pivot).</summary>
+        static PixelImage Figure(int ppu, float back, float front, float side, Vector3 light, System.Collections.Generic.List<Part> parts) =>
+            Figure(ppu, Mathf.CeilToInt((back + front) * ppu), Mathf.CeilToInt(side * 2f * ppu), back * ppu, side * ppu, light, parts, false);
+
+        // The figure on a canvas of cw x ch pixels, its middle at (cx, cy) pixels.
+        static PixelImage Figure(int ppu, int cw, int ch, float cx, float cy, Vector3 light, System.Collections.Generic.List<Part> parts, bool royal)
+        {
+            var img = new PixelImage(cw, ch) { Pivot = new Vector2(cx / cw, cy / ch) };
             float px1 = 1f / ppu;
-            var height = new float[size * size];
-            var which = new int[size * size];
-            var cover = new float[size * size];
-            for (int y = 0; y < size; y++)
-                for (int x = 0; x < size; x++)
+            var height = new float[cw * ch];
+            var which = new int[cw * ch];
+            var cover = new float[cw * ch];
+            for (int y = 0; y < ch; y++)
+                for (int x = 0; x < cw; x++)
                 {
-                    float wx = (x + 0.5f - c) / ppu, wy = (y + 0.5f - c) / ppu;
+                    float wx = (x + 0.5f - cx) / ppu, wy = (y + 0.5f - cy) / ppu;
                     float best = -1f, coverage = 0f;
                     int top = -1;
                     for (int i = 0; i < parts.Count; i++)
@@ -180,20 +315,20 @@ namespace KingdomGame.Art
                             coverage = Mathf.Max(coverage, Mathf.Clamp01(edge * ppu + 0.5f));
                         }
                     }
-                    int idx = y * size + x;
+                    int idx = y * cw + x;
                     height[idx] = best;
                     which[idx] = top;
                     cover[idx] = top == -1 ? 0f : coverage;
                 }
 
-            var blurred = PixelImage.BlurClamped(height, size, size, Mathf.Max(1, Mathf.RoundToInt(0.02f * ppu)));
-            for (int y = 0; y < size; y++)
-                for (int x = 0; x < size; x++)
+            var blurred = PixelImage.BlurClamped(height, cw, ch, Mathf.Max(1, Mathf.RoundToInt(0.02f * ppu)));
+            for (int y = 0; y < ch; y++)
+                for (int x = 0; x < cw; x++)
                 {
-                    int idx = y * size + x;
+                    int idx = y * cw + x;
                     if (which[idx] == -1) continue;
-                    float hx = (H(height, which, size, x + 1, y, height[idx]) - H(height, which, size, x - 1, y, height[idx])) * 0.5f * ppu;
-                    float hy = (H(height, which, size, x, y + 1, height[idx]) - H(height, which, size, x, y - 1, height[idx])) * 0.5f * ppu;
+                    float hx = (H(height, which, cw, ch, x + 1, y, height[idx]) - H(height, which, cw, ch, x - 1, y, height[idx])) * 0.5f * ppu;
+                    float hy = (H(height, which, cw, ch, x, y + 1, height[idx]) - H(height, which, cw, ch, x, y - 1, height[idx])) * 0.5f * ppu;
                     float nx = -hx, ny = -hy, nz = 1f;
                     float len = Mathf.Sqrt(nx * nx + ny * ny + nz * nz);
                     nx /= len; ny /= len; nz /= len;
@@ -208,7 +343,7 @@ namespace KingdomGame.Art
                     else if (which[idx] == -3) { m = Mat.Hem; baseColor = PixelImage.Rgb(176, 132, 52); }
                     else { m = parts[which[idx]].Material; baseColor = parts[which[idx]].Tint; }
 
-                    float wx = (x + 0.5f - c) / ppu, wy = (y + 0.5f - c) / ppu;
+                    float wx = (x + 0.5f - cx) / ppu, wy = (y + 0.5f - cy) / ppu;
                     float shine = 0f, shininess = 12f, texture = 0f;
                     switch (m)
                     {
@@ -240,8 +375,11 @@ namespace KingdomGame.Art
                         }
                         case Mat.Hair:
                         {
-                            float a = Mathf.Atan2(wy, wx - 0.022f);
-                            texture = (Noise.Value(a * 40f, Mathf.Sqrt((wx - 0.022f) * (wx - 0.022f) + wy * wy) * 200f, 59u) - 0.5f) * 0.3f;
+                            // Strands running out from the top of the head.
+                            var head = parts[which[idx]].A;
+                            float a = Mathf.Atan2(wy - head.y, wx - head.x);
+                            float r = Mathf.Sqrt((wx - head.x) * (wx - head.x) + (wy - head.y) * (wy - head.y));
+                            texture = (Noise.Value(a * 40f, r * 200f, 59u) - 0.5f) * 0.3f;
                             shine = 0.15f; shininess = 10f;
                             break;
                         }
@@ -254,6 +392,29 @@ namespace KingdomGame.Art
                         case Mat.Skin:
                             shine = 0.08f;
                             break;
+                        case Mat.Rot:
+                        {
+                            // Grey-green rotting skin: bruised blotches, dark veins, a clammy sheen.
+                            float blotch = Noise.Value(wx * 120f, wy * 120f, 63u);
+                            float vein = Mathf.Abs(Noise.Value(wx * 420f, wy * 420f, 64u) - 0.5f);
+                            texture = (blotch - 0.5f) * 0.22f - (vein < 0.025f ? 0.14f : 0f);
+                            baseColor = PixelImage.Mix(baseColor, PixelImage.Rgb(82, 60, 58), PixelImage.Smooth(0.62f, 0.82f, blotch) * 0.55f);
+                            shine = 0.16f; shininess = 14f;
+                            break;
+                        }
+                        case Mat.Rag:
+                        {
+                            // Torn, filthy clothes: dark tears, old bloodstains.
+                            float tear = Noise.Fractal(wx * 55f, wy * 55f, 65u, 2);
+                            texture = Mathf.Sin(wx * 2400f) * Mathf.Sin(wy * 2400f) * 0.03f + (Noise.Value(wx * 260f, wy * 260f, 66u) - 0.5f) * 0.12f;
+                            if (tear > 0.7f) baseColor = PixelImage.Mix(baseColor, PixelImage.Rgb(28, 22, 20), PixelImage.Smooth(0.7f, 0.74f, tear));
+                            else if (tear < 0.3f) baseColor = PixelImage.Mix(baseColor, PixelImage.Rgb(74, 18, 16), PixelImage.Smooth(0.3f, 0.26f, tear) * 0.65f);
+                            break;
+                        }
+                        case Mat.Wound:
+                            texture = (Noise.Value(wx * 700f, wy * 700f, 67u) - 0.5f) * 0.25f;
+                            shine = 0.4f; shininess = 20f;
+                            break;
                     }
                     float shade = (0.32f + diffuse * 0.95f) * (1f + cavity * 0.6f) + texture;
                     var col = PixelImage.Scale(baseColor, shade);
@@ -262,21 +423,21 @@ namespace KingdomGame.Art
                     img.Pixels[idx] = col;
                 }
 
-            if (royal) Crown(img, ppu, light, c);
+            if (royal) Crown(img, ppu, light, cx, cy);
             return img;
         }
 
-        static float H(float[] height, int[] which, int size, int x, int y, float fallback)
+        static float H(float[] height, int[] which, int cw, int ch, int x, int y, float fallback)
         {
-            if (x < 0 || y < 0 || x >= size || y >= size) return fallback - 0.05f;
-            int i = y * size + x;
+            if (x < 0 || y < 0 || x >= cw || y >= ch) return fallback - 0.05f;
+            int i = y * cw + x;
             return which[i] == -1 ? fallback - 0.05f : height[i];
         }
 
         // A gold crown on the ruler's head: a ring with five points and jewels.
-        static void Crown(PixelImage img, int ppu, Vector3 light, float c)
+        static void Crown(PixelImage img, int ppu, Vector3 light, float cx, float cy)
         {
-            float hx = c + 0.022f * ppu, hy = c;
+            float hx = cx + 0.022f * ppu, hy = cy;
             float ringR = 0.058f * ppu, tube = Mathf.Max(0.8f, 0.012f * ppu);
             var gold = PixelImage.Rgb(212, 168, 70);
             for (int y = Mathf.FloorToInt(hy - ringR - tube - 1); y <= hy + ringR + tube + 1; y++)

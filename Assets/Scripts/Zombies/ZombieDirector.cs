@@ -1,0 +1,491 @@
+using System;
+using System.Collections.Generic;
+using KingdomGame.Art;
+using KingdomGame.Building;
+using KingdomGame.Character;
+using KingdomGame.Destruction;
+using KingdomGame.Economy;
+using KingdomGame.World;
+using UnityEngine;
+
+namespace KingdomGame.Zombies
+{
+    /// <summary>
+    /// Runs every zombie on the map. It keeps the <see cref="FlowField"/> that leads
+    /// them to the nearest person (worked out again a few times a second, walking
+    /// round what can't be broken and smashing through what's quicker to break than
+    /// to go round), moves them, keeps crowds from piling into one spot, and turns
+    /// their blows on walls, doors and furniture into damage. One per survival game
+    /// (<see cref="Current"/>); the <see cref="SurvivalDirector"/> decides when they come.
+    /// </summary>
+    [DefaultExecutionOrder(-20)]
+    public sealed class ZombieDirector : MonoBehaviour
+    {
+        /// <summary>Breaking through this much door, wall or furniture health is worth about one tile of walking round.</summary>
+        const float HealthPerTile = 8f;
+        const float FieldSeconds = 0.3f;
+        /// <summary>Zombies would rather go for the ruler: a villager has to be this many tiles closer.</summary>
+        const float VillagerHeadStart = 2f;
+        /// <summary>How hard zombies push each other apart, in tiles per second.</summary>
+        const float CrowdPush = 2.5f;
+
+        SurvivalConfig config;
+        PixelWorld world;
+        Kingdom kingdom;
+        RulerController ruler;
+        Health rulerHealth;
+        DayNightCycle dayNight;
+        RectInt map;
+        FlowField field;
+        Door[] doorAt;
+        float fieldAt;
+        int[] bucketHead;
+        int[] bucketNext = new int[256];
+
+        readonly List<Zombie> zombies = new List<Zombie>();
+        readonly Dictionary<ZombieConfig, ZombieSprites> sprites = new Dictionary<ZombieConfig, ZombieSprites>();
+        readonly List<int> targets = new List<int>();
+        readonly List<float> headStarts = new List<float>();
+
+        public static ZombieDirector Current { get; private set; }
+
+        public IReadOnlyList<Zombie> Zombies => zombies;
+        public int Alive => zombies.Count;
+        public int Kills { get; private set; }
+        /// <summary>A zombie died (for counting and the HUD).</summary>
+        public event Action<Zombie> ZombieDied;
+        /// <summary>Zombies are faster at night...</summary>
+        public float SpeedFactor => dayNight != null && dayNight.IsNight && config != null ? config.nightSpeed : 1f;
+        /// <summary>...and hit harder.</summary>
+        public float DamageFactor => dayNight != null && dayNight.IsNight && config != null ? config.nightDamage : 1f;
+
+        void Awake()
+        {
+            if (Current != null && Current != this) Debug.LogWarning("There is more than one ZombieDirector in the scene.", this);
+            Current = this;
+        }
+
+        void OnDestroy()
+        {
+            if (Current == this) Current = null;
+        }
+
+        public void Setup(SurvivalConfig survival, PixelWorld pixelWorld, Kingdom owner, RulerController rulerController, DayNightCycle cycle, RectInt mapCells)
+        {
+            config = survival;
+            world = pixelWorld;
+            kingdom = owner;
+            ruler = rulerController;
+            rulerHealth = ruler != null ? ruler.Health : null;
+            dayNight = cycle;
+            map = mapCells;
+            field = new FlowField(map.width, map.height);
+            doorAt = new Door[map.width * map.height];
+            bucketHead = new int[map.width * map.height];
+            UpdateField();
+        }
+
+        // ------------------------------------------------------------- frame --
+
+        void Update()
+        {
+            if (field == null) return;
+            if (Time.time >= fieldAt)
+            {
+                fieldAt = Time.time + FieldSeconds;
+                UpdateField();
+            }
+            float dt = Time.deltaTime;
+            if (dt <= 0f) return;
+            Crowd();
+            for (int i = zombies.Count - 1; i >= 0; i--)
+            {
+                var z = zombies[i];
+                if (z == null) { zombies.RemoveAt(i); continue; }
+                z.Tick(dt);
+            }
+        }
+
+        // ------------------------------------------------------------ spawning --
+
+        /// <summary>A new zombie of <paramref name="kind"/> at <paramref name="at"/>, its health times <paramref name="toughness"/>.</summary>
+        public Zombie Spawn(ZombieConfig kind, Vector2 at, float toughness)
+        {
+            if (kind == null) return null;
+            var go = new GameObject(kind.displayName);
+            go.transform.SetParent(transform, false);
+            var z = go.AddComponent<Zombie>();
+            z.Setup(this, kind, SpritesOf(kind), toughness, at);
+            zombies.Add(z);
+            return z;
+        }
+
+        ZombieSprites SpritesOf(ZombieConfig kind)
+        {
+            if (sprites.TryGetValue(kind, out var s)) return s;
+            string art = string.IsNullOrEmpty(kind.art) ? CharacterArt.ZombieKinds[0] : kind.art;
+            s = new ZombieSprites
+            {
+                Frames = new Sprite[CharacterArt.ZombieDirections, CharacterArt.ZombieFrames],
+                Shadow = ArtSprites.Get(ArtKeys.ZombieShadow(art)),
+                Dead = new Sprite[CharacterArt.DeadDirections],
+            };
+            for (int d = 0; d < CharacterArt.ZombieDirections; d++)
+                for (int f = 0; f < CharacterArt.ZombieFrames; f++)
+                    s.Frames[d, f] = ArtSprites.Get(ArtKeys.Zombie(art, d, f));
+            for (int d = 0; d < CharacterArt.DeadDirections; d++) s.Dead[d] = ArtSprites.Get(ArtKeys.ZombieDead(art, d));
+            if (s.Frames[0, 0] == null) Debug.LogWarning($"Zombie {kind.name} has art '{art}', which isn't one of: {string.Join(", ", CharacterArt.ZombieKinds)}.", kind);
+            sprites[kind] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// A spot on the edge of the map to come from: around <paramref name="along"/> (0..1,
+        /// once round the map's edge anticlockwise from the bottom-left corner), at least
+        /// <paramref name="minDistance"/> tiles from the ruler, the villagers and the throne,
+        /// and from where someone can be reached (if anywhere can).
+        /// </summary>
+        public bool FindSpawnPoint(float along, float minDistance, out Vector2 spot)
+        {
+            int inset = 2;
+            int w = map.width - inset * 2, h = map.height - inset * 2;
+            int perimeter = 2 * (w + h);
+            int start = Mathf.FloorToInt(Mathf.Repeat(along, 1f) * perimeter);
+            for (int pass = 0; pass < 2; pass++)
+                for (int i = 0; i < perimeter; i++)
+                {
+                    // Look outwards from the chosen spot, alternating sides.
+                    int step = (i + 1) / 2 * (i % 2 == 0 ? 1 : -1);
+                    var cell = EdgeCell((start + step + perimeter * 4) % perimeter, inset, w, h);
+                    if (!Walkable(cell) || !FarFromEveryone(cell, minDistance)) continue;
+                    if (pass == 0 && float.IsPositiveInfinity(field.Distance(cell.x - map.xMin, cell.y - map.yMin))) continue;
+                    spot = (Vector2)cell + new Vector2(UnityEngine.Random.Range(0.3f, 0.7f), UnityEngine.Random.Range(0.3f, 0.7f));
+                    return true;
+                }
+            spot = default;
+            return false;
+        }
+
+        // The cell number i of the ring of cells inset from the map's edge.
+        Vector2Int EdgeCell(int i, int inset, int w, int h)
+        {
+            int x0 = map.xMin + inset, y0 = map.yMin + inset;
+            if (i < w) return new Vector2Int(x0 + i, y0);
+            i -= w;
+            if (i < h) return new Vector2Int(x0 + w - 1, y0 + i);
+            i -= h;
+            if (i < w) return new Vector2Int(x0 + w - 1 - i, y0 + h - 1);
+            i -= w;
+            return new Vector2Int(x0, y0 + h - 1 - Mathf.Min(i, h - 1));
+        }
+
+        bool FarFromEveryone(Vector2Int cell, float minDistance)
+        {
+            var at = (Vector2)cell + new Vector2(0.5f, 0.5f);
+            float min2 = minDistance * minDistance;
+            if (kingdom != null && kingdom.Throne != null && (kingdom.Throne.Center - at).sqrMagnitude < min2) return false;
+            foreach (var h in Health.Creatures)
+                if (h != null && h.Team == Team.Friendly && (h.Position - at).sqrMagnitude < min2) return false;
+            return true;
+        }
+
+        // ------------------------------------------------------------- dying --
+
+        /// <summary>A zombie died: count it, leave it lying there, and maybe drop loot.</summary>
+        internal void Died(Zombie z, float facingDegrees, ZombieSprites pictures)
+        {
+            zombies.Remove(z);
+            Kills++;
+            var at = z.Position;
+            var remains = Remains.Current;
+            if (remains != null)
+            {
+                // It falls backwards, a little twisted.
+                float a = facingDegrees + 180f + UnityEngine.Random.Range(-30f, 30f);
+                int d = RulerLook.Direction(a, pictures.Dead.Length);
+                remains.Body(pictures.Dead[d], at, a);
+                remains.Blood(at, 1.1f);
+            }
+            if (world != null) world.Burst(at, new Color32(80, 10, 12, 255), 10, 2.5f);
+            var c = z.Config;
+            if (c.lootAmount > 0 && UnityEngine.Random.value < c.lootChance)
+            {
+                int wood = UnityEngine.Random.Range(0, c.lootAmount + 1);
+                int stone = UnityEngine.Random.Range(0, c.lootAmount - wood + 1);
+                LootBag.Drop(at, wood, stone, c.lootAmount - wood - stone);
+            }
+            ZombieDied?.Invoke(z);
+        }
+
+        /// <summary>A zombie that can't reach anyone wanders off into the dark (not a kill).</summary>
+        internal void Vanish(Zombie z)
+        {
+            zombies.Remove(z);
+            if (z != null) Destroy(z.gameObject);
+        }
+
+        // -------------------------------------------------------------- field --
+
+        void UpdateField()
+        {
+            UpdateCosts();
+            targets.Clear();
+            headStarts.Clear();
+            foreach (var h in Health.Creatures)
+            {
+                if (h == null || h.Dead || h.Team != Team.Friendly) continue;
+                AddTarget(h.Position, h == rulerHealth ? 0f : VillagerHeadStart);
+            }
+            field.Compute(targets, headStarts);
+        }
+
+        void AddTarget(Vector2 at, float headStart)
+        {
+            var cell = CellOf(at);
+            if (Passable(cell))
+            {
+                targets.Add(Index(cell));
+                headStarts.Add(headStart);
+                return;
+            }
+            // Somewhere zombies can't go (the ruler on the throne): the cells around it instead.
+            for (int dy = -2; dy <= 2; dy++)
+                for (int dx = -2; dx <= 2; dx++)
+                {
+                    var c = cell + new Vector2Int(dx, dy);
+                    if (!Passable(c)) continue;
+                    targets.Add(Index(c));
+                    headStarts.Add(headStart + 0.5f * Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)));
+                }
+        }
+
+        // What each cell takes to get through (see FlowField.Cost).
+        void UpdateCosts()
+        {
+            var cost = field.Cost;
+            int w = map.width, h = map.height;
+            for (int i = 0; i < cost.Length; i++) cost[i] = 1f;
+            Array.Clear(doorAt, 0, doorAt.Length);
+            // The edge of the map.
+            for (int x = 0; x < w; x++) { cost[x] = 0f; cost[(h - 1) * w + x] = 0f; }
+            for (int y = 0; y < h; y++) { cost[y * w] = 0f; cost[y * w + w - 1] = 0f; }
+            // Trees, rocks and bushes: walked round.
+            foreach (var node in ResourceNode.All)
+                if (node != null && node.Blocks) Set(node.Cell, 0f);
+            // Walls: the more battering one would take, the further zombies will walk to go round it.
+            if (world != null)
+                foreach (var cell in world.ChunkCells)
+                {
+                    var wall = world.ChunkAt(cell)?.Owner;
+                    float left = wall != null ? wall.SiegeHealthLeft / Mathf.Max(1, wall.Cells.width * wall.Cells.height) : 0f;
+                    Set(cell, 1.5f + left / HealthPerTile);
+                }
+            if (kingdom == null) return;
+            // The throne and storehouses can't be broken; doors and furniture can.
+            if (kingdom.Throne != null) SetArea(kingdom.Throne.Cells, 0f);
+            foreach (var s in kingdom.Storages)
+                if (s != null) SetArea(s.Cells, 0f);
+            foreach (var d in kingdom.Doors)
+            {
+                if (d == null) continue;
+                foreach (var cell in d.Cells.allPositionsWithin)
+                {
+                    if (!map.Contains(cell)) continue;
+                    doorAt[Index(cell)] = d;
+                    Set(cell, d.IsOpen || d.Health == null ? 1f : 1.5f + d.Health.Current / HealthPerTile);
+                }
+            }
+            foreach (var f in kingdom.AllFurniture)
+            {
+                if (f == null || !f.Config.blocksMovement || f.Config.flat) continue;
+                SetArea(f.Cells, f.Health != null ? 1.5f + f.Health.Current / HealthPerTile : 0f);
+            }
+        }
+
+        void Set(Vector2Int cell, float value)
+        {
+            if (map.Contains(cell)) field.Cost[Index(cell)] = value;
+        }
+
+        void SetArea(RectInt cells, float value)
+        {
+            foreach (var cell in cells.allPositionsWithin) Set(cell, value);
+        }
+
+        // ------------------------------------------------------ for zombies --
+
+        public Vector2Int CellOf(Vector2 position) => new Vector2Int(Mathf.FloorToInt(position.x), Mathf.FloorToInt(position.y));
+
+        int Index(Vector2Int cell) => (cell.y - map.yMin) * map.width + (cell.x - map.xMin);
+
+        bool Passable(Vector2Int cell) => map.Contains(cell) && field.Cost[Index(cell)] > 0f;
+
+        /// <summary>Whether a zombie can walk into this cell right now (open ground, or an open door).</summary>
+        public bool Walkable(Vector2Int cell)
+        {
+            if (!map.Contains(cell)) return false;
+            int i = Index(cell);
+            var door = doorAt[i];
+            if (!ReferenceEquals(door, null)) return door == null || door.IsOpen;   // a smashed door is a gap
+            return field.Cost[i] == 1f;
+        }
+
+        /// <summary>Whether a zombie's body (a box <paramref name="halfSize"/> tiles from its middle) fits at <paramref name="p"/>.</summary>
+        public bool Fits(Vector2 p, float halfSize) =>
+            Walkable(CellOf(new Vector2(p.x - halfSize, p.y - halfSize))) && Walkable(CellOf(new Vector2(p.x + halfSize, p.y - halfSize))) &&
+            Walkable(CellOf(new Vector2(p.x - halfSize, p.y + halfSize))) && Walkable(CellOf(new Vector2(p.x + halfSize, p.y + halfSize)));
+
+        /// <summary>
+        /// The next cell to step into from <paramref name="from"/> on the way to the nearest
+        /// person. <paramref name="blocked"/>: something there has to be broken first. False if
+        /// there's nowhere to go.
+        /// </summary>
+        public bool NextStep(Vector2 from, out Vector2Int next, out bool blocked)
+        {
+            var cell = CellOf(from);
+            blocked = false;
+            next = cell;
+            if (!map.Contains(cell) || !field.Next(cell.x - map.xMin, cell.y - map.yMin, out int nx, out int ny)) return false;
+            next = new Vector2Int(nx + map.xMin, ny + map.yMin);
+            blocked = !Walkable(next);
+            return true;
+        }
+
+        /// <summary>Whether nothing zombies can't walk through stands between two points (walls, closed doors, tables).</summary>
+        public bool ClearLine(Vector2 a, Vector2 b)
+        {
+            var line = b - a;
+            float length = line.magnitude;
+            if (length < 0.3f) return true;
+            var start = CellOf(a);
+            var end = CellOf(b);
+            int samples = Mathf.CeilToInt(length / 0.2f);
+            for (int i = 1; i < samples; i++)
+            {
+                var cell = CellOf(a + line * (i / (float)samples));
+                if (cell == start || cell == end) continue;
+                if (!Walkable(cell)) return false;
+            }
+            return true;
+        }
+
+        bool SeatedRuler(Health h) => h != null && h == rulerHealth && ruler != null && ruler.Seated && kingdom != null && kingdom.Throne != null;
+
+        /// <summary>Where to swing at someone: their middle, or for the ruler on the throne, the nearest edge of the throne.</summary>
+        public Vector2 AimPoint(Health h, Vector2 from)
+        {
+            if (!SeatedRuler(h)) return h.Position;
+            var r = kingdom.Throne.Cells;
+            return new Vector2(Mathf.Clamp(from.x, r.xMin, r.xMax), Mathf.Clamp(from.y, r.yMin, r.yMax));
+        }
+
+        /// <summary>How far <paramref name="from"/> is from someone's body (from the throne, if the ruler is sitting on it).</summary>
+        public float Gap(Health h, Vector2 from) =>
+            SeatedRuler(h) ? (AimPoint(h, from) - from).magnitude : (h.Position - from).magnitude - h.Radius;
+
+        /// <summary>The closest person within <paramref name="range"/> tiles that a zombie at <paramref name="from"/> can see.</summary>
+        public Health FindPrey(Vector2 from, float range)
+        {
+            Health best = null;
+            float bestDistance = range * range;
+            foreach (var h in Health.Creatures)
+            {
+                if (h == null || h.Dead || h.Team != Team.Friendly) continue;
+                var at = AimPoint(h, from);
+                float d = (at - from).sqrMagnitude;
+                if (d < bestDistance && ClearLine(from, at))
+                {
+                    best = h;
+                    bestDistance = d;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>The closest zombie within <paramref name="range"/> tiles that can see <paramref name="from"/> (villagers run from it).</summary>
+        public Zombie NearestVisible(Vector2 from, float range)
+        {
+            Zombie best = null;
+            float bestDistance = range * range;
+            foreach (var z in zombies)
+            {
+                if (z == null) continue;
+                float d = (z.Position - from).sqrMagnitude;
+                if (d < bestDistance && ClearLine(z.Position, from))
+                {
+                    best = z;
+                    bestDistance = d;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>A zombie's blow lands on what's in <paramref name="cell"/>: a wall wears down, a door or piece of furniture loses health.</summary>
+        public void HitCell(Vector2Int cell, Zombie z)
+        {
+            float damage = DamageFactor;
+            var chunk = world != null ? world.ChunkAt(cell) : null;
+            if (chunk != null && chunk.Owner != null)
+            {
+                // A few scratches where it hits (just for looks)...
+                var middle = (Vector2)cell + new Vector2(0.5f, 0.5f);
+                if (z.Config.wallScratch != null && world.Raycast(z.Position, middle, out var pixel, out _)
+                    && world.TryMakeEvent(z.Config.wallScratch, PixelWorld.PixelCenter(pixel.x, pixel.y), out var scratch))
+                    world.ApplyDamage(scratch);
+                // ...and the wall wears down until it caves in.
+                chunk.Owner.Batter(z.Config.wallDamage * damage);
+                return;
+            }
+            if (kingdom == null) return;
+            var thing = kingdom.ThingAt(cell);
+            var target = thing is Door door ? door.Health : thing is Furniture piece ? piece.Health : null;
+            if (target != null) target.Damage(z.Config.structureDamage * damage, z.Position);
+        }
+
+        // Pushes zombies that stand too close apart (only neighbours are compared: they're sorted by cell first).
+        void Crowd()
+        {
+            int n = zombies.Count;
+            if (n == 0) return;
+            if (bucketNext.Length < n) bucketNext = new int[n * 2];
+            for (int i = 0; i < bucketHead.Length; i++) bucketHead[i] = -1;
+            for (int i = 0; i < n; i++)
+            {
+                var z = zombies[i];
+                bucketNext[i] = -1;
+                if (z == null) continue;
+                var cell = CellOf(z.Position);
+                if (!map.Contains(cell)) continue;
+                int b = Index(cell);
+                bucketNext[i] = bucketHead[b];
+                bucketHead[b] = i;
+            }
+            for (int i = 0; i < n; i++)
+            {
+                var z = zombies[i];
+                if (z == null) continue;
+                var push = Vector2.zero;
+                var cell = CellOf(z.Position);
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        var c = new Vector2Int(cell.x + dx, cell.y + dy);
+                        if (!map.Contains(c)) continue;
+                        for (int j = bucketHead[Index(c)]; j >= 0; j = bucketNext[j])
+                        {
+                            if (j == i) continue;
+                            var other = zombies[j];
+                            var away = z.Position - other.Position;
+                            float min = z.Radius + other.Radius;
+                            float d2 = away.sqrMagnitude;
+                            if (d2 >= min * min) continue;
+                            if (d2 < 1e-8f) away = new Vector2(Mathf.Cos(i * 2.4f), Mathf.Sin(i * 2.4f)) * 0.01f;   // right on top: split them
+                            float d = Mathf.Sqrt(Mathf.Max(d2, 1e-8f));
+                            push += away / Mathf.Max(d, 0.01f) * ((min - d) / min);
+                        }
+                    }
+                z.Crowding = Vector2.ClampMagnitude(push, 1f) * CrowdPush;
+            }
+        }
+    }
+}

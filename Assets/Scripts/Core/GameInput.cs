@@ -155,6 +155,17 @@ namespace KingdomGame
                 case KeyCode.Alpha3: return k.digit3Key;
                 case KeyCode.Alpha4: return k.digit4Key;
                 case KeyCode.Alpha5: return k.digit5Key;
+                case KeyCode.Alpha6: return k.digit6Key;
+                case KeyCode.Alpha7: return k.digit7Key;
+                case KeyCode.Alpha8: return k.digit8Key;
+                case KeyCode.Alpha9: return k.digit9Key;
+                case KeyCode.Alpha0: return k.digit0Key;
+                case KeyCode.Tab: return k.tabKey;
+                case KeyCode.Q: return k.qKey;
+                case KeyCode.F: return k.fKey;
+                case KeyCode.P: return k.pKey;
+                case KeyCode.Return: return k.enterKey;
+                case KeyCode.N: return k.nKey;
                 case KeyCode.Delete: return k.deleteKey;
                 case KeyCode.Escape: return k.escapeKey;
                 default:

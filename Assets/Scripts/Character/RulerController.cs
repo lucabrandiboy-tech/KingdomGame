@@ -15,6 +15,10 @@ namespace KingdomGame.Character
     /// <item>at a blueprint (hold): hand over what it needs from your backpack, then help build;</item>
     /// <item>at a tree, rock or bush (hold): gather wood, stone or food.</item>
     /// </list>
+    /// Walking over a bag of loot puts it in the backpack. The ruler has
+    /// <see cref="Health"/>: zombies hurt them, wounds heal after a while, and
+    /// zombies can't be walked through. If the ruler falls, survival is over; in
+    /// free build they're back at the throne after a few seconds.
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
     public sealed class RulerController : MonoBehaviour
@@ -38,6 +42,7 @@ namespace KingdomGame.Character
         float primaryReady, secondaryReady, explosiveReady, gatherReady, handOverReady;
         float noticeUntil;
         int stoodUpFrame = -1;
+        float respawnAt;
 
         public Inventory Backpack { get; private set; }
         /// <summary>What E would do right now, for the HUD (null = nothing in reach).</summary>
@@ -46,6 +51,11 @@ namespace KingdomGame.Character
         public string Notice { get; private set; }
         /// <summary>Sitting on the throne (no walking or shooting).</summary>
         public bool Seated { get; private set; }
+        /// <summary>Hit points (made in <see cref="Setup"/>).</summary>
+        public Health Health { get; private set; }
+        public bool Dead => Health != null && Health.Dead;
+        /// <summary>Free build: come back at the throne after falling. Survival: falling is the end.</summary>
+        public bool RespawnOnDeath { get; set; } = true;
 
         public void Setup(PlayerConfig playerConfig, WeaponConfig primary, WeaponConfig secondary, ExplosiveConfig thrown,
             Transform gunTransform, Projectiles shots, Explosives charges)
@@ -58,6 +68,13 @@ namespace KingdomGame.Character
             projectiles = shots;
             explosives = charges;
             Backpack = new Inventory(config != null ? config.backpackCapacity : 250);
+            if (Health == null)
+            {
+                Health = gameObject.AddComponent<Health>();
+                Health.Setup(Team.Friendly, config != null ? config.maxHealth : 100f, config != null ? config.bodyRadius : 0.15f, true);
+                Health.Hurt += OnHurt;
+                Health.Died += OnDied;
+            }
         }
 
         void Awake()
@@ -97,7 +114,13 @@ namespace KingdomGame.Character
 
         void Update()
         {
-            if (config == null) return;
+            if (config == null || Time.timeScale <= 0f) return;
+            if (Dead)
+            {
+                if (RespawnOnDeath && Time.time >= respawnAt) Respawn();
+                return;
+            }
+            Heal();
             if (Seated)
             {
                 if (look != null) look.Show(Vector2.zero, Vector2.down, config.moveSpeed, config.stepsPerSecond, holdingGun: false);
@@ -131,14 +154,107 @@ namespace KingdomGame.Character
                 explosiveReady = now + explosive.cooldown;
             }
 
+            PickUpLoot();
             Interact(now);
             if (now > noticeUntil) Notice = null;
         }
 
         void FixedUpdate()
         {
-            if (config == null || Seated) return;
+            if (config == null || Seated || Dead) return;
             Velocity = Vector2.MoveTowards(Velocity, wantedVelocity, config.acceleration * Time.fixedDeltaTime);
+            KeepOutOfZombies();
+        }
+
+        // Zombies can't be walked through: no walking into them, and they shove you out of the way.
+        void KeepOutOfZombies()
+        {
+            var here = body.position;
+            var v = Velocity;
+            bool pushed = false;
+            foreach (var h in Health.Creatures)
+            {
+                if (h == null || h.Team != Team.Zombie || h.Dead) continue;
+                var away = here - h.Position;
+                float min = config.bodyRadius + h.Radius;
+                float d2 = away.sqrMagnitude;
+                if (d2 >= min * min || d2 < 1e-8f) continue;
+                float d = Mathf.Sqrt(d2);
+                var n = away / d;
+                float into = Vector2.Dot(v, n);
+                if (into < 0f) v -= n * into;
+                v += n * ((min - d) * 10f);
+                pushed = true;
+            }
+            if (pushed) Velocity = v;
+        }
+
+        // ------------------------------------------------------------ health --
+
+        // Wounds heal once the ruler hasn't been hurt for a while.
+        void Heal()
+        {
+            if (Health == null || Health.Current >= Health.Max || Time.time - Health.LastHurt < config.healDelay) return;
+            Health.Heal(config.healPerSecond * Time.deltaTime);
+        }
+
+        void OnHurt(Health h, float amount, Vector2 from)
+        {
+            // Attacked on the throne: stand up and fight.
+            if (Seated && !h.Dead)
+            {
+                var builder = Kingdom.Current != null ? Kingdom.Current.GetComponent<BuildController>() : null;
+                if (builder != null) builder.Leave();
+                Say("You're under attack!");
+            }
+        }
+
+        void OnDied(Health h)
+        {
+            if (Seated)
+            {
+                var builder = Kingdom.Current != null ? Kingdom.Current.GetComponent<BuildController>() : null;
+                if (builder != null) builder.Leave();
+            }
+            wantedVelocity = Vector2.zero;
+            Velocity = Vector2.zero;
+            body.simulated = false;
+            Hint = null;
+            if (look != null) look.ShowDead(look.FacingDegrees);
+            // Whatever was in the backpack is left where they fell.
+            LootBag.DropAll(transform.position, Backpack);
+            respawnAt = Time.time + (config != null ? config.respawnSeconds : 5f);
+            Say(RespawnOnDeath ? "You fell! Your backpack is where you fell." : "You fell!");
+        }
+
+        void Respawn()
+        {
+            var throne = Kingdom.Current != null ? Kingdom.Current.Throne : null;
+            Vector2 at = throne != null ? throne.Front : (Vector2)transform.position;
+            body.position = at;
+            transform.position = at;
+            body.simulated = true;
+            Health.Revive();
+            if (look != null) look.ShowAlive();
+            Say("You're back at the throne. Your backpack is where you fell.");
+        }
+
+        // Walking over a bag of loot empties it into the backpack.
+        void PickUpLoot()
+        {
+            Vector2 here = transform.position;
+            foreach (var bag in LootBag.All)
+            {
+                if (bag == null || (bag.Position - here).sqrMagnitude > 0.36f) continue;
+                if (Backpack.SpaceLeft <= 0)
+                {
+                    Say("Your backpack is full: empty it at a storehouse (E)");
+                    return;
+                }
+                string what = bag.Contents();
+                if (bag.TakeInto(Backpack) > 0) Say($"Picked up {what}");
+                return;   // one bag a frame (an emptied bag removes itself from the list)
+            }
         }
 
         // Unity 6 renamed Rigidbody2D.velocity to linearVelocity.

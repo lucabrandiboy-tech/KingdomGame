@@ -337,6 +337,36 @@ namespace KingdomGame.Art
                 }
         }
 
+        /// <summary>
+        /// This picture turned <paramref name="quarterTurns"/> quarter turns anticlockwise
+        /// (heights and pivot too). Turn pictures before <see cref="BakeLight"/>, so the
+        /// light still comes from the top-left.
+        /// </summary>
+        public PixelImage Turned(int quarterTurns)
+        {
+            int q = ((quarterTurns % 4) + 4) % 4;
+            if (q == 0) return this;
+            int w = q % 2 == 0 ? Width : Height, h = q % 2 == 0 ? Height : Width;
+            var turned = new PixelImage(w, h) { Bumpiness = Bumpiness };
+            if (Heights != null) turned.Heights = new float[w * h];
+            for (int y = 0; y < Height; y++)
+                for (int x = 0; x < Width; x++)
+                {
+                    int tx, ty;
+                    switch (q)
+                    {
+                        case 1: tx = Height - 1 - y; ty = x; break;
+                        case 2: tx = Width - 1 - x; ty = Height - 1 - y; break;
+                        default: tx = y; ty = Width - 1 - x; break;
+                    }
+                    turned.Pixels[ty * w + tx] = Pixels[y * Width + x];
+                    if (Heights != null) turned.Heights[ty * w + tx] = Heights[y * Width + x];
+                }
+            var p = Pivot;
+            turned.Pivot = q == 1 ? new Vector2(1f - p.y, p.x) : q == 2 ? new Vector2(1f - p.x, 1f - p.y) : new Vector2(p.y, 1f - p.x);
+            return turned;
+        }
+
         /// <summary>Copies <paramref name="source"/> in with its bottom-left corner at (x, y), replacing what's there.</summary>
         public void Stamp(PixelImage source, int x, int y)
         {

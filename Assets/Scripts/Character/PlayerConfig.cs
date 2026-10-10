@@ -18,5 +18,14 @@ namespace KingdomGame.Character
         [Min(0.1f)] public float stepsPerSecond = 8f;
         [Tooltip("Building work per second while holding E at a blueprint (a villager does 1).")]
         [Min(0)] public float buildRate = 1f;
+
+        [Header("Health")]
+        [Min(1)] public float maxHealth = 100f;
+        [Tooltip("Seconds without being hurt before wounds start to heal.")]
+        [Min(0)] public float healDelay = 6f;
+        [Tooltip("Health healed per second after that.")]
+        [Min(0)] public float healPerSecond = 4f;
+        [Tooltip("Free build: seconds before a fallen ruler is back at the throne. (In survival, falling ends the game.)")]
+        [Min(0)] public float respawnSeconds = 5f;
     }
 }

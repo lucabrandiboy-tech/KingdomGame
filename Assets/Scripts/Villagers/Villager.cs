@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using KingdomGame.Building;
 using KingdomGame.Economy;
+using KingdomGame.Zombies;
 using UnityEngine;
 
 namespace KingdomGame.Villagers
@@ -11,6 +12,8 @@ namespace KingdomGame.Villagers
         public Sprite[,] Walking;
         public Sprite[,] Carrying;
         public Sprite Shadow;
+        /// <summary>Lying dead (zombies got them), one picture per direction (<see cref="Art.CharacterArt.DeadDirections"/>).</summary>
+        public Sprite[] Dead;
     }
 
     /// <summary>
@@ -20,11 +23,16 @@ namespace KingdomGame.Villagers
     /// <see cref="NavGrid"/> and finds a new way if a wall goes up in front of it.
     ///
     /// Villagers have no physics body: they never get stuck on corners, and the
-    /// ruler can walk through them. (Zombies and needs come in step 2C.)
+    /// ruler can walk through them. When they see a zombie close by they drop
+    /// their work and run (to the throne if that's away from it), and wait until
+    /// it's safe. Zombies can kill them. (Needs like food and sleep come later.)
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee }
+
+        /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
+        const float ScaredSeconds = 4f;
 
         VillagerConfig config;
         Kingdom kingdom;
@@ -46,9 +54,14 @@ namespace KingdomGame.Villagers
         int promised;            // reserved at the storehouse / on its way to the blueprint
         float thinkAt;
         float stepClock;
+        float scaredUntil, lookAt;
         Vector2 facing = Vector2.down;
 
         public bool IsIdle => task == Task.Idle;
+        /// <summary>Hit points (zombies).</summary>
+        public Health Health { get; private set; }
+        /// <summary>Running from or hiding from zombies.</summary>
+        public bool Scared => Time.time < scaredUntil;
         /// <summary>On the move (it will be gone from where it is in a moment).</summary>
         public bool IsWalking => task != Task.Idle && pathIndex < path.Count;
         public Vector2 Position => transform.position;
@@ -65,7 +78,8 @@ namespace KingdomGame.Villagers
                     case Task.Build: return "building";
                     case Task.Return: return "taking things back to storage";
                     case Task.MakeRoom: return "making room";
-                    default: return "idle";
+                    case Task.Flee: return "running from zombies";
+                    default: return Scared ? "hiding" : "idle";
                 }
             }
         }
@@ -84,6 +98,11 @@ namespace KingdomGame.Villagers
             bodyRenderer.sprite = sprites.Walking[0, 0];
             bodyRenderer.sortingOrder = SortOrder.Characters;
             thinkAt = Time.time + Random.Range(0f, config.thinkSeconds);
+
+            Health = gameObject.AddComponent<Health>();
+            Health.Setup(Team.Friendly, config.maxHealth, 0.18f, true);
+            Health.Hurt += (h, amount, from) => { if (!h.Dead) Flee(from); };
+            Health.Died += OnDied;
         }
 
         // ------------------------------------------------------------ orders --
@@ -149,6 +168,42 @@ namespace KingdomGame.Villagers
             path.Add(spot);
         }
 
+        /// <summary>
+        /// Runs from a zombie at <paramref name="from"/>: to the throne if that's further from
+        /// it, otherwise straight away from it. Drops the job it was doing.
+        /// </summary>
+        void Flee(Vector2 from)
+        {
+            scaredUntil = Time.time + ScaredSeconds;
+            if (task == Task.Flee) return;
+            Abandon();
+            task = Task.Flee;
+            var throne = kingdom.Throne;
+            if (throne != null && (throne.Center - from).sqrMagnitude > (Position - from).sqrMagnitude + 1f && Walk(throne.Cells, true)) return;
+            var away = Position + (Position - from).normalized * 6f;
+            if (nav.NearestFreeSpot(away, new RectInt(0, 0, 0, 0), out var spot) && Walk(new RectInt(NavGrid.CellAt(spot), Vector2Int.one), false)) return;
+            Idle();   // nowhere to run: hide where it is
+        }
+
+        void OnDied(Health h)
+        {
+            var remains = Remains.Current;
+            if (remains != null && sprites.Dead != null && sprites.Dead.Length > 0)
+            {
+                float a = body.localEulerAngles.z + 180f + Random.Range(-30f, 30f);
+                remains.Body(sprites.Dead[Character.RulerLook.Direction(a, sprites.Dead.Length)], Position, a);
+                remains.Blood(Position, 1.1f);
+            }
+            // What they were carrying is left where they fell.
+            if (carryAmount > 0)
+                LootBag.Drop(Position, carryType == ResourceType.Wood ? carryAmount : 0, carryType == ResourceType.Stone ? carryAmount : 0,
+                    carryType == ResourceType.Food ? carryAmount : 0);
+            carryAmount = 0;
+            Abandon();
+            kingdom.Lost(this);
+            Destroy(gameObject);
+        }
+
         /// <summary>Carrying something that nobody needs right now.</summary>
         public bool HasLeftovers => carryAmount > 0 && task == Task.Idle;
         public ResourceType CarryType => carryType;
@@ -158,12 +213,20 @@ namespace KingdomGame.Villagers
 
         void Update()
         {
-            if (config == null) return;
+            if (config == null || Health == null || Health.Dead) return;
             Vector2 before = transform.position;
+
+            if (Time.time >= lookAt)
+            {
+                lookAt = Time.time + 0.3f;
+                var director = ZombieDirector.Current;
+                var zombie = director != null ? director.NearestVisible(Position, config.fleeDistance) : null;
+                if (zombie != null) Flee(zombie.Position);
+            }
 
             if (task == Task.Idle)
             {
-                if (Time.time >= thinkAt)
+                if (Time.time >= thinkAt && !Scared)
                 {
                     thinkAt = Time.time + config.thinkSeconds * Random.Range(0.8f, 1.2f);
                     kingdom.AssignJob(this);

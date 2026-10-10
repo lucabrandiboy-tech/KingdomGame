@@ -9,6 +9,9 @@
 //   game_close.png  zoomed in as far as the game allows (6 tiles tall), to show the detail
 //   game_outpost.png  the test outpost's walls, 8 tiles tall
 //   game_zoomed.png the closest zoom the game allows (4 tiles tall), at night
+//   castle_night.png  a furnished castle (great hall, bedroom, library) at night
+//   castle_close.png  inside it up close, by day
+//   horde_night.png   zombies at the castle gate at night
 // The mock lights sprites the way URP's 2D lights do (color times light, normal
 // maps for point lights) and adds bloom, vignette and color grading like the game's
 // post-processing. It's an approximation: Unity's own result will differ a little.
@@ -69,12 +72,17 @@ static class Program
             var sheet = new Sheet { Repeats = s.Repeats };
             sheet.Albedo.Add(s.Albedo);
             while (sheet.Albedo[^1].Width > 1 && sheet.Albedo[^1].Height > 1) sheet.Albedo.Add(sheet.Albedo[^1].Downsample(2));
-            for (int l = 0; l < MinLevel && l < sheet.Albedo.Count - 1; l++) sheet.Albedo[l] = null;
+            // Keep the levels with up to 256 pixels per tile (half-detail sheets keep their sharpest).
+            float ppt = 0f;
+            foreach (var e in s.Entries) ppt = MathF.Max(ppt, e.PixelsPerTile);
+            int keep = 0;
+            while (ppt / (1 << keep) > 256f) keep++;
+            for (int l = 0; l < keep && l < sheet.Albedo.Count - 1; l++) sheet.Albedo[l] = null;
             if (s.Normals != null)
             {
                 sheet.Normals = new List<PixelImage> { s.Normals };
                 while (sheet.Normals[^1].Width > 1 && sheet.Normals[^1].Height > 1) sheet.Normals.Add(sheet.Normals[^1].Downsample(2));
-                for (int l = 0; l < MinLevel && l < sheet.Normals.Count - 1; l++) sheet.Normals[l] = null;
+                for (int l = 0; l < keep && l < sheet.Normals.Count - 1; l++) sheet.Normals[l] = null;
             }
             foreach (var e in s.Entries)
                 Bank[e.Item.Key] = new Entry { Sheet = sheet, X = e.X, Y = e.Y, W = e.Width, H = e.Height, Pivot = e.Pivot, Ppt = e.PixelsPerTile };
@@ -83,12 +91,16 @@ static class Program
         });
         Console.WriteLine($"baked {count} sheets at {Ppu} px/tile in {sw.Elapsed.TotalSeconds:0.0}s");
 
-        var world = new MockWorld(4242u);
+        var world = new MockWorld(4242u, false);
         Render(world, Path.Combine(dir, "game_day.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day);
         Render(world, Path.Combine(dir, "game_night.png"), 1920, 1080, new Vector2(1f, 1f), 6f, Time.Night);
         Render(world, Path.Combine(dir, "game_close.png"), 1920, 1080, new Vector2(-0.3f, 1.4f), 3f, Time.Day);
         Render(world, Path.Combine(dir, "game_outpost.png"), 1920, 1080, new Vector2(9f, 1.5f), 4f, Time.Day);
         Render(world, Path.Combine(dir, "game_zoomed.png"), 1920, 1080, new Vector2(0.1f, 1.6f), 2f, Time.Night);
+        var castle = new MockWorld(4242u, true);
+        Render(castle, Path.Combine(dir, "castle_night.png"), 1920, 1080, new Vector2(0f, 2.6f), 7.5f, Time.Night);
+        Render(castle, Path.Combine(dir, "castle_close.png"), 1920, 1080, new Vector2(-1.2f, 1.2f), 3f, Time.Day);
+        Render(castle, Path.Combine(dir, "horde_night.png"), 1920, 1080, new Vector2(0.5f, -4.2f), 5f, Time.Night);
         Console.WriteLine($"done in {sw.Elapsed.TotalSeconds:0.0}s");
     }
 
@@ -130,7 +142,7 @@ static class Program
         public readonly byte[] MudMask = new byte[MapSize * MaskDetail * MapSize * MaskDetail];
         public readonly Color32[] Tint = new Color32[MapSize * TintDetail * MapSize * TintDetail];
 
-        public MockWorld(uint seed)
+        public MockWorld(uint seed, bool castle)
         {
             Seed = seed;
             for (int y = 0; y < MapSize; y++)
@@ -153,6 +165,14 @@ static class Program
                     Tint[y * tn + x] = GroundArt.Tint(tx, ty, seed, wood, rim, dry, mud);
                 }
 
+            if (castle) BuildCastle();
+            else BuildStart();
+            Nature(seed, castle);
+        }
+
+        // The start of a game, laid out like KingdomBootstrap: throne, storehouse, test outpost, ruler and villagers.
+        void BuildStart()
+        {
             // Throne at (-1, 2), braziers on its lower corners (Throne.Setup).
             Building(ArtKeys.Throne, -1, 2, 2, 0.12f);
             foreach (float side in new[] { -1f, 1f }) Fire(side * 0.8f, 2.2f, 1f, 1f);
@@ -174,12 +194,156 @@ static class Program
             Person(ArtKeys.Villager(true, 1, 1), -3.5f, 0.2f, 40f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
             Person(ArtKeys.Villager(false, 4, 2), -1.2f, -1.4f, 175f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
             Person(ArtKeys.Villager(false, 2, 0), 3.4f, 2.6f, 95f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
+        }
 
-            // Nature, placed like WorldGenerator: forests where the noise says, rocks and bushes elsewhere, kept clear around the start.
+        // A small castle round the throne, as a player might build it (Kingdom.Build): a great hall
+        // with the throne, a barracks and a library behind it, a gate in the south wall, and a
+        // few zombies and their dead at the gate at night.
+        void BuildCastle()
+        {
+            Building(ArtKeys.Throne, -1, 2, 2, 0.12f);
+            foreach (float side in new[] { -1f, 1f }) Fire(side * 0.8f, 2.2f, 1f, 1f);
+            // Walls: the outer ring with a heavy gate, a wall across with two doors, and one between the back rooms.
+            for (int x = -6; x <= 6; x++)
+            {
+                if (x != 0) Wall("StoneWall", x, -3);
+                Wall("StoneWall", x, 9);
+            }
+            for (int y = -2; y <= 8; y++) { Wall("StoneWall", -6, y); Wall("StoneWall", 6, y); }
+            for (int x = -5; x <= 5; x++) if (x != -3 && x != 3) Wall("StoneWall", x, 4);
+            for (int y = 5; y <= 8; y++) Wall("StoneWall", 0, y);
+            DoorAt(true, 0, -3, 0, false);
+            DoorAt(false, -3, 4, 0, false);
+            DoorAt(false, 3, 4, 0, true);
+            // Floors: flagstones in the hall, boards in the back rooms.
+            for (int y = -2; y <= 3; y++) for (int x = -5; x <= 5; x++) if (!(y >= 2 && x >= -1 && x <= 0)) Floor(FurnitureArt.StoneFloor, x, y);
+            for (int y = 5; y <= 8; y++) for (int x = -5; x <= 5; x++) if (x != 0) Floor(FurnitureArt.WoodFloor, x, y);
+            // The great hall: a rug before the throne, banners beside it, feasting tables, a fireplace and torches.
+            Piece(FurnitureArt.Rug, -1, -1, 2, 3, 0, 0f, flat: true);
+            Piece(FurnitureArt.Banner, -2, 3, 1, 1, 3, 0.9f);
+            Piece(FurnitureArt.Banner, 1, 3, 1, 1, 3, 0.9f);
+            Piece(FurnitureArt.LongTable, -4, -1, 2, 1, 1, 0.3f);
+            Piece(FurnitureArt.Bench, -5, -1, 2, 1, 1, 0.15f);
+            Piece(FurnitureArt.Bench, -3, -1, 2, 1, 1, 0.15f);
+            Piece(FurnitureArt.LongTable, 3, -1, 2, 1, 1, 0.3f);
+            Piece(FurnitureArt.Bench, 2, -1, 2, 1, 1, 0.15f);
+            Piece(FurnitureArt.Bench, 4, -1, 2, 1, 1, 0.15f);
+            Piece(FurnitureArt.Fireplace, 2, 3, 2, 1, 0, 0.7f, flames: new[] { FurnitureArt.FireplaceFlame }, flameSize: 2.4f, light: 1.2f);
+            foreach (var (x, y) in new[] { (-5, 3), (5, 3), (-5, -2), (5, -2) })
+                Piece(FurnitureArt.Torch, x, y, 1, 1, 0, 0.55f, flames: new[] { Vector2.zero }, flameSize: 1f, light: 0.75f);
+            // The barracks: three beds, a chest and candles.
+            for (int x = -5; x <= -3; x++) Piece(FurnitureArt.Bed, x, 7, 1, 2, 0, 0.25f);
+            Piece(FurnitureArt.Chest, -1, 8, 1, 1, 2, 0.3f);
+            Piece(FurnitureArt.Candelabra, -1, 5, 1, 1, 0, 0.4f, flames: FurnitureArt.CandelabraFlames, flameSize: 0.45f, light: 0.6f);
+            // The library: shelves along the wall, a table with chairs, an armor stand.
+            Piece(FurnitureArt.Bookshelf, 1, 8, 2, 1, 0, 0.6f);
+            Piece(FurnitureArt.Bookshelf, 4, 8, 2, 1, 0, 0.6f);
+            Piece(FurnitureArt.Table, 3, 6, 1, 1, 0, 0.3f);
+            Piece(FurnitureArt.Chair, 2, 6, 1, 1, 1, 0.25f);
+            Piece(FurnitureArt.Chair, 4, 6, 1, 1, 3, 0.25f);
+            Piece(FurnitureArt.ArmorStand, 5, 5, 1, 1, 0, 0.7f);
+            Piece(FurnitureArt.Candelabra, 1, 5, 1, 1, 0, 0.4f, flames: FurnitureArt.CandelabraFlames, flameSize: 0.45f, light: 0.6f);
+            // Torches outside the gate.
+            Piece(FurnitureArt.Torch, -2, -4, 1, 1, 0, 0.55f, flames: new[] { Vector2.zero }, flameSize: 1f, light: 0.75f);
+            Piece(FurnitureArt.Torch, 2, -4, 1, 1, 0, 0.55f, flames: new[] { Vector2.zero }, flameSize: 1f, light: 0.75f);
+
+            // The ruler behind the gate, aiming out over the wall; a villager hiding by the throne.
+            Person(ArtKeys.Ruler(0, 1), 0.6f, -1.45f, -80f, CharacterArt.RulerDirections, ArtKeys.RulerShadow(1));
+            var hand = Rotate(CharacterArt.RulerHand, -80f);
+            Things.Add(new Inst { Key = ArtKeys.Rifle, X = 0.6f + hand.x, Y = -1.45f + hand.y, Rot = -80f, Order = 1001 });
+            Lights.Add(new Light { X = 0.6f, Y = -1.45f, R = 1f, G = 0.82f, B = 0.55f, Intensity = 1.1f, Radius = 5.5f, Inner = 0.25f, NightOnly = true });
+            Person(ArtKeys.Villager(false, 0, 0), 1.6f, 1.6f, 200f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
+
+            // The horde: walkers clawing at the gate and the wall, more coming, a brute and a runner, and the dead.
+            Zombie("Walker", 0.3f, -4.35f, 88f, 5);
+            Zombie("Walker", -0.6f, -4.4f, 95f, 4);
+            Zombie("Walker", 1.25f, -4.35f, 80f, 0);
+            Zombie("Brute", -1.6f, -4.55f, 75f, 4);
+            Zombie("Walker", 0.8f, -5.5f, 100f, 1);
+            Zombie("Walker", -0.4f, -6.1f, 85f, 3);
+            Zombie("Runner", 2.6f, -5.9f, 120f, 2);
+            Zombie("Walker", -2.7f, -6.6f, 60f, 1);
+            Zombie("Walker", 1.9f, -7.4f, 95f, 2);
+            Zombie("Walker", -1.2f, -8.3f, 80f, 0);
+            Zombie("Walker", 0.4f, -9f, 100f, 3);
+            Dead("Walker", 1.6f, -6.6f, 230f);
+            Dead("Walker", -1.9f, -7.6f, 300f);
+            Dead("Runner", 3.2f, -8.1f, 160f);
+            Dead("Walker", -0.2f, -7.3f, 20f);
+            foreach (var (x, y, v) in new[] { (1.5f, -6.4f, 0), (-1.8f, -7.4f, 1), (3.1f, -7.9f, 2), (-0.1f, -7.1f, 3), (0.5f, -4.6f, 1), (-2.4f, -5.2f, 2) })
+                Things.Add(new Inst { Key = ArtKeys.Blood(v), X = x, Y = y, Rot = v * 77f, Order = -800, Alpha = 0.85f });
+            Things.Add(new Inst { Key = ArtKeys.Shadow(ArtKeys.LootBag), X = 2.4f + 0.55f * 0.06f, Y = -6.9f - 0.65f * 0.06f, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = ArtKeys.LootBag, X = 2.4f, Y = -6.9f, Order = 250 });
+            for (int y = -12; y <= 12; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
+        }
+
+        // A piece of furniture like Furniture.Setup: its picture for the way it faces, centered on
+        // its cells, a shadow unless it lies flat, and its flames (unlit) with one fire light.
+        void Piece(string art, int x, int y, int w, int h, int rotation, float height, bool flat = false,
+            Vector2[] flames = null, float flameSize = 1f, float light = 0f)
+        {
+            int turns = 1;
+            foreach (var p in FurnitureArt.Pieces) if (p.Art == art) turns = p.Rotations;
+            rotation %= turns;
+            float cx = x + (rotation % 2 == 0 ? w : h) / 2f, cy = y + (rotation % 2 == 0 ? h : w) / 2f;
+            string key = ArtKeys.Turned(art, rotation);
+            if (!flat) Things.Add(new Inst { Key = ArtKeys.Shadow(key), X = cx + 0.55f * height, Y = cy - 0.65f * height, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = key, X = cx, Y = cy, Order = flat ? -900 : 150 });
+            if (flames == null) return;
+            var middle = new Vector2(0, 0);
+            foreach (var f in flames)
+            {
+                var o = Turn(f, rotation);
+                Things.Add(new Inst { Key = ArtKeys.Flame, X = cx + o.x, Y = cy + o.y, Scale = flameSize, Order = 151, Glow = true });
+                middle = middle + o;
+            }
+            middle = middle / flames.Length;
+            if (light > 0f)
+                Lights.Add(new Light { X = cx + middle.x, Y = cy + middle.y, R = FireColor.x, G = FireColor.y, B = FireColor.z,
+                    Intensity = 1.3f * MathF.Sqrt(light), Radius = 5f * light, FireLight = true });
+        }
+
+        static Vector2 Turn(Vector2 o, int rotation) =>
+            rotation == 1 ? new Vector2(-o.y, o.x) : rotation == 2 ? new Vector2(-o.x, -o.y) : rotation == 3 ? new Vector2(o.y, -o.x) : o;
+
+        void Floor(string art, int x, int y)
+        {
+            int v = (int)(KingdomGame.Destruction.DamageShape.Hash(0xF1u, x, y) % (uint)ArtCatalog.FloorVariants);
+            Things.Add(new Inst { Key = ArtKeys.FloorTile(art, v), X = x + 0.5f, Y = y + 0.5f, Order = -1000 });
+        }
+
+        void DoorAt(bool heavy, int x, int y, int rotation, bool open)
+        {
+            string art = heavy ? FurnitureArt.HeavyDoor : FurnitureArt.WoodDoor;
+            if (!open) Things.Add(new Inst { Key = ArtKeys.Shadow(ArtKeys.DoorClosed(art, rotation)), X = x + 0.5f + 0.55f * 0.2f, Y = y + 0.5f - 0.65f * 0.2f, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = open ? ArtKeys.DoorOpen(art, rotation) : ArtKeys.DoorClosed(art, rotation), X = x + 0.5f, Y = y + 0.5f, Order = 50 });
+        }
+
+        // A zombie like Zombie.Show: the picture for the nearest of its directions, turned the rest of the way.
+        void Zombie(string kind, float x, float y, float facing, int frame)
+        {
+            float step = 360f / CharacterArt.ZombieDirections;
+            int d = ((int)MathF.Round(facing / step) % CharacterArt.ZombieDirections + CharacterArt.ZombieDirections) % CharacterArt.ZombieDirections;
+            Things.Add(new Inst { Key = ArtKeys.ZombieShadow(kind), X = x + 0.55f * 0.1f, Y = y - 0.65f * 0.1f, Rot = facing, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = ArtKeys.Zombie(kind, d, frame), X = x, Y = y, Rot = facing, Order = 999 });
+        }
+
+        void Dead(string kind, float x, float y, float degrees)
+        {
+            float step = 360f / CharacterArt.DeadDirections;
+            int d = ((int)MathF.Round(degrees / step) % CharacterArt.DeadDirections + CharacterArt.DeadDirections) % CharacterArt.DeadDirections;
+            Things.Add(new Inst { Key = ArtKeys.ZombieDead(kind, d), X = x, Y = y, Rot = degrees, Order = -700 });
+        }
+
+        // Nature, placed like WorldGenerator: forests where the noise says, rocks and bushes elsewhere, kept clear around the start.
+        void Nature(uint seed, bool castle)
+        {
             for (int y = -14; y < 14; y++)
                 for (int x = -26; x < 26; x++)
                 {
-                    if (x * x + y * y < 49 || used.Contains((x, y)) || (x >= 3 && x <= 15 && y >= -6 && y <= 6)) continue;
+                    if (x * x + y * y < 49 || used.Contains((x, y))) continue;
+                    if (!castle && x >= 3 && x <= 15 && y >= -6 && y <= 6) continue;
+                    if (castle && x >= -9 && x <= 9 && y >= -10 && y <= 12) continue;
                     float forest = Forest[(y + Half) * MapSize + (x + Half)];
                     float roll = Noise.Hash01(seed + 2u, x, y);
                     int v = (int)(KingdomGame.Destruction.DamageShape.Hash(seed + 5u, x, y) % NatureArt.Variants);
@@ -426,7 +590,9 @@ static class Program
     // Bilinear sample at a mip level (no blending between levels), weighted by alpha.
     static Vector3 SampleRaw(List<PixelImage> mips, float u, float v, float level, bool wrap, out float alpha)
     {
-        int l = Math.Clamp((int)MathF.Round(level), Math.Min(MinLevel, mips.Count - 1), mips.Count - 1);
+        int first = 0;
+        while (first < mips.Count - 1 && mips[first] == null) first++;
+        int l = Math.Clamp((int)MathF.Round(level), first, mips.Count - 1);
         var img = mips[l];
         float scale = 1f / (1 << l);
         float x = u * scale - 0.5f, y = v * scale - 0.5f;

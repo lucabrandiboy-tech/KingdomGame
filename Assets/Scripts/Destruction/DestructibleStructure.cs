@@ -34,6 +34,36 @@ namespace KingdomGame.Destruction
         public int SolidCount { get; private set; }
         public int InitialSolidCount { get; private set; }
         public bool Collapsed { get; private set; }
+        /// <summary>Zombie damage taken so far (see <see cref="Batter"/>).</summary>
+        public float Battered { get; private set; }
+
+        /// <summary>
+        /// How much more zombie battering it takes before it caves in: its material's
+        /// Siege Health per tile, less what explosions already broke off and what
+        /// zombies already did.
+        /// </summary>
+        public float SiegeHealthLeft
+        {
+            get
+            {
+                if (Collapsed || material == null || InitialSolidCount <= 0 || World == null) return 0f;
+                float collapseAt = World.Settings.collapseBelow * InitialSolidCount;
+                float standing = Mathf.Clamp01((SolidCount - collapseAt) / Mathf.Max(1f, InitialSolidCount - collapseAt));
+                return Mathf.Max(0f, material.siegeHealth * Cells.width * Cells.height * standing - Battered);
+            }
+        }
+
+        /// <summary>
+        /// A zombie's blow. Zombies don't break walls pixel by pixel (their claws would
+        /// take forever on stone); each blow wears the wall down, and when there's
+        /// nothing left (<see cref="SiegeHealthLeft"/>) the whole thing caves in.
+        /// </summary>
+        public void Batter(float amount)
+        {
+            if (Collapsed || amount <= 0f) return;
+            Battered += amount;
+            if (SiegeHealthLeft <= 0f) Collapse();
+        }
 
         /// <summary>Set by <see cref="PixelWorld"/> while an integrity check is queued.</summary>
         internal bool CheckQueued;

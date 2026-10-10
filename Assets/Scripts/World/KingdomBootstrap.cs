@@ -4,6 +4,7 @@ using KingdomGame.Combat;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
 using KingdomGame.UI;
+using KingdomGame.Zombies;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -11,16 +12,23 @@ namespace KingdomGame.World
 {
     /// <summary>
     /// Builds the game when you press Play: the map, your kingdom (throne,
-    /// storehouse, builder villagers), the ruler with their gear, the test
-    /// outpost, day and night, and the on-screen info.
+    /// storehouse, builder villagers), the ruler with their gear, day and night,
+    /// and the on-screen info. In survival the zombies too; in free build the
+    /// test outpost instead. The mode comes from the main menu, or is
+    /// <see cref="DefaultMode"/> when this scene is played on its own.
     /// </summary>
     public sealed class KingdomBootstrap : MonoBehaviour
     {
         [SerializeField] GameContent content;
         [SerializeField] DayNightCycle dayNight;
+        [Tooltip("The mode when you press Play in this scene directly (the main menu chooses otherwise).")]
+        [SerializeField] GameMode defaultMode = GameMode.Survival;
 
         public GameContent Content { get => content; set => content = value; }
         public DayNightCycle DayNight { get => dayNight; set => dayNight = value; }
+        public GameMode DefaultMode { get => defaultMode; set => defaultMode = value; }
+        /// <summary>The mode this game is in.</summary>
+        public GameMode Mode { get; private set; }
 
         void Start()
         {
@@ -37,12 +45,22 @@ namespace KingdomGame.World
             if (content.dayNight != null)
                 FireLight.Configure(content.dayNight.fireColor, content.dayNight.fireRadius, content.dayNight.fireBrightness, content.dayNight.fireDaytimeShare);
 
+            Mode = GameSession.Chosen ?? defaultMode;
+            bool survival = Mode == GameMode.Survival;
+            if (survival && content.survival == null)
+            {
+                Debug.LogWarning("The Game Content has no Survival Config, so this game has no zombies. Run KingdomGame > Build Game Scenes again.", this);
+                survival = false;
+            }
+
             int seed = content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
             Debug.Log($"Map seed {seed}. Put this number in WorldConfig's Seed to get the same map again.");
             var canopies = WorldGenerator.Generate(content, transform, seed);
-            if (content.world.testOutpost) BuildOutpost(world);
+            // The test outpost is for trying weapons on walls; survival starts on open ground.
+            if (content.world.testOutpost && !survival) BuildOutpost(world);
+            new GameObject("Remains").AddComponent<Remains>().transform.SetParent(transform, false);
 
-            var kingdom = MakeKingdom(world);
+            var kingdom = MakeKingdom(world, survival ? content.survival : null);
             var ruler = SpawnRuler(kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero);
             var rulerController = ruler.GetComponent<RulerController>();
             kingdom.Ruler = ruler.transform;
@@ -66,14 +84,28 @@ namespace KingdomGame.World
             var builder = kingdom.gameObject.AddComponent<BuildController>();
             builder.Setup(kingdom, rulerController, rig, canopies, content.view);
 
+            // Survival: the zombies, and the waves they come in. Falling ends the game.
+            SurvivalDirector waves = null;
+            rulerController.RespawnOnDeath = !survival;
+            if (survival)
+            {
+                var zombies = new GameObject("Zombies").AddComponent<ZombieDirector>();
+                zombies.transform.SetParent(transform, false);
+                zombies.Setup(content.survival, world, kingdom, rulerController, dayNight, kingdom.Nav.Cells);
+                waves = gameObject.AddComponent<SurvivalDirector>();
+                waves.Setup(content.survival, zombies, kingdom);
+                rulerController.Health.Died += _ => waves.RulerFell();
+            }
+
             var hud = gameObject.AddComponent<GameHud>();
-            hud.Setup(rulerController, dayNight, kingdom, builder, rig);
+            hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
+            gameObject.AddComponent<PauseMenu>().Setup(builder, waves);
             var debug = gameObject.AddComponent<DebugHud>();
             debug.visible = false;
             debug.toggleKey = KeyCode.F3;
         }
 
-        Kingdom MakeKingdom(PixelWorld world)
+        Kingdom MakeKingdom(PixelWorld world, SurvivalConfig survival)
         {
             var go = new GameObject("Kingdom");
             go.transform.SetParent(transform, false);
@@ -90,9 +122,9 @@ namespace KingdomGame.World
             if (storehouse != null)
             {
                 var storage = kingdom.AddStorage(storehouse, config.storageCell);
-                storage.Deposit(ResourceType.Wood, config.startWood);
-                storage.Deposit(ResourceType.Stone, config.startStone);
-                storage.Deposit(ResourceType.Food, config.startFood);
+                storage.Deposit(ResourceType.Wood, survival != null ? survival.startWood : config.startWood);
+                storage.Deposit(ResourceType.Stone, survival != null ? survival.startStone : config.startStone);
+                storage.Deposit(ResourceType.Food, survival != null ? survival.startFood : config.startFood);
             }
             else
             {

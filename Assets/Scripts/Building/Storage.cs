@@ -4,29 +4,35 @@ using UnityEngine;
 namespace KingdomGame.Building
 {
     /// <summary>
-    /// A storehouse: the kingdom's resources live here. Builders take what
-    /// blueprints need from it; the ruler empties their backpack into it (E).
+    /// A storehouse or a chest: the kingdom's resources live here. Builders take
+    /// what blueprints need from it; the ruler empties their backpack into it (E).
     /// Builders reserve what they're coming to fetch, so two of them never walk
     /// over for the same stones.
     /// </summary>
-    public sealed class Storage : MonoBehaviour
+    public sealed class Storage : MonoBehaviour, IBuilt
     {
         readonly int[] reserved = new int[Inventory.TypeCount];
 
         public BuildingConfig Config { get; private set; }
         public RectInt Cells { get; private set; }
+        public int Rotation { get; private set; }
         public Inventory Stock { get; private set; }
         public Vector2 Center => Cells.center;
 
-        public void Setup(BuildingConfig config, RectInt cells, Sprite look, Sprite shadow)
+        public void Setup(BuildingConfig config, RectInt cells, Sprite look, Sprite shadow, int rotation = 0)
         {
             Config = config;
             Cells = cells;
+            Rotation = rotation;
             Stock = new Inventory(config != null ? config.storageCapacity : 1000);
             transform.position = (Vector3)(Vector2)cells.center;
-            BuildingLook.Make(transform, look, shadow, 0.3f, SortOrder.Buildings);
+            float height = config != null && config.kind == BuildingKind.Storage && config.size.x * config.size.y <= 1 ? config.height : 0.3f;
+            BuildingLook.Make(transform, look, shadow, height, SortOrder.Buildings);
             BuildingLook.MakeSolid(gameObject, cells.size);
         }
+
+        /// <summary>Takes it away (torn down). What's inside is lost unless the kingdom moved it first.</summary>
+        public void Remove() => Destroy(gameObject);
 
         /// <summary>A lantern on the porch (a small fire).</summary>
         public void AddLantern(Sprite fire)

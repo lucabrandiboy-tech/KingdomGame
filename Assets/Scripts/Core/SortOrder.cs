@@ -10,13 +10,26 @@ namespace KingdomGame
     {
         public const int Ground = -30000;
         public const int GroundTint = -29990;
+        /// <summary>Wooden and stone floors you build.</summary>
+        public const int Floors = -1000;
+        /// <summary>Rugs, on top of floors.</summary>
+        public const int Rugs = -900;
+        /// <summary>Blood splatters.</summary>
+        public const int Blood = -800;
+        /// <summary>Fallen zombies and villagers.</summary>
+        public const int Corpses = -700;
         public const int Rubble = -200;
         /// <summary>Shadows of walls, trees, people and flying cubes.</summary>
         public const int Shadows = -100;
         public const int Walls = 0;
+        public const int Doors = 50;
         /// <summary>Rocks, bushes, tree trunks and stumps.</summary>
         public const int Nature = 100;
+        /// <summary>Tables, beds, shelves (their flames are one higher).</summary>
+        public const int Furniture = 150;
         public const int Buildings = 200;
+        /// <summary>Bags of loot on the ground.</summary>
+        public const int Loot = 250;
         public const int Blueprints = 300;
         /// <summary>The ruler and villagers; what they hold is one higher.</summary>
         public const int Characters = 1000;

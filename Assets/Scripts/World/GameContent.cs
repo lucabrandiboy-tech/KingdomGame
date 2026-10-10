@@ -4,6 +4,7 @@ using KingdomGame.Combat;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
 using KingdomGame.Villagers;
+using KingdomGame.Zombies;
 using UnityEngine;
 
 namespace KingdomGame.World
@@ -44,8 +45,12 @@ namespace KingdomGame.World
         public VillagerConfig villager;
         [Tooltip("The storehouse your kingdom starts with.")]
         public BuildingConfig storehouse;
-        [Tooltip("What you can build from the throne, in build-bar order (keys 1-5).")]
+        [Tooltip("What you can build from the throne. Each goes on its category's tab of the build bar, in this order (keys 1-9).")]
         public BuildingConfig[] buildMenu = new BuildingConfig[0];
+
+        [Header("Survival")]
+        [Tooltip("The waves of zombies, and the kinds of zombie.")]
+        public SurvivalConfig survival;
 
         [Tooltip("Bumped by Build Game Scenes when it updates older settings to new defaults.")]
         public int settingsVersion;

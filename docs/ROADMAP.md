@@ -52,9 +52,23 @@ was tested, so **2A and 2B are tested together**: `docs/PHASE-2B-TEST.md`.
 - [x] Builder villagers: fetch resources, carry them over, build; path finding around walls and trees
 - [x] The ruler can hand over resources and help build (hold E at a blueprint)
 
-**2C** (next, after 2A + 2B are tested): villager needs (food, housing,
-happiness), basic zombie waves drawn by noise and kingdom size and stronger at
-night, ruler health, death and respawn at the throne.
+**Castle and survival update (written, not yet tested in Unity)**, asked for
+before 2A + 2B were tested, so all three are tested together:
+`docs/CASTLE-SURVIVAL-TEST.md`. It brings part of 2C (zombies, health, death
+and respawn) and a little of Phase 4 (zombie types) forward:
+- [x] Rooms: areas closed by walls and doors, named after their furniture (bedroom, great hall, library...)
+- [x] Doors (open for you and villagers, zombies break them; can replace a wall tile), floors, rugs
+- [x] Furniture you can turn: chairs, tables, beds, shelves, weapon racks, armor stands, cauldron, anvil, banner, well
+- [x] Lights (torch, candelabra, brazier, fireplace) and storage (chest, barrel, crates)
+- [x] Build bar with tabs; tear down what's built for half the cost back
+- [x] Main menu: **Survival** (endless, growing waves of walkers, runners and brutes; game over when the ruler falls) or **Free build** (no zombies)
+- [x] Zombies: flow-field path finding to the nearest person, smashing through doors, furniture and walls when that's quicker than going round; faster and stronger at night
+- [x] Ruler and villager health; villagers run from zombies; beds let survivors join between waves
+- [x] Shots hit zombies and fly over a wall you stand right behind; explosions hurt creatures and furniture
+- [x] Loot bags, bodies and blood that fade, a pause menu
+
+**2C** (after the above is tested): villager needs (food, housing,
+happiness), zombie waves in free build too (drawn by noise and kingdom size).
 
 ## ⏳ Phase 3: Production and eras
 Production chains and jobs · hand-carry then carts · tech tree for the first

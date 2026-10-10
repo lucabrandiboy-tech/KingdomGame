@@ -290,3 +290,70 @@ Breaking into a base should take explosives, like in Rust.
   server map we'll need cheaper searches (searching in larger regions first,
   sharing paths, spreading searches over several frames). Not needed yet, and
   noted so it isn't forgotten.
+
+## 14. Rooms, doors and furniture (castle update, decided)
+
+- **Three layers per cell** (`Building/Kingdom.cs`): floors at the bottom,
+  rugs on them, and everything else (doors, furniture, chests, blueprints) on
+  top. Walls live in the `PixelWorld` as before.
+- **Rooms** are found with a flood fill from the map's edge over everything
+  that isn't a wall or a door (`Building/RoomFinder.cs`, unit-tested): what the
+  outside can't reach is a room, unless it's huge (over 300 tiles: that's just
+  a walled-in area). Found again at most four times a second after something
+  changes. A room is named after its furniture (`BuildingConfig.roomTag`).
+- **Furniture turns** in quarter turns. Its art is drawn once facing down and
+  turned before the top-left light is baked in, so every direction is lit the
+  same way. Big pieces (beds, tables, shelves) block movement; chairs, benches,
+  rugs, torches and banners don't.
+- **Doors** block with a collider that's switched off while open. They open for
+  anyone on your side within about a tile and stay open while someone stands
+  in the doorway. A door can be placed on a single wall tile and replaces it
+  when built (half the wall's cost back), so you don't have to tear a hole
+  first. Doors turn to fit the walls beside them.
+- **Half-detail art:** furniture, floors, doors, effects, zombies and bodies are
+  baked at half the Art Detail (512 per tile by default, `ArtItem.Detail`).
+  They never show bigger than about 270 screen pixels per tile (the closest
+  zoom), and there are a lot of them: at full detail they'd add about 0.4 GB
+  of video memory; at half, about 0.1 GB. Every picture's edge pixels are
+  copied into the space around it in the sheet, so tiles that fill their cell
+  (floors, walls) don't show seams when the view zooms out.
+
+## 15. Zombies and survival (castle update, decided; revisit after testing)
+
+- **Flow field, not a path per zombie** (`Zombies/FlowField.cs`, unit-tested):
+  every few tenths of a second one Dijkstra search from every person outwards
+  gives each cell its "effort" to the nearest person. Each zombie just steps to
+  its cheapest neighbour, so 5 or 500 zombies cost the same search. The ruler
+  is preferred: a villager has to be 2 tiles closer.
+- **Breaking through is part of the path:** each cell has a cost. Trees, rocks,
+  the throne and storehouses can't be broken (zombies walk round); doors, walls
+  and big furniture can, and cost more the more health they have left
+  (8 health ≈ 1 tile of walking round). So zombies smash through a door or a
+  wooden wall when that's quicker than the way round, and look for the weakest
+  point of a closed castle.
+- **Zombies wear walls down instead of breaking pixels.** A zombie's claws
+  would need hundreds of blows to cut a hole through a stone tile pixel by
+  pixel. Instead each blow takes the zombie's Wall Damage off the tile's
+  **siege health** (stone 600, wood 200, less if explosions already broke
+  pieces off) and leaves scratches (a tiny damage event: wood splinters,
+  stone cracks). At 0 the tile caves in with the usual crumbling. Players'
+  weapons still break pixels like before.
+- **No physics bodies on zombies.** The director moves them (they slide along
+  anything they can't walk through), pushes crowds apart, and keeps the ruler
+  out of them (the ruler can't walk into a zombie and gets shoved out of a
+  crowd). Shots find zombies through `Core/Health.cs`.
+- **Shots fly over your own wall** for the first 1.6 tiles (rifle) so you can
+  defend from behind a wall you stand next to; further walls stop them, and
+  rockets always hit the first wall. Explosions hurt every creature, door and
+  piece of furniture in the blast, including yours.
+- **Waves** (`Zombies/SurvivalDirector.cs`, numbers in `SurvivalConfig`):
+  6 zombies, then 3 more each wave, all times 1.05 per wave (wave 10: 51,
+  wave 20: about 160), with 6% more health each wave. New kinds join over three
+  waves. Bigger waves come from more sides. At most 120 alive at once; the
+  rest wait their turn. Zombies that can't reach anyone for 25 seconds wander
+  off, so a wave can't get stuck.
+- **Performance:** the field search is about a millisecond on the 96 × 96 map;
+  zombies check neighbours through a grid, not each other. Hundreds of
+  zombies on a much bigger server map will need the field computed in pieces
+  or less often far away. Not needed yet.
+

@@ -22,6 +22,8 @@ namespace KingdomGame.Building
 
         public BuildingConfig Config { get; private set; }
         public RectInt Cells { get; private set; }
+        /// <summary>Which way the finished building will face, 0..3.</summary>
+        public int Rotation { get; private set; }
         public Vector2 Center => Cells.center;
         /// <summary>Seconds of work done so far.</summary>
         public float Work { get; private set; }
@@ -33,13 +35,16 @@ namespace KingdomGame.Building
         public string Problem { get; set; }
         public bool Cancelled { get; private set; }
 
-        public void Setup(BuildingConfig config, RectInt cells, Sprite look, Sprite white)
+        public void Setup(BuildingConfig config, RectInt cells, int rotation, Sprite look, Sprite white)
         {
             Config = config;
             Cells = cells;
+            Rotation = rotation;
             transform.position = (Vector3)(Vector2)cells.center;
 
-            ghost = Part("Ghost", look, SortOrder.Blueprints);
+            // Floor and rug blueprints lie under everything; the rest float above.
+            bool low = config.kind == BuildingKind.Floor || (config.kind == BuildingKind.Furniture && config.flat);
+            ghost = Part("Ghost", look, low ? SortOrder.Rugs + 1 : SortOrder.Blueprints);
             if (look != null) ghost.transform.localPosition = -look.bounds.center;   // centered, whatever the picture's pivot
             barBack = Part("Bar", white, SortOrder.Markers);
             barFill = Part("Bar fill", white, SortOrder.Markers + 1);

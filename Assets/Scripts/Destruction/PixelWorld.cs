@@ -234,6 +234,9 @@ namespace KingdomGame.Destruction
 
             if (type.category == DamageCategory.Explosive)
                 effects.Explode(center, type.ToShape(hit.RadiusPx).RadiusPx, settings.rubble ? rubble : null);
+            // Zombies, people, doors and furniture caught in the blast.
+            if (type.creatureDamage > 0f && type.blastRadius > 0f)
+                Health.Blast(center, type.blastRadius, type.creatureDamage);
 
             PixelsDestroyed += broken;
             Damaged?.Invoke(hit, type, center, broken);

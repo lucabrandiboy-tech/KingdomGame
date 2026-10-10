@@ -55,5 +55,7 @@ namespace UnityEngine
         public static int Min(int a, int b) => a < b ? a : b;
         public static float Max(float a, float b) => a > b ? a : b;
         public static float Min(float a, float b) => a < b ? a : b;
+        public static float Floor(float v) => (float)System.Math.Floor(v);
+        public static float Repeat(float t, float length) => Clamp(t - Floor(t / length) * length, 0f, length);
     }
 }

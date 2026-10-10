@@ -9,7 +9,9 @@ namespace KingdomGame.Combat
     /// Every bullet and rocket in flight. Each frame a shot checks the pixels
     /// along its path (<see cref="PixelWorld.Raycast"/>), so it flies through
     /// holes and hits the exact pixel it touches, then becomes a damage event.
-    /// Sprites are pooled and reused.
+    /// Shots also hit zombies (<see cref="Health.Raycast"/>), whichever comes
+    /// first, and fly over a wall right in front of the shooter
+    /// (<see cref="WeaponConfig.overWalls"/>). Sprites are pooled and reused.
     /// </summary>
     public sealed class Projectiles : MonoBehaviour
     {
@@ -18,6 +20,7 @@ namespace KingdomGame.Combat
             public Vector2 Position;
             public Vector2 Velocity;
             public float RangeLeft;
+            public float Flown;   // tiles so far
             public WeaponConfig Weapon;
         }
 
@@ -65,8 +68,30 @@ namespace KingdomGame.Combat
                 bool lastStep = length >= shot.RangeLeft;
                 if (lastStep) step *= shot.RangeLeft / Mathf.Max(length, 1e-6f);
                 var to = shot.Position + step;
+                float stepLength = step.magnitude;
 
-                if (world != null && world.Raycast(shot.Position, to, out var pixel, out _))
+                // Walls, except those it flies over just after leaving the barrel.
+                bool hitWall = false;
+                Vector2Int pixel = default;
+                float wallAlong = 1f;
+                float overWalls = shot.Weapon.overWalls;
+                if (world != null && shot.Flown + stepLength > overWalls && stepLength > 1e-6f)
+                {
+                    var from = shot.Flown < overWalls ? shot.Position + step * ((overWalls - shot.Flown) / stepLength) : shot.Position;
+                    if (world.Raycast(from, to, out pixel, out var wallPoint))
+                    {
+                        hitWall = true;
+                        wallAlong = (wallPoint - shot.Position).magnitude / stepLength;
+                    }
+                }
+                // A zombie in the way, if it's closer than the wall.
+                if (Health.Raycast(shot.Position, to, Team.Zombie, out var zombie, out float along) && (!hitWall || along <= wallAlong))
+                {
+                    HitCreature(world, shot.Weapon, zombie, shot.Position + step * along, step / Mathf.Max(stepLength, 1e-6f));
+                    RemoveAt(i--);
+                    continue;
+                }
+                if (hitWall)
                 {
                     Detonate(world, shot.Weapon, PixelWorld.PixelCenter(pixel.x, pixel.y));
                     RemoveAt(i--);
@@ -81,6 +106,7 @@ namespace KingdomGame.Combat
 
                 shot.Position = to;
                 shot.RangeLeft -= length;
+                shot.Flown += length;
                 shots[i] = shot;
                 Place(renderers[i], to, shot.Velocity);
             }
@@ -90,6 +116,15 @@ namespace KingdomGame.Combat
         {
             if (weapon.damage != null && world.TryMakeEvent(weapon.damage, at, out var hit))
                 world.ApplyDamage(hit);
+        }
+
+        // A shot hits a zombie: it's hurt (a little blood flies), and explosive shots blow up right there.
+        static void HitCreature(PixelWorld world, WeaponConfig weapon, Health target, Vector2 at, Vector2 direction)
+        {
+            target.Damage(weapon.hitDamage, at - direction * 0.3f);
+            if (world == null) return;
+            if (weapon.damage != null && weapon.damage.category == DamageCategory.Explosive) Detonate(world, weapon, at);
+            else world.Burst(at, new Color32(96, 12, 14, 255), 5, 2f);
         }
 
         void RemoveAt(int i)

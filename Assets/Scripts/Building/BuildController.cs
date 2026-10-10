@@ -9,9 +9,10 @@ namespace KingdomGame.Building
     /// The throne view. While the ruler sits on the throne the camera pulls far
     /// out and you plan buildings on the grid:
     /// <list type="bullet">
-    /// <item>1-5 (or the buttons at the bottom) pick a building; pick it again to put it away.</item>
-    /// <item>Left click places it. For walls, hold and drag to place a whole straight line.</item>
-    /// <item>Right click: stop placing, or cancel the blueprint under the mouse (you get its resources back).</item>
+    /// <item>The build bar has tabs (walls and doors, floors, furniture, lights, storage): click one, or Tab for the next.</item>
+    /// <item>1-9 (or the buttons) pick something on the tab; pick it again to put it away. R turns it.</item>
+    /// <item>Left click places it. Walls: hold and drag for a straight line. Floors: drag for a whole area.</item>
+    /// <item>Right click: stop placing; with nothing picked, cancel the blueprint under the mouse or tear down what's built there (half its cost back).</item>
     /// <item>WASD moves the view, the mouse wheel zooms, E or Esc stands up.</item>
     /// </list>
     /// The world keeps running while you sit there.
@@ -20,7 +21,13 @@ namespace KingdomGame.Building
     {
         static readonly Color Good = new Color(0.45f, 1f, 0.55f, 0.55f);
         static readonly Color Bad = new Color(1f, 0.35f, 0.3f, 0.55f);
-        static readonly KeyCode[] NumberKeys = { KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5 };
+        static readonly KeyCode[] NumberKeys =
+        {
+            KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5,
+            KeyCode.Alpha6, KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9,
+        };
+        /// <summary>Most blueprints one floor drag places.</summary>
+        const int MaxArea = 400;
 
         Kingdom kingdom;
         RulerController ruler;
@@ -29,7 +36,12 @@ namespace KingdomGame.Building
         CanopyFader canopies;
         ViewConfig viewConfig;
 
+        BuildCategory category = BuildCategory.Walls;
+        readonly List<BuildingConfig> items = new List<BuildingConfig>();
+        readonly List<BuildCategory> categories = new List<BuildCategory>();
         int selected = -1;
+        int rotation;
+        bool turnedByHand;   // R was pressed: don't turn doors to fit the walls by themselves
         bool dragging;
         Vector2Int dragStart;
         int enteredFrame;
@@ -40,8 +52,17 @@ namespace KingdomGame.Building
         float messageUntil;
 
         public bool Active { get; private set; }
+        /// <summary>The frame the ruler last stood up (so the Esc that did it doesn't also open the pause menu).</summary>
+        public int LeftFrame { get; private set; } = -1;
+        /// <summary>The build bar's tabs: only the ones that have something on them.</summary>
+        public IReadOnlyList<BuildCategory> Categories => categories;
+        public BuildCategory Category => category;
+        /// <summary>What's on the open tab.</summary>
+        public IReadOnlyList<BuildingConfig> Items => items;
         public int SelectedIndex => selected;
-        public BuildingConfig Selected => selected >= 0 && selected < kingdom.BuildMenu.Count ? kingdom.BuildMenu[selected] : null;
+        public BuildingConfig Selected => selected >= 0 && selected < items.Count ? items[selected] : null;
+        /// <summary>Which way the building being placed faces (R turns it).</summary>
+        public int Rotation => rotation;
         /// <summary>About whatever is under the mouse, for the info box.</summary>
         public string Hover { get; private set; }
         /// <summary>A short message after an action (like "Placed 6 blueprints").</summary>
@@ -57,6 +78,11 @@ namespace KingdomGame.Building
             canopies = fader;
             viewConfig = look;
             view = rig != null ? rig.GetComponent<Camera>() : Camera.main;
+            categories.Clear();
+            foreach (BuildCategory c in System.Enum.GetValues(typeof(BuildCategory)))
+                foreach (var b in kingdom.BuildMenu)
+                    if (b != null && b.category == c) { categories.Add(c); break; }
+            if (categories.Count > 0) SelectCategory(categories[0]);
         }
 
         /// <summary>Sits the ruler on the throne and pulls the camera out.</summary>
@@ -77,6 +103,7 @@ namespace KingdomGame.Building
         {
             if (!Active) return;
             Active = false;
+            LeftFrame = Time.frameCount;
             selected = -1;
             dragging = false;
             ShowPlacements(0);
@@ -86,11 +113,25 @@ namespace KingdomGame.Building
             if (canopies != null) canopies.FarAlpha = 1f;
         }
 
-        /// <summary>Picks building number <paramref name="index"/> from the build bar (again = put it away).</summary>
+        /// <summary>Opens a tab of the build bar.</summary>
+        public void SelectCategory(BuildCategory c)
+        {
+            category = c;
+            items.Clear();
+            foreach (var b in kingdom.BuildMenu)
+                if (b != null && b.category == c) items.Add(b);
+            selected = -1;
+            dragging = false;
+        }
+
+        /// <summary>Picks item number <paramref name="index"/> on the open tab (again = put it away).</summary>
         public void Select(int index)
         {
-            selected = selected == index || index < 0 || index >= kingdom.BuildMenu.Count ? -1 : index;
+            selected = selected == index || index < 0 || index >= items.Count ? -1 : index;
             dragging = false;
+            turnedByHand = false;
+            var b = Selected;
+            if (b != null) rotation = b.ClampRotation(rotation);
         }
 
         void Say(string text)
@@ -102,7 +143,7 @@ namespace KingdomGame.Building
         void Update()
         {
             if (Time.unscaledTime > messageUntil) Message = null;
-            if (!Active || kingdom == null || view == null) return;
+            if (!Active || kingdom == null || view == null || Time.timeScale <= 0f) return;
 
             bool firstFrame = Time.frameCount == enteredFrame;
             if (!firstFrame && GameInput.Pressed(KeyCode.Escape))
@@ -117,8 +158,15 @@ namespace KingdomGame.Building
             }
 
             if (rig != null) rig.Pan(GameInput.Move);
-            for (int i = 0; i < NumberKeys.Length && i < kingdom.BuildMenu.Count; i++)
+            if (GameInput.Pressed(KeyCode.Tab) && categories.Count > 0)
+                SelectCategory(categories[(categories.IndexOf(category) + 1) % categories.Count]);
+            for (int i = 0; i < NumberKeys.Length && i < items.Count; i++)
                 if (GameInput.Pressed(NumberKeys[i])) Select(i);
+            if (GameInput.Pressed(KeyCode.R) && Selected != null)
+            {
+                rotation = Selected.ClampRotation(rotation + 1);
+                turnedByHand = true;
+            }
 
             Vector2 mouse = view.ScreenToWorldPoint(GameInput.PointerPosition);
             var b = Selected;
@@ -129,7 +177,10 @@ namespace KingdomGame.Building
         void Placing(BuildingConfig b, Vector2 mouse, bool firstFrame)
         {
             // The building's middle follows the mouse.
-            var origin = new Vector2Int(Mathf.RoundToInt(mouse.x - b.size.x * 0.5f), Mathf.RoundToInt(mouse.y - b.size.y * 0.5f));
+            var size = b.SizeFacing(rotation);
+            var origin = new Vector2Int(Mathf.RoundToInt(mouse.x - size.x * 0.5f), Mathf.RoundToInt(mouse.y - size.y * 0.5f));
+            // Doors turn to fit the wall they go in (unless you turned them yourself).
+            if (b.kind == BuildingKind.Door && !turnedByHand && !dragging) rotation = b.ClampRotation(kingdom.DoorFacing(origin, rotation));
 
             if (GameInput.AltFirePressed)
             {
@@ -145,7 +196,8 @@ namespace KingdomGame.Building
             }
 
             placements.Clear();
-            if (dragging && b.dragToPlaceLines) Line(dragStart, origin, b.size, kingdom.Config.maxLine, placements);
+            if (dragging && b.dragToPlaceLines && b.kind == BuildingKind.Floor) Area(dragStart, origin, MaxArea, placements);
+            else if (dragging && b.dragToPlaceLines) Line(dragStart, origin, size, kingdom.Config.maxLine, placements);
             else placements.Add(dragging ? dragStart : origin);
 
             valid.Clear();
@@ -153,16 +205,15 @@ namespace KingdomGame.Building
             int good = 0;
             foreach (var cell in placements)
             {
-                bool ok = kingdom.CanPlace(b, cell, out string reason);
+                bool ok = kingdom.CanPlace(b, cell, rotation, out string reason);
                 valid.Add(ok);
                 if (ok) good++;
                 else if (firstProblem == null) firstProblem = reason;
             }
             ShowPlacements(PointerOverHud && !dragging ? 0 : placements.Count, b);
 
-            string cost = good > 1
-                ? $"{good} x {b.displayName}: {b.woodCost * good} wood, {b.stoneCost * good} stone"
-                : $"{b.displayName}: {b.CostText()}";
+            string cost = good > 1 ? $"{good} x {b.displayName}: {b.CostText(good)}" : $"{b.displayName}: {b.CostText()}";
+            if (b.rotations > 1) cost += "   (R: turn it)";
             Hover = firstProblem != null ? $"{cost}\n<color=#ff8a80>{firstProblem}</color>" : cost;
 
             if (dragging && (GameInput.FireReleased || !GameInput.FireHeld))
@@ -170,7 +221,7 @@ namespace KingdomGame.Building
                 dragging = false;
                 int placed = 0;
                 for (int i = 0; i < placements.Count; i++)
-                    if (valid[i] && kingdom.PlaceBlueprint(b, placements[i]) != null) placed++;
+                    if (valid[i] && kingdom.PlaceBlueprint(b, placements[i], rotation) != null) placed++;
                 if (placed > 0) Say(placed == 1 ? $"Planned: {b.displayName}" : $"Planned {placed} x {b.displayName}");
                 else if (firstProblem != null) Say(firstProblem);
             }
@@ -180,23 +231,38 @@ namespace KingdomGame.Building
         {
             ShowPlacements(0);
             var cell = new Vector2Int(Mathf.FloorToInt(mouse.x), Mathf.FloorToInt(mouse.y));
+            bool rightClick = !PointerOverHud && (GameInput.AltFirePressed || GameInput.Pressed(KeyCode.Delete));
+            var room = kingdom.RoomAt(cell);
+            string roomText = room != null ? $"\n{room.Name} ({room.Size} tiles)" : "";
+
             var blueprint = kingdom.BlueprintAt(cell);
             if (blueprint != null)
             {
-                Hover = Describe(blueprint) + "\nRight click: cancel it (resources go back to storage)";
-                if (!PointerOverHud && (GameInput.AltFirePressed || GameInput.Pressed(KeyCode.Delete)))
-                    Say(kingdom.Cancel(blueprint));
+                Hover = Describe(blueprint) + "\nRight click: cancel it (resources go back to storage)" + roomText;
+                if (rightClick) Say(kingdom.Cancel(blueprint));
                 return;
             }
             foreach (var storage in kingdom.Storages)
             {
                 if (!storage.Cells.Contains(cell)) continue;
                 var stock = storage.Stock;
+                string tearDown = storage.Config != null && kingdom.Storages.Count > 1 ? "\n" + kingdom.TearDownText(cell) : "";
                 Hover = $"{storage.name}: {stock.Get(Economy.ResourceType.Wood)} wood, {stock.Get(Economy.ResourceType.Stone)} stone, " +
-                        $"{stock.Get(Economy.ResourceType.Food)} food ({stock.Total} / {stock.Capacity})";
+                        $"{stock.Get(Economy.ResourceType.Food)} food ({stock.Total} / {stock.Capacity}){tearDown}{roomText}";
+                if (rightClick && tearDown.Length > 0) Say(kingdom.TearDown(cell));
                 return;
             }
-            Hover = null;
+            string teardown = kingdom.TearDownText(cell);
+            if (teardown != null)
+            {
+                var built = kingdom.BuiltAt(cell);
+                string health = built is Door door ? $" ({Mathf.CeilToInt(door.Health.Current)}/{Mathf.CeilToInt(door.Health.Max)})"
+                    : built is Furniture f && f.Health != null ? $" ({Mathf.CeilToInt(f.Health.Current)}/{Mathf.CeilToInt(f.Health.Max)})" : "";
+                Hover = (built != null ? built.Config.displayName + health + "\n" : "") + teardown + roomText;
+                if (rightClick) Say(kingdom.TearDown(cell));
+                return;
+            }
+            Hover = room != null ? roomText.TrimStart('\n') : null;
         }
 
         public static string Describe(Blueprint b)
@@ -205,8 +271,9 @@ namespace KingdomGame.Building
             if (!b.HasAllResources)
             {
                 var parts = new List<string>();
-                foreach (var type in new[] { Economy.ResourceType.Wood, Economy.ResourceType.Stone })
-                    if (b.Required(type) > 0) parts.Add($"{b.Delivered(type)}/{b.Required(type)} {type.ToString().ToLowerInvariant()}");
+                foreach (var type in new[] { Economy.ResourceType.Wood, Economy.ResourceType.Stone, Economy.ResourceType.Food })
+                    if (b.Required(type) > 0)
+                        parts.Add($"{b.Delivered(type)}/{b.Required(type)} {(type == Economy.ResourceType.Food ? "cloth" : type.ToString().ToLowerInvariant())}");
                 return $"{b.Config.displayName}: builders are bringing resources ({string.Join(", ", parts)})";
             }
             int percent = Mathf.FloorToInt(b.Work / Mathf.Max(0.01f, b.Config.buildSeconds) * 100f);
@@ -225,6 +292,15 @@ namespace KingdomGame.Building
                 result.Add(horizontal ? new Vector2Int(a.x + i * sign * stepSize, a.y) : new Vector2Int(a.x, a.y + i * sign * stepSize));
         }
 
+        // Every cell of the rectangle between a and b (floors).
+        static void Area(Vector2Int a, Vector2Int b, int max, List<Vector2Int> result)
+        {
+            int x0 = Mathf.Min(a.x, b.x), x1 = Mathf.Max(a.x, b.x), y0 = Mathf.Min(a.y, b.y), y1 = Mathf.Max(a.y, b.y);
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1 && result.Count < max; x++)
+                    result.Add(new Vector2Int(x, y));
+        }
+
         void ShowPlacements(int count, BuildingConfig b = null)
         {
             while (ghosts.Count < count)
@@ -232,21 +308,22 @@ namespace KingdomGame.Building
                 ghosts.Add(MakeRenderer("Placing", SortOrder.Markers));
                 outlines.Add(MakeRenderer("Placing outline", SortOrder.Markers + 1));
             }
+            var size = b != null ? b.SizeFacing(rotation) : Vector2Int.one;
             for (int i = 0; i < ghosts.Count; i++)
             {
                 bool show = i < count && b != null;
                 ghosts[i].enabled = show;
                 outlines[i].enabled = show;
                 if (!show) continue;
-                var center = (Vector2)placements[i] + (Vector2)b.size * 0.5f;
+                var center = (Vector2)placements[i] + (Vector2)size * 0.5f;
                 var tint = valid[i] ? Good : Bad;
-                var look = kingdom.LookOf(b);
+                var look = kingdom.LookOf(b, rotation);
                 ghosts[i].sprite = look;
                 ghosts[i].transform.position = look != null ? center - (Vector2)look.bounds.center : center;
                 ghosts[i].color = tint;
                 outlines[i].sprite = kingdom.CellMarker;
                 outlines[i].transform.position = center;
-                outlines[i].transform.localScale = new Vector3(b.size.x, b.size.y, 1f);
+                outlines[i].transform.localScale = new Vector3(size.x, size.y, 1f);
                 outlines[i].color = new Color(tint.r, tint.g, tint.b, 0.9f);
             }
         }

@@ -41,14 +41,16 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
   pictures, so nature isn't rotated). `Art/ArtCatalog.cs` lists every picture
   (keys in `ArtKeys`). Build Game Scenes bakes them (`Editor/ArtBaker.cs`) at
   `ViewConfig.artDetail` pixels per tile (1024 by default, the user's choice:
-  about 0.55 GB of video memory) into sheets with normal maps in
+  about 0.65 GB of video memory; furniture, floors, doors, effects, zombies
+  and bodies at half that, `ArtItem.Detail`) into sheets with normal maps in
   `Assets/Art/Generated` (gitignored) plus `Assets/Data/Look/ArtLibrary`; the
   game gets sprites with `ArtSprites.Get(key)`. **Bump `ArtCatalog.Version`
   whenever any art changes**, or Unity keeps the old bake. Preview it with
   `dotnet run -c Release --project tools/art-preview/ArtPreview.csproj -- <folder> [pixels per tile] [--sheet=<name>]`
-  (about 90 s at 1024; game_day/night/close/outpost.png are mock screenshots lit
-  like URP: linear color, URP's falloff, bloom, contrast) and look at the PNGs
-  before committing art changes. Keep its lights and colors in step with the game.
+  (about a minute at 1024; game_day/night/close/outpost.png and
+  castle_night/close.png, horde_night.png are mock screenshots lit like URP:
+  linear color, URP's falloff, bloom, contrast) and look at the PNGs before
+  committing art changes. Keep its lights, colors and layouts in step with the game.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.
@@ -67,17 +69,23 @@ Networking (Phase 5): Fish-Net recommended, not installed yet.
 Phases 0 and 1 are done and tested in Unity. Phase 2 is split into 2A
 (Rust-style walls, C4, map with gathering, day/night, restyled dark realistic
 top-down), 2B (throne view, grid building, storehouses, builder villagers) and
-2C (villager needs, zombies, health and respawn). 2A and 2B are written and
-compile-checked but **not yet run in Unity**; the user tests them together with
-`docs/PHASE-2B-TEST.md`. Don't start 2C before they confirm. See `docs/ROADMAP.md`.
+2C (villager needs, zombies, health and respawn). The user then asked for a
+**castle and survival update** before testing (rooms, doors, floors,
+furniture, lights; main menu with Survival = endless zombie waves, and Free
+build). 2A, 2B and that update are written and compile-checked but **not yet
+run in Unity**; the user tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
+(plus `docs/PHASE-2B-TEST.md` for the details). Don't start 2C before they
+confirm. See `docs/ROADMAP.md` and `docs/DECISIONS.md` sections 14-15.
 The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 
 ## Checks to run before every commit
 
 - `dotnet run --project tools/tests/DestructionTests.csproj`: unit tests for
-  the Unity-free code: destruction math (`DamageShape.cs`, `PixelAlgorithms.cs`)
-  and path finding (`Villagers/GridPathfinder.cs`). Keep those files free of
-  `UnityEngine` so the tests can compile them.
+  the Unity-free code: destruction math (`DamageShape.cs`, `PixelAlgorithms.cs`),
+  path finding (`Villagers/GridPathfinder.cs`), the zombies' flow field and
+  waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`) and room finding
+  (`Building/RoomFinder.cs`). Keep those files free of `UnityEngine` so the
+  tests can compile them.
 - `python3 tools/check_meta.py`
 - `dotnet build tools/compile-check/CompileCheck.csproj` compiles every script
   in `Assets/` against Unity 2021.3 reference assemblies (NuGet

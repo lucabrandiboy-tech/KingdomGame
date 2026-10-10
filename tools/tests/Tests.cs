@@ -36,6 +36,20 @@ static partial class Tests
         Run(nameof(PathIsShortestOnRandomGrids), PathIsShortestOnRandomGrids);
         Run(nameof(SmoothedPathsStayClear), SmoothedPathsStayClear);
 
+        Run(nameof(FieldLeadsStraightToTarget), FieldLeadsStraightToTarget);
+        Run(nameof(FieldGoesRoundAShortWall), FieldGoesRoundAShortWall);
+        Run(nameof(FieldPrefersTheDoor), FieldPrefersTheDoor);
+        Run(nameof(FieldBreaksInWhenThereIsNoDoor), FieldBreaksInWhenThereIsNoDoor);
+        Run(nameof(FieldCantCrossTheImpossible), FieldCantCrossTheImpossible);
+        Run(nameof(FieldHeadStartMakesTargetsLessAttractive), FieldHeadStartMakesTargetsLessAttractive);
+        Run(nameof(FieldMatchesDijkstraOnRandomGrids), FieldMatchesDijkstraOnRandomGrids);
+        Run(nameof(WavesGrowAndBringNewKinds), WavesGrowAndBringNewKinds);
+
+        Run(nameof(RoomsAreClosedAreas), RoomsAreClosedAreas);
+        Run(nameof(RoomWithAGapIsNotARoom), RoomWithAGapIsNotARoom);
+        Run(nameof(CornersCloseARoom), CornersCloseARoom);
+        Run(nameof(HugeEnclosuresAreNotRooms), HugeEnclosuresAreNotRooms);
+
         Console.WriteLine(failures == 0 ? "All tests passed." : $"{failures} test(s) FAILED.");
         return failures == 0 ? 0 : 1;
     }

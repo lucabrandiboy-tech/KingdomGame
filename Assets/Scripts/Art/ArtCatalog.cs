@@ -25,6 +25,12 @@ namespace KingdomGame.Art
         public int Shrink = 1;
         /// <summary>For shadows: how blurry, in tiles.</summary>
         public float BlurTiles;
+        /// <summary>
+        /// Drawn at this share of the art detail (1 = full). Furniture, floors and creatures
+        /// never show big enough on screen to need full detail, and there are many of them,
+        /// so they're drawn at half to save video memory. Shadows get their item's.
+        /// </summary>
+        public float Detail = 1f;
     }
 
     /// <summary>What a wall material looks like, for drawing its tiles.</summary>
@@ -59,6 +65,23 @@ namespace KingdomGame.Art
         public const string GroundGrass = "Ground/Grass";
         public const string GroundDry = "Ground/Dry";
         public const string GroundMud = "Ground/Mud";
+
+        /// <summary>A piece of furniture (or a chest) facing direction <paramref name="rotation"/> (0..3).</summary>
+        public static string Turned(string art, int rotation) => $"{art}/{rotation}";
+        /// <summary>One of a floor's pictures (<see cref="ArtCatalog.FloorVariants"/> of each).</summary>
+        public static string FloorTile(string art, int variant) => $"{art}/{variant}";
+        public static string DoorClosed(string art, int rotation) => $"{art}/Closed/{rotation}";
+        public static string DoorOpen(string art, int rotation) => $"{art}/Open/{rotation}";
+        /// <summary>A small bright flame (torches, candles, fireplaces).</summary>
+        public const string Flame = "Effect/Flame";
+        public static string Blood(int variant) => $"Effect/Blood/{variant}";
+        public const string LootBag = "Effect/LootBag";
+        /// <summary>The fallen, lying facing one of <see cref="CharacterArt.DeadDirections"/> directions.</summary>
+        public static string VillagerDead(int direction) => $"Villager/Dead/{direction}";
+        public static string RulerDead(int direction) => $"Ruler/Dead/{direction}";
+        public static string Zombie(string kind, int direction, int frame) => $"Zombie/{kind}/{direction}/{frame}";
+        public static string ZombieDead(string kind, int direction) => $"Zombie/{kind}/Dead/{direction}";
+        public static string ZombieShadow(string kind) => $"Zombie/{kind}/Shadow";
     }
 
     /// <summary>
@@ -72,7 +95,11 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 1;
+        public const int Version = 2;
+        /// <summary>How many different pictures each kind of floor has.</summary>
+        public const int FloorVariants = 4;
+        /// <summary>Blood splatter pictures.</summary>
+        public const int BloodVariants = 4;
 
         public static List<ArtItem> Items(IList<WallLook> walls)
         {
@@ -121,6 +148,63 @@ namespace KingdomGame.Art
                     }
             Shadow(items, ArtKeys.Villager(false, 0, 0), "CharacterShadows", 0.02f, ArtKeys.VillagerShadow);
 
+            // Castle furniture (a picture for each way it can face), floors, doors, small effects,
+            // the zombies and the fallen: at half detail (see ArtItem.Detail).
+            const float half = 0.5f;
+            foreach (var piece in FurnitureArt.Pieces)
+                for (int r = 0; r < piece.Rotations; r++)
+                {
+                    var draw = piece.Draw;
+                    int rotation = r;
+                    string key = ArtKeys.Turned(piece.Art, r);
+                    Add(items, key, "Furniture", p => draw(p, rotation), true, half);
+                    if (!piece.Flat) Shadow(items, key, "FurnitureShadows", 0.025f);
+                }
+            foreach (bool stone in new[] { false, true })
+                for (int v = 0; v < FloorVariants; v++)
+                {
+                    int variant = v;
+                    Add(items, ArtKeys.FloorTile(stone ? FurnitureArt.StoneFloor : FurnitureArt.WoodFloor, v), "Floors",
+                        p => stone ? FurnitureArt.StoneFloorTile(p, variant) : FurnitureArt.WoodFloorTile(p, variant), true, half);
+                }
+            foreach (bool heavy in new[] { false, true })
+                for (int r = 0; r < 2; r++)
+                {
+                    string art = heavy ? FurnitureArt.HeavyDoor : FurnitureArt.WoodDoor;
+                    int rotation = r;
+                    Add(items, ArtKeys.DoorClosed(art, r), "Doors", p => FurnitureArt.Door(p, heavy, false, rotation), true, half);
+                    Add(items, ArtKeys.DoorOpen(art, r), "Doors", p => FurnitureArt.Door(p, heavy, true, rotation), true, half);
+                    Shadow(items, ArtKeys.DoorClosed(art, r), "FurnitureShadows", 0.02f);
+                }
+            Add(items, ArtKeys.Flame, "Effects", FurnitureArt.Flame, false, half);
+            for (int v = 0; v < BloodVariants; v++)
+            {
+                int variant = v;
+                Add(items, ArtKeys.Blood(v), "Effects", p => FurnitureArt.Blood(p, variant), false, half);
+            }
+            Add(items, ArtKeys.LootBag, "Effects", FurnitureArt.LootBag, false, half);
+            Shadow(items, ArtKeys.LootBag, "FurnitureShadows", 0.015f);
+
+            foreach (string kind in CharacterArt.ZombieKinds)
+            {
+                for (int d = 0; d < CharacterArt.ZombieDirections; d++)
+                    for (int f = 0; f < CharacterArt.ZombieFrames; f++)
+                    {
+                        int frame = f;
+                        float facing = d * 360f / CharacterArt.ZombieDirections;
+                        Add(items, ArtKeys.Zombie(kind, d, f), "Zombies", p => CharacterArt.ZombieFrame(p, kind, facing, frame), false, half);
+                    }
+                Shadow(items, ArtKeys.Zombie(kind, 0, 0), "CharacterShadows", 0.02f, ArtKeys.ZombieShadow(kind));
+            }
+            for (int d = 0; d < CharacterArt.DeadDirections; d++)
+            {
+                float facing = d * 360f / CharacterArt.DeadDirections;
+                foreach (string kind in CharacterArt.ZombieKinds)
+                    Add(items, ArtKeys.ZombieDead(kind, d), "Fallen", p => CharacterArt.ZombieDead(p, kind, facing), false, half);
+                Add(items, ArtKeys.VillagerDead(d), "Fallen", p => CharacterArt.VillagerDead(p, facing), false, half);
+                Add(items, ArtKeys.RulerDead(d), "Fallen", p => CharacterArt.RulerDead(p, facing), false, half);
+            }
+
             if (walls != null)
                 foreach (var wall in walls)
                     for (int v = 0; v < Mathf.Max(1, wall.Variants); v++)
@@ -141,20 +225,32 @@ namespace KingdomGame.Art
             return items;
         }
 
-        static void Add(List<ArtItem> items, string key, string sheet, Func<int, PixelImage> draw, bool normals) =>
-            items.Add(new ArtItem { Key = key, Sheet = sheet, Draw = draw, NormalMap = normals });
+        static void Add(List<ArtItem> items, string key, string sheet, Func<int, PixelImage> draw, bool normals, float detail = 1f) =>
+            items.Add(new ArtItem { Key = key, Sheet = sheet, Draw = draw, NormalMap = normals, Detail = detail });
 
-        // Shadows are blurry, so they're drawn 4 times smaller.
-        static void Shadow(List<ArtItem> items, string of, string sheet, float blurTiles, string key = null) =>
-            items.Add(new ArtItem { Key = key ?? ArtKeys.Shadow(of), Sheet = sheet, ShadowOf = of, Shrink = 4, BlurTiles = blurTiles });
+        // Shadows are blurry, so they're drawn 4 times smaller (than their item, at its detail).
+        static void Shadow(List<ArtItem> items, string of, string sheet, float blurTiles, string key = null)
+        {
+            var source = items.FindLast(i => i.Key == of);
+            items.Add(new ArtItem
+            {
+                Key = key ?? ArtKeys.Shadow(of), Sheet = sheet, ShadowOf = of, Shrink = 4, BlurTiles = blurTiles,
+                Detail = source != null ? source.Detail : 1f,
+            });
+        }
 
-        /// <summary>Draws one item at <paramref name="ppu"/> pixels per tile (shadows need their item, drawn the same way).</summary>
+        /// <summary>Pixels per tile an item is drawn at when the art is drawn at <paramref name="ppu"/> (its <see cref="ArtItem.Detail"/> share).</summary>
+        public static int DetailOf(ArtItem item, int ppu) =>
+            item.Detail >= 1f ? ppu : Mathf.Max(16, Mathf.RoundToInt(ppu * Mathf.Max(0.01f, item.Detail)));
+
+        /// <summary>Draws one item at <paramref name="ppu"/> pixels per tile, times its detail (shadows need their item, drawn the same way).</summary>
         public static PixelImage Render(ArtItem item, int ppu, Func<string, PixelImage> source)
         {
-            if (item.ShadowOf == null) return item.Draw(ppu);
+            int detail = DetailOf(item, ppu);
+            if (item.ShadowOf == null) return item.Draw(detail);
             var of = source(item.ShadowOf);
             int shrink = Mathf.Max(1, item.Shrink);
-            int blur = Mathf.Max(1, Mathf.RoundToInt(item.BlurTiles * ppu / shrink));
+            int blur = Mathf.Max(1, Mathf.RoundToInt(item.BlurTiles * detail / shrink));
             return of.Shadow(blur, 1f, shrink);
         }
 
@@ -167,7 +263,11 @@ namespace KingdomGame.Art
         }
 
         /// <summary>Pixels per tile of an item's picture when the art is drawn at <paramref name="ppu"/>.</summary>
-        public static float PixelsPerTile(ArtItem item, int ppu) => item.ShadowOf != null ? ppu / (float)Mathf.Max(1, item.Shrink) : ppu;
+        public static float PixelsPerTile(ArtItem item, int ppu)
+        {
+            int detail = DetailOf(item, ppu);
+            return item.ShadowOf != null ? detail / (float)Mathf.Max(1, item.Shrink) : detail;
+        }
     }
 
     /// <summary>A packed sheet: where each picture sits in it.</summary>
@@ -212,7 +312,6 @@ namespace KingdomGame.Art
                 return img;
             }
 
-            int padding = Mathf.Max(4, ppu / 16);
             var bySheet = new Dictionary<string, List<ArtItem>>();
             var sheetOrder = new List<string>();
             foreach (var item in items)
@@ -240,7 +339,7 @@ namespace KingdomGame.Art
                     foreach (string other in sheetOrder)
                         if (bySheet[other][0].Repeats) ground.AddRange(bySheet[other]);
                     var pictures = new PixelImage[ground.Count];
-                    DrawAll(pictures.Length, i => pictures[i] = ground[i].Draw(ppu), workers,
+                    DrawAll(pictures.Length, i => pictures[i] = ground[i].Draw(ArtCatalog.DetailOf(ground[i], ppu)), workers,
                         count => progress?.Invoke($"The ground: {count} of {ground.Count} drawn", (done + count) / (float)items.Count));
                     for (int i = 0; i < ground.Count; i++) repeating[ground[i].Key] = pictures[i];
                 }
@@ -253,7 +352,7 @@ namespace KingdomGame.Art
                 {
                     if (sheetItems[i].ShadowOf != null) return;
                     if (repeating.TryGetValue(sheetItems[i].Key, out var picture)) drawn[i] = picture;
-                    else drawn[i] = sheetItems[i].Draw(ppu);
+                    else drawn[i] = sheetItems[i].Draw(ArtCatalog.DetailOf(sheetItems[i], ppu));
                 }, workers, count => progress?.Invoke($"{sheetName}: {count} of {toDraw} pictures drawn", (done + count) / (float)items.Count));
                 foreach (var item in sheetItems) repeating.Remove(item.Key);
                 for (int i = 0; i < sheetItems.Count; i++)
@@ -284,7 +383,10 @@ namespace KingdomGame.Art
                 // Shelf packing, tallest first. Of the sheet widths that fit everything, the
                 // one with the least area wins (sheets needn't be square or a power of two);
                 // if even the widest can't, the rest go on another sheet (like "Nature_2").
-                int pad = sheetItems[0].ShadowOf != null ? Mathf.Max(4, padding / 4) : padding;
+                // Room between pictures: a sixteenth of a tile (shadows are drawn 4 times smaller).
+                int detail = 0;
+                foreach (var item in sheetItems) detail = Mathf.Max(detail, ArtCatalog.DetailOf(item, ppu));
+                int pad = sheetItems[0].ShadowOf != null ? Mathf.Max(4, detail / 64) : Mathf.Max(4, detail / 16);
                 var remaining = new List<int>();
                 for (int i = 0; i < drawn.Length; i++) remaining.Add(i);
                 remaining.Sort((a, b) => drawn[b].Height.CompareTo(drawn[a].Height));
@@ -322,7 +424,12 @@ namespace KingdomGame.Art
                         int i = remaining[k];
                         var img = drawn[i];
                         sheet.Albedo.Stamp(img, spots[i].x, spots[i].y);
-                        if (anyNormals && sheetItems[i].NormalMap) sheet.Normals.Stamp(img.NormalMap(), spots[i].x, spots[i].y);
+                        Extrude(sheet.Albedo, spots[i].x, spots[i].y, img.Width, img.Height, pad / 2);
+                        if (anyNormals && sheetItems[i].NormalMap)
+                        {
+                            sheet.Normals.Stamp(img.NormalMap(), spots[i].x, spots[i].y);
+                            Extrude(sheet.Normals, spots[i].x, spots[i].y, img.Width, img.Height, pad / 2);
+                        }
                         sheet.Entries.Add((sheetItems[i], spots[i].x, spots[i].y, img.Width, img.Height, img.Pivot, ArtCatalog.PixelsPerTile(sheetItems[i], ppu)));
                         drawn[i] = null;   // let go of the picture
                     }
@@ -351,6 +458,22 @@ namespace KingdomGame.Art
                 // Pass on the art code's own error, not the wrapper.
                 System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e.Flatten().InnerExceptions[0]).Throw();
             }
+        }
+
+        // Copies a picture's outermost pixels outwards into the room around it, so smooth
+        // filtering and the smaller versions (mipmaps) never mix its edge with the empty
+        // room: pictures that fill their tile edge to edge (floors, walls) would get seams.
+        static void Extrude(PixelImage sheet, int x, int y, int width, int height, int by)
+        {
+            if (by <= 0 || width <= 0 || height <= 0) return;
+            for (int sy = y - by; sy < y + height + by; sy++)
+                for (int sx = x - by; sx < x + width + by; sx++)
+                {
+                    if (sx >= x && sx < x + width && sy >= y && sy < y + height) { sx = x + width - 1; continue; }
+                    if (!sheet.Inside(sx, sy)) continue;
+                    int cx = Mathf.Clamp(sx, x, x + width - 1), cy = Mathf.Clamp(sy, y, y + height - 1);
+                    sheet.Pixels[sy * sheet.Width + sx] = sheet.Pixels[cy * sheet.Width + cx];
+                }
         }
 
         // Places pictures left to right in rows, in the given order, until one doesn't fit

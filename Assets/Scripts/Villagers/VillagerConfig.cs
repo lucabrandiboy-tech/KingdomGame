@@ -16,5 +16,10 @@ namespace KingdomGame.Villagers
         [Min(0.05f)] public float thinkSeconds = 0.5f;
         [Tooltip("Steps per second of the walking animation.")]
         [Min(0.1f)] public float stepsPerSecond = 7f;
+
+        [Header("Danger")]
+        [Min(1)] public float maxHealth = 60f;
+        [Tooltip("Villagers drop their work and run when they see a zombie this close (tiles).")]
+        [Min(0)] public float fleeDistance = 6f;
     }
 }

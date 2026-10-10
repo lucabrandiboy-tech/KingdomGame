@@ -68,6 +68,12 @@ namespace KingdomGame.Art
             new DefensePiece { Art = NapalmTrap, Draw = p => DrawNapalmTrap(p, false), Sprung = p => DrawNapalmTrap(p, true), Flat = true },
             new DefensePiece { Art = Hedgehog, Draw = DrawHedgehog },
             new DefensePiece { Art = FlameBunker, Draw = DrawFlameBunker, Head = DrawFlamethrower },
+            // Machines (MachineArt.cs).
+            new DefensePiece { Art = Smelter, Draw = DrawSmelter },
+            new DefensePiece { Art = Generator, Draw = DrawGenerator },
+            new DefensePiece { Art = Sawmill, Draw = DrawSawmill },
+            new DefensePiece { Art = Quarry, Draw = DrawQuarry },
+            new DefensePiece { Art = Conveyor, Draw = DrawConveyor, Flat = true },
             new DefensePiece { Art = Howitzer, Draw = DrawHowitzerBase, Head = DrawHowitzer },
         };
 

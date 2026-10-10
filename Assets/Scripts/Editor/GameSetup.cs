@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 12;
+        const int SettingsVersion = 13;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -73,8 +73,9 @@ namespace KingdomGame.EditorTools
             Folder("Assets", "Data");
             foreach (var area in new[] { "Destruction", "Combat", "Character", "Economy", "World", "Building", "Villagers", "Look", "Zombies", "Defenses", "Progression", "Network" })
                 Folder(DataRoot, area);
-            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming", "Traps", "Towers", "Mining" })
+            foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming", "Traps", "Towers", "Mining", "Machines" })
                 Folder(DataRoot + "/Building", area);
+            Folder(DataRoot + "/Economy", "Machines");
             Folder("Assets", "Scenes");
             Folder("Assets", "Art");
 
@@ -93,6 +94,7 @@ namespace KingdomGame.EditorTools
             bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
             bool nightHordes = oldContent != null && oldContent.settingsVersion < 11;
             bool endless = oldContent != null && oldContent.settingsVersion < 12;
+            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 13;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -253,6 +255,9 @@ namespace KingdomGame.EditorTools
             };
             var blasts = new List<DamageType>();
             var defensesByAge = Defenses(blasts);
+            var (medievalMachines, industrialMachines) = Machines();
+            defensesByAge[3].AddRange(medievalMachines);
+            defensesByAge[5].AddRange(industrialMachines);
             var defenses = new List<BuildingConfig>();
             foreach (var age in defensesByAge) defenses.AddRange(age);
             // Planted trees grow back after they're cut (a tree farm); a little less wood than a wild one.
@@ -417,6 +422,28 @@ namespace KingdomGame.EditorTools
                 content.survival.breakSeconds = 120f;
                 EditorUtility.SetDirty(content.survival);
                 Debug.Log("Survival hordes now come at night, 2 minutes apart. Your other settings were kept.");
+            }
+
+            if (machinesUpdate)
+            {
+                // The smelter (Medieval) and the machines (Industrial): on the build bar's Industry tab, unlocked with their age.
+                var all = new List<BuildingConfig>(medievalMachines);
+                all.AddRange(industrialMachines);
+                var list = new List<BuildingConfig>(content.buildMenu);
+                foreach (var m in all) if (!list.Contains(m)) list.Add(m);
+                content.buildMenu = list.ToArray();
+                var ages = content.progression != null ? content.progression.ages : null;
+                void Unlock(int age, List<BuildingConfig> things)
+                {
+                    if (ages == null || age >= ages.Length || ages[age] == null) return;
+                    var u = new List<BuildingConfig>(ages[age].startUnlocks ?? new BuildingConfig[0]);
+                    foreach (var m in things) if (!u.Contains(m)) u.Add(m);
+                    ages[age].startUnlocks = u.ToArray();
+                    EditorUtility.SetDirty(ages[age]);
+                }
+                Unlock(3, medievalMachines);
+                Unlock(5, industrialMachines);
+                Debug.Log("Added the smelter (Medieval) and machines (Industrial) on the Industry tab. Your other settings were kept.");
             }
 
             if (endless && content.network != null && content.network.kingdomSpacing < 560)
@@ -678,6 +705,38 @@ namespace KingdomGame.EditorTools
                 });
             }
             return Asset<ProgressionConfig>("Progression/ProgressionConfig", p => p.ages = ages);
+        }
+
+        // The smelter (Medieval: iron and wood into steel) and the Industrial machines built with that steel.
+        static (List<BuildingConfig> Medieval, List<BuildingConfig> Industrial) Machines()
+        {
+            MachineConfig Machine(string file, MachineKind kind, float seconds, int output, float reach, int woodIn, int ironIn) =>
+                Asset<MachineConfig>("Economy/Machines/" + file, m =>
+                {
+                    m.kind = kind; m.workSeconds = seconds; m.output = output; m.reach = reach; m.holds = 60;
+                    m.woodIn = woodIn; m.ironIn = ironIn; m.beltSpeed = 2f;
+                });
+            BuildingConfig Item(string file, string displayName, string art, int size, int wood, int stone, int steel, float seconds,
+                float health, float height, bool flat, MachineConfig machine) =>
+                Asset<BuildingConfig>("Building/Machines/" + file, b =>
+                {
+                    b.displayName = displayName; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Industry; b.art = art;
+                    b.size = new Vector2Int(size, size); b.rotations = 1; b.woodCost = wood; b.stoneCost = stone; b.steelCost = steel;
+                    b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = !flat; b.flat = flat;
+                    b.dragToPlaceLines = flat; b.roomTag = RoomTag.Workshop; b.machine = machine;
+                });
+            var medieval = new List<BuildingConfig>
+            {
+                Item("Smelter", "Smelter", FurnitureArt.Smelter, 2, 80, 150, 0, 30f, 800f, 0.9f, false, Machine("Smelter", MachineKind.Smelter, 20f, 1, 1f, 2, 2)),
+            };
+            var industrial = new List<BuildingConfig>
+            {
+                Item("Generator", "Generator", FurnitureArt.Generator, 2, 100, 100, 40, 35f, 700f, 1f, false, Machine("Generator", MachineKind.Generator, 30f, 0, 10f, 2, 0)),
+                Item("Sawmill", "Sawmill", FurnitureArt.Sawmill, 2, 80, 20, 30, 30f, 600f, 0.7f, false, Machine("Sawmill", MachineKind.Sawmill, 8f, 5, 8f, 0, 0)),
+                Item("Quarry", "Quarry", FurnitureArt.Quarry, 2, 40, 60, 40, 30f, 700f, 1f, false, Machine("Quarry", MachineKind.Quarry, 10f, 4, 1f, 0, 0)),
+                Item("Conveyor", "Conveyor belt", FurnitureArt.Conveyor, 1, 0, 2, 1, 2f, 150f, 0.05f, true, Machine("Conveyor", MachineKind.Conveyor, 1f, 1, 1f, 0, 0)),
+            };
+            return (medieval, industrial);
         }
 
         // Traps, barriers and towers, four or five for each age; returns them by age (blasts: their explosions, for the PixelWorld).

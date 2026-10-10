@@ -1,0 +1,39 @@
+using UnityEngine;
+
+namespace KingdomGame.Economy
+{
+    public enum MachineKind
+    {
+        /// <summary>Turns iron and wood from storage into steel, straight into storage (Medieval, no power).</summary>
+        Smelter,
+        /// <summary>Burns wood from storage; machines within its reach work while it burns.</summary>
+        Generator,
+        /// <summary>Cuts the trees within its reach (needs power); the wood goes out on conveyors.</summary>
+        Sawmill,
+        /// <summary>Digs stone out of the ground (needs power); the stone goes out on conveyors.</summary>
+        Quarry,
+        /// <summary>A piece of belt: carries what machines next to it make to a storehouse or chest it touches.</summary>
+        Conveyor,
+    }
+
+    /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
+    [CreateAssetMenu(menuName = "KingdomGame/Economy/Machine", fileName = "Machine")]
+    public sealed class MachineConfig : ScriptableObject
+    {
+        public MachineKind kind = MachineKind.Sawmill;
+        [Tooltip("Seconds per round of work (one batch made, or one load of fuel burnt).")]
+        [Min(0.5f)] public float workSeconds = 6f;
+        [Tooltip("How much each round makes (wood, stone or steel).")]
+        [Min(1)] public int output = 5;
+        [Tooltip("Sawmill: how far away it cuts trees. Generator: how far its power reaches. In tiles.")]
+        [Min(1)] public float reach = 8f;
+        [Tooltip("How much it keeps before it stops (when nothing takes its output away).")]
+        [Min(1)] public int holds = 60;
+        [Tooltip("Generator: wood burnt each round. Smelter: wood used for each batch.")]
+        [Min(0)] public int woodIn = 1;
+        [Tooltip("Smelter: iron used for each batch.")]
+        [Min(0)] public int ironIn = 2;
+        [Tooltip("How fast things ride the conveyor belts, in tiles a second.")]
+        [Min(0.2f)] public float beltSpeed = 2f;
+    }
+}

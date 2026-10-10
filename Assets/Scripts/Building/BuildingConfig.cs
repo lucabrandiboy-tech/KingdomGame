@@ -42,6 +42,8 @@ namespace KingdomGame.Building
         Houses,
         Farming,
         Mining,
+        /// <summary>The smelter and the machines.</summary>
+        Industry,
     }
 
     /// <summary>What a piece of furniture counts as, for naming the room it's in.</summary>
@@ -83,6 +85,8 @@ namespace KingdomGame.Building
         [Min(0)] public int stoneCost;
         [Tooltip("Food stands in for cloth and wool for now (rugs, beds, banners).")]
         [Min(0)] public int foodCost;
+        [Tooltip("Steel, smelted at a smelter (machines).")]
+        [Min(0)] public int steelCost;
         [Tooltip("Seconds of work for one builder once all the resources are there. Two builders take half as long.")]
         [Min(0.1f)] public float buildSeconds = 4f;
 
@@ -124,6 +128,9 @@ namespace KingdomGame.Building
         [Tooltip("What it does to zombies (a trap, an area, a mine or a tower), or empty for ordinary furniture.")]
         public Defenses.DefenseConfig defense;
 
+        [Header("Machines")]
+        [Tooltip("What it does by itself (smelter, generator, sawmill, quarry, conveyor), or None.")]
+        public Economy.MachineConfig machine;
         [Header("Mines")]
         [Tooltip("How the mine underground works (Mine only).")]
         public MineConfig mine;
@@ -159,6 +166,7 @@ namespace KingdomGame.Building
                 case ResourceType.Wood: return woodCost;
                 case ResourceType.Stone: return stoneCost;
                 case ResourceType.Food: return foodCost;
+                case ResourceType.Steel: return steelCost;
                 default: return 0;
             }
         }
@@ -170,6 +178,7 @@ namespace KingdomGame.Building
             if (woodCost > 0) parts.Add($"{woodCost * count} wood");
             if (stoneCost > 0) parts.Add($"{stoneCost * count} stone");
             if (foodCost > 0) parts.Add($"{foodCost * count} cloth (food)");
+            if (steelCost > 0) parts.Add($"{steelCost * count} steel");
             return parts.Count > 0 ? string.Join(", ", parts) : "free";
         }
     }

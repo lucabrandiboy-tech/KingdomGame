@@ -34,6 +34,8 @@ namespace KingdomGame.Building
             r.sortingOrder = config.flat ? SortOrder.Rugs : SortOrder.Furniture;
             // A trap or tower: it works on zombies by itself (or with a guard).
             if (config.defense != null) gameObject.AddComponent<Defenses.Defense>().Setup(this, config.defense, r, owner);
+            // A machine: works by itself (smelter, generator, sawmill, quarry) or carries things (conveyor).
+            if (config.machine != null) gameObject.AddComponent<Machine>().Setup(this, config.machine, r, owner);
 
             if (config.blocksMovement)
             {

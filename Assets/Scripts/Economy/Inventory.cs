@@ -11,6 +11,8 @@ namespace KingdomGame.Economy
         Copper,
         Iron,
         Gold,
+        /// <summary>Smelted from iron at a smelter (Medieval); machines are built from it.</summary>
+        Steel,
     }
 
     public static class ResourceText

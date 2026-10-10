@@ -167,7 +167,8 @@ namespace KingdomGame.UI
             y += row + font * 0.6f;
             if (GUI.Button(new Rect(x, y, width, row), saves != null ? "Save and go to the main menu" : "Main menu", button))
             {
-                if (saves != null && saves.CanSave(out _)) saves.Save(true);
+                // Not a brand-new game over the saved one, nor a game whose save couldn't be loaded (see SaveSystem).
+                if (saves != null && saves.SafeToOverwrite()) saves.Save(true);
                 ToMainMenu();
             }
             y += row + font * 0.6f;

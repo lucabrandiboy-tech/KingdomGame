@@ -1258,10 +1258,14 @@ namespace KingdomGame.Building
             if (NearestWithSpace(Throne != null ? Throne.Center : Vector2.zero) == null) return "storage is full";
             foreach (var n in ResourceNode.All)
                 if (n != null && !n.Empty && n.Config != null && n.Config.resource == type) return null;
+            if (nature != null && Throne != null && nature.FindNearest(Throne.Center, type, SearchRadius, null, out _)) return null;
             return type == ResourceType.Wood ? "no trees left: plant some (Farming tab)" : type == ResourceType.Food ? "no berries left: plant bushes (Farming tab)" : "no rocks left";
         }
 
-        readonly Dictionary<ResourceNode, float> unreachableNodes = new Dictionary<ResourceNode, float>();
+        // Trees, rocks and bushes a gatherer couldn't find a way to (by cell: their objects come and go), and until when.
+        readonly Dictionary<Vector2Int, float> unreachableNodes = new Dictionary<Vector2Int, float>();
+        /// <summary>How far gatherers look for trees, rocks and bushes, in tiles.</summary>
+        const int SearchRadius = 128;
         // Towers a guard couldn't find a way to, and until when to leave them be.
         readonly Dictionary<Defenses.Defense, float> unreachableTowers = new Dictionary<Defenses.Defense, float>();
 
@@ -1333,7 +1337,7 @@ namespace KingdomGame.Building
                 var node = NearestNode(type, v.Position, now);
                 if (node == null) break;
                 if (v.StartGather(node)) return;
-                unreachableNodes[node] = now + 15f;   // no way there (deep in a forest, walled in): try others for a while
+                unreachableNodes[node.Cell] = now + 15f;   // no way there (deep in a forest, walled in): try others for a while
             }
             if (v.CarryAmount > 0)
             {
@@ -1343,18 +1347,37 @@ namespace KingdomGame.Building
         }
 
         // The closest tree, rock or bush of this kind that nobody else is at; planted ones count as a little closer.
+        // Then, if none of those are near, the nearest one on the map (its square of the map is made real for it).
         ResourceNode NearestNode(ResourceType type, Vector2 from, float now)
         {
+            if (unreachableNodes.Count > 256)
+            {
+                // Forget the ones whose time is up.
+                var old = new List<Vector2Int>();
+                foreach (var pair in unreachableNodes) if (pair.Value <= now) old.Add(pair.Key);
+                foreach (var c in old) unreachableNodes.Remove(c);
+            }
             ResourceNode best = null;
             float bestDistance = float.MaxValue;
             foreach (var n in ResourceNode.All)
             {
                 if (n == null || n.Empty || n.Config == null || n.Config.resource != type || n.Gatherer != null) continue;
-                if (unreachableNodes.TryGetValue(n, out float until) && until > now) continue;
+                if (unreachableNodes.TryGetValue(n.Cell, out float until) && until > now) continue;
                 float d = Travel(from, n.transform.position) - (n.Config.replant ? 6f : 0f);
                 if (d < bestDistance) { best = n; bestDistance = d; }
             }
-            return best;
+            if (best != null && bestDistance < 32f) return best;
+            if (nature == null || Streamer == null) return best;
+            bool Skip(Vector2Int c)
+            {
+                if (unreachableNodes.TryGetValue(c, out float t) && t > now) return true;
+                var live = nature.Live(c);
+                return live != null && live.Gatherer != null;
+            }
+            if (!nature.FindNearest(from, type, SearchRadius, Skip, out var cell)) return best;
+            if (best != null && Travel(from, (Vector2)cell + new Vector2(0.5f, 0.5f)) >= bestDistance) return best;
+            var far = Streamer.ShowAt(cell);
+            return far != null && !far.Empty ? far : best;
         }
 
         /// <summary>Gives an idle villager something to do, if there is anything.</summary>
@@ -1678,35 +1701,39 @@ namespace KingdomGame.Building
         }
 
         /// <summary>
-        /// Where this kingdom's villagers work: round the throne and everything built, with a margin.
-        /// Trees and rocks there are always real objects, so gatherers can find them.
+        /// Where this kingdom's villagers work: round the throne and each building (not one box round all of
+        /// them: a mine far off would make everything in between real). The trees and rocks there are
+        /// always real objects. Adds the areas to <paramref name="into"/>.
         /// </summary>
-        public RectInt ActiveArea()
+        public void ActiveAreas(List<RectInt> into)
         {
-            const int margin = 24;
-            if (Throne == null) return default;
-            if (Time.time >= areaAt)
+            const int margin = 16;
+            if (Throne == null) return;
+            if (Time.time >= areasAt)
             {
-                areaAt = Time.time + 3f;
-                var c = Throne.Cells;
-                int x0 = c.xMin, y0 = c.yMin, x1 = c.xMax, y1 = c.yMax;
-                void Grow(RectInt r)
+                areasAt = Time.time + 3f;
+                areas.Clear();
+                void Add(RectInt r)
                 {
                     if (Nav == null || !Nav.Cells.Contains(r.position)) return;   // insides and mines are off the map
-                    x0 = Mathf.Min(x0, r.xMin); y0 = Mathf.Min(y0, r.yMin); x1 = Mathf.Max(x1, r.xMax); y1 = Mathf.Max(y1, r.yMax);
+                    areas.Add(new RectInt(r.x - margin, r.y - margin, r.width + margin * 2, r.height + margin * 2));
                 }
-                foreach (var s in storages) if (s != null) Grow(s.Cells);
-                foreach (var h in houses) if (h != null) Grow(h.Cells);
-                foreach (var m in mines) if (m != null) Grow(m.Cells);
-                foreach (var f in furniture) if (f != null) Grow(f.Cells);
-                foreach (var b in blueprints) if (b != null) Grow(b.Cells);
-                area = new RectInt(x0 - margin, y0 - margin, x1 - x0 + margin * 2, y1 - y0 + margin * 2);
+                var t = Throne.Cells;
+                areas.Add(new RectInt(t.x - margin * 2, t.y - margin * 2, t.width + margin * 4, t.height + margin * 4));
+                foreach (var s in storages) if (s != null) Add(s.Cells);
+                foreach (var h in houses) if (h != null) Add(h.Cells);
+                foreach (var m in mines) if (m != null) Add(m.Cells);
+                foreach (var f in furniture) if (f != null) Add(f.Cells);
+                foreach (var b in blueprints) if (b != null) Add(b.Cells);
             }
-            return area;
+            into.AddRange(areas);
         }
 
-        RectInt area;
-        float areaAt = -999f;
+        readonly List<RectInt> areas = new List<RectInt>();
+        float areasAt = -999f;
+
+        /// <summary>Makes trees and rocks far from anyone real when a villager heads for one.</summary>
+        public World.NatureStreamer Streamer { get; set; }
 
         // ------------------------------------------------------------ saving --
 
@@ -1722,15 +1749,18 @@ namespace KingdomGame.Building
             foreach (var s in storages) if (s != null) all.Add(s);
             foreach (var d in doors) if (d != null) all.Add(d);
             foreach (var f in furniture) if (f != null) all.Add(f);
+            var seen = new HashSet<IBuilt>(all);
             foreach (var layer in new[] { floors, roofs })
                 foreach (var thing in layer.Values)
-                    if (thing != null && !(thing is Blueprint) && thing is IBuilt built && !all.Contains(built)) all.Add(built);
+                    if (thing != null && !(thing is Blueprint) && thing is IBuilt built && seen.Add(built)) all.Add(built);
             return all;
         }
 
         /// <summary>Puts up a finished building from a saved game; a house or mine gets inside square <paramref name="slot"/> again.</summary>
         public Component Restore(BuildingConfig config, RectInt cells, int rotation, int slot)
         {
+            // In case the map came out a little different (its settings changed): no trees inside buildings.
+            if (config != null && config.kind != BuildingKind.Roof && Nav != null && Nav.Cells.Contains(cells.position)) ClearNature(cells);
             restoreSlot = slot;
             try { return Build(config, cells, rotation); }
             finally { restoreSlot = -1; }
@@ -1769,7 +1799,9 @@ namespace KingdomGame.Building
             roomsDirty = false;
             roomsCheckAt = Time.time + 0.25f;
 
-            var map = Nav.Cells;
+            // Rooms can only be inside the walls and doors, so only the box round them (and a ring
+            // of open ground) is searched, not the whole map.
+            var map = WallBox();
             int w = map.width, h = map.height;
             var walls = new bool[w * h];
             if (world != null)
@@ -1842,6 +1874,27 @@ namespace KingdomGame.Building
                 room.LabelAt = inside.Inner.center;
                 rooms.Add(room);
             }
+        }
+
+        // The walls' and doors' bounding box on the map, one cell bigger all round (empty when there are none).
+        RectInt WallBox()
+        {
+            var cells = Nav.Cells;
+            int x0 = int.MaxValue, y0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue;
+            void Add(Vector2Int c)
+            {
+                if (!cells.Contains(c)) return;
+                if (c.x < x0) x0 = c.x;
+                if (c.y < y0) y0 = c.y;
+                if (c.x > x1) x1 = c.x;
+                if (c.y > y1) y1 = c.y;
+            }
+            if (world != null) foreach (var c in world.ChunkCells) Add(c);
+            foreach (var d in doors) if (d != null) foreach (var c in d.Cells.allPositionsWithin) Add(c);
+            if (x0 > x1) return new RectInt(cells.x, cells.y, 0, 0);
+            x0 = Mathf.Max(cells.xMin, x0 - 1); y0 = Mathf.Max(cells.yMin, y0 - 1);
+            x1 = Mathf.Min(cells.xMax - 1, x1 + 1); y1 = Mathf.Min(cells.yMax - 1, y1 + 1);
+            return new RectInt(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
         }
 
         static string NameOf(int size, bool throne, Dictionary<RoomTag, int> tags)

@@ -35,7 +35,8 @@ namespace KingdomGame.Zombies
         RulerController ruler;
         Health rulerHealth;
         DayNightCycle dayNight;
-        RectInt map;
+        RectInt fullMap;     // the whole map
+        RectInt map;         // the part of it the paths are worked out over: round the kingdom (a 1024 map is too big to do whole)
         FlowField field;
         bool[] fixedBlock;   // the map's edge, trees, rocks and bushes (what's built is checked as it is right now)
         float fieldAt;
@@ -103,13 +104,56 @@ namespace KingdomGame.Zombies
             ruler = rulerController;
             rulerHealth = ruler != null ? ruler.Health : null;
             dayNight = cycle;
-            map = mapCells;
-            field = new FlowField(map.width, map.height);
-            fixedBlock = new bool[map.width * map.height];
-            bucketHead = new int[map.width * map.height];
+            fullMap = mapCells;
+            Resize(Wanted());
             if (world != null) world.CellChanged += OnCellChanged;
             if (kingdom != null) kingdom.Changed += OnKingdomChanged;
             UpdateField();
+        }
+
+        // ------------------------------------------------------------ window --
+
+        const int WindowStep = 32;
+
+        // The square the paths should cover: the kingdom out past the spawn ring, and the ruler if they're
+        // out beyond that, in steps of WindowStep tiles (so it doesn't change with every step taken).
+        RectInt Wanted()
+        {
+            var center = kingdom != null && kingdom.Throne != null ? kingdom.Throne.Center : fullMap.center;
+            float r = SpawnRadius(center, 14f) + 16f;
+            var want = Snap(new Rect(center.x - r, center.y - r, r * 2f, r * 2f));
+            if (ruler != null && rulerHealth != null && !rulerHealth.Dead && (kingdom == null || kingdom.PlaceAt((Vector2)ruler.transform.position) == null))
+            {
+                var at = CellOf(ruler.transform.position);
+                if (!new RectInt(want.x + 8, want.y + 8, want.width - 16, want.height - 16).Contains(at))
+                    want = Union(want, Snap(new Rect(at.x - 24, at.y - 24, 48, 48)));
+            }
+            return want;
+        }
+
+        RectInt Snap(Rect r)
+        {
+            int x0 = Mathf.FloorToInt((r.xMin - fullMap.xMin) / WindowStep) * WindowStep + fullMap.xMin;
+            int y0 = Mathf.FloorToInt((r.yMin - fullMap.yMin) / WindowStep) * WindowStep + fullMap.yMin;
+            int x1 = Mathf.CeilToInt((r.xMax - fullMap.xMin) / WindowStep) * WindowStep + fullMap.xMin;
+            int y1 = Mathf.CeilToInt((r.yMax - fullMap.yMin) / WindowStep) * WindowStep + fullMap.yMin;
+            x0 = Mathf.Max(x0, fullMap.xMin); y0 = Mathf.Max(y0, fullMap.yMin);
+            x1 = Mathf.Min(x1, fullMap.xMax); y1 = Mathf.Min(y1, fullMap.yMax);
+            return new RectInt(x0, y0, Mathf.Max(1, x1 - x0), Mathf.Max(1, y1 - y0));
+        }
+
+        static RectInt Union(RectInt a, RectInt b)
+        {
+            int x0 = Mathf.Min(a.xMin, b.xMin), y0 = Mathf.Min(a.yMin, b.yMin);
+            return new RectInt(x0, y0, Mathf.Max(a.xMax, b.xMax) - x0, Mathf.Max(a.yMax, b.yMax) - y0);
+        }
+
+        void Resize(RectInt window)
+        {
+            map = window;
+            field = new FlowField(map.width, map.height);
+            fixedBlock = new bool[map.width * map.height];
+            bucketHead = new int[map.width * map.height];
         }
 
         // ------------------------------------------------------------- frame --
@@ -222,6 +266,10 @@ namespace KingdomGame.Zombies
         {
             fieldAt = Time.time + FieldSeconds;
             fieldDirty = false;
+            // The window follows the kingdom (and a ruler out beyond it); it only grows while zombies are out.
+            var want = Wanted();
+            if (zombies.Count > 0) want = Union(want, map);
+            if (want.x != map.x || want.y != map.y || want.width != map.width || want.height != map.height) Resize(want);
             UpdateField();
         }
 
@@ -237,17 +285,17 @@ namespace KingdomGame.Zombies
                         extent = Mathf.Max(extent, ((Vector2)cell + new Vector2(0.5f, 0.5f) - center).magnitude);
                 if (kingdom != null)
                 {
-                    foreach (var s in kingdom.Storages) if (s != null && map.Contains(s.Cells.position)) extent = Mathf.Max(extent, (s.Center - center).magnitude);
+                    foreach (var s in kingdom.Storages) if (s != null && fullMap.Contains(s.Cells.position)) extent = Mathf.Max(extent, (s.Center - center).magnitude);
                     foreach (var h in kingdom.Houses) if (h != null) extent = Mathf.Max(extent, (h.Center - center).magnitude);
                     foreach (var m in kingdom.Mines) if (m != null) extent = Mathf.Max(extent, (m.Center - center).magnitude);
                     // Furniture out on the map: traps, towers, barriers.
                     foreach (var f in kingdom.AllFurniture)
-                        if (f != null && map.Contains(f.Cells.position)) extent = Mathf.Max(extent, (f.Cells.center - center).magnitude);
+                        if (f != null && fullMap.Contains(f.Cells.position)) extent = Mathf.Max(extent, (f.Cells.center - center).magnitude);
                 }
                 builtExtent = extent;
                 spawnRadius = extent + 12f;
             }
-            float most = Mathf.Min(map.width, map.height) * 0.5f - 3f;
+            float most = Mathf.Min(fullMap.width, fullMap.height) * 0.5f - 3f;
             return Mathf.Clamp(Mathf.Max(spawnRadius, minDistance + 4f), Mathf.Min(16f, most), most);
         }
 
@@ -356,6 +404,7 @@ namespace KingdomGame.Zombies
             if (world != null)
                 foreach (var cell in world.ChunkCells)
                 {
+                    if (!map.Contains(cell)) continue;
                     var wall = world.ChunkAt(cell)?.Owner;
                     float left = wall != null ? wall.SiegeHealthLeft / Mathf.Max(1, wall.Cells.width * wall.Cells.height) : 0f;
                     Set(cell, 1.5f + left / HealthPerTile);

@@ -56,11 +56,12 @@ namespace KingdomGame.World
 
             // Continuing a saved game: the same map again (from its seed), then what was built on it.
             SaveData saved = null;
+            string loadProblem = null;
             if (GameSession.LoadSave)
             {
                 GameSession.LoadSave = false;
-                saved = SaveFiles.Read(Mode, out string problem);
-                if (saved == null) Debug.LogWarning($"{problem}: starting a new game instead.");
+                saved = SaveFiles.Read(Mode, out loadProblem);
+                if (saved == null) Debug.LogWarning($"{loadProblem}: starting a new game instead.");
             }
 
             int seed = saved != null ? saved.seed : content.world.seed != 0 ? content.world.seed : Random.Range(1, int.MaxValue);
@@ -82,7 +83,8 @@ namespace KingdomGame.World
             // Trees, rocks and bushes are real objects round the ruler, the camera's view and the kingdom.
             parts.Streamer.Followed.Add(ruler.transform);
             parts.Streamer.View = Camera.main;
-            parts.Streamer.Areas.Add(kingdom.ActiveArea);
+            parts.Streamer.Areas.Add(kingdom.ActiveAreas);
+            kingdom.Streamer = parts.Streamer;
             if (content.view != null) canopies.NearAlpha = content.view.canopyFadeAlpha;
 
             CameraRig rig = null;
@@ -131,6 +133,8 @@ namespace KingdomGame.World
             var saves = gameObject.AddComponent<SaveSystem>();
             saves.Setup(content, Mode, seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
             if (saved != null) saves.Restore(saved);
+            // Continuing failed: this new game mustn't save over the save on its own.
+            else if (loadProblem != null) saves.KeepOldSave(loadProblem + ": started a new game instead");
             parts.Streamer.ShowNow();
             gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves);
             var debug = gameObject.AddComponent<DebugHud>();

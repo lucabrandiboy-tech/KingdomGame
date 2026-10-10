@@ -84,7 +84,53 @@ namespace KingdomGame.Economy
                 return !node.Empty;
             }
             look = kinds[kind[i] - 1].look;
+            Settle(i);
             return left[i] > 0;
+        }
+
+        // A node that isn't a real object finished growing (or growing back) while nobody was near:
+        // it's full now. (A real object does this itself in its Update.)
+        void Settle(int i)
+        {
+            if (!timers.TryGetValue(i, out var t) || Time.time < t.End || live.ContainsKey(i)) return;
+            timers.Remove(i);
+            var config = KindOf(i);
+            if (config == null) return;
+            left[i] = (short)Mathf.Clamp(config.amount, 0, short.MaxValue);
+            SetBlocks(i, true);
+        }
+
+        /// <summary>
+        /// The nearest cell to <paramref name="from"/> (within <paramref name="radius"/> tiles) with a tree, rock or
+        /// bush giving <paramref name="type"/> that has something left, skipping cells <paramref name="skip"/> says to.
+        /// Searches outwards ring by ring, so near ones are found quickly.
+        /// </summary>
+        public bool FindNearest(Vector2 from, ResourceType type, int radius, Func<Vector2Int, bool> skip, out Vector2Int found)
+        {
+            var center = new Vector2Int(Mathf.FloorToInt(from.x), Mathf.FloorToInt(from.y));
+            found = default;
+            float best = float.MaxValue;
+            for (int r = 0; r <= radius; r++)
+            {
+                // Once something is found, rings further out than it can't hold anything nearer.
+                if (best < float.MaxValue && r - 1 > Mathf.Sqrt(best)) break;
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    bool edgeRow = dy == -r || dy == r;
+                    // The ring only: whole top and bottom rows, just the two ends of the rows between.
+                    for (int dx = -r; dx <= r; dx += edgeRow ? 1 : 2 * r)
+                    {
+                        var cell = new Vector2Int(center.x + dx, center.y + dy);
+                        if (!Inside(cell)) continue;
+                        int i = Index(cell);
+                        if (kind[i] == 0 || kinds[kind[i] - 1].resource != type) continue;
+                        if (!Standing(cell, out _) || (skip != null && skip(cell))) continue;
+                        float d = (new Vector2(cell.x + 0.5f, cell.y + 0.5f) - from).sqrMagnitude;
+                        if (d < best) { best = d; found = cell; }
+                    }
+                }
+            }
+            return best < float.MaxValue;
         }
 
         /// <summary>What kind stands at a cell, or null.</summary>
@@ -178,6 +224,7 @@ namespace KingdomGame.Economy
         /// </summary>
         public void StateOf(int index, out int amountLeft, out bool growing, out float start, out float end)
         {
+            Settle(index);
             amountLeft = left[index];
             growing = false;
             start = end = 0f;
@@ -243,6 +290,7 @@ namespace KingdomGame.Economy
             for (int i = 0; i < flags.Length; i++)
             {
                 if ((flags[i] & Flag.Changed) == 0) continue;
+                Settle(i);
                 var c = new Change { Cell = CellOf(i), Kind = KindOf(i), Planted = IsPlanted(i), Variant = variant[i], Left = left[i], Grown = -1f, RegrowLeft = -1f };
                 if (timers.TryGetValue(i, out var t))
                 {
@@ -272,7 +320,7 @@ namespace KingdomGame.Economy
             kind[i] = KindIndex(c.Kind);
             variant[i] = (byte)Mathf.Clamp(c.Variant, 0, 255);
             left[i] = (short)Mathf.Clamp(c.Left, 0, short.MaxValue);
-            flags[i] = Flag.Changed | (c.Planted ? Flag.Planted : Flag.None);
+            flags[i] = Flag.Changed | (c.Planted ? Flag.Planted : Flag.None) | (flags[i] & Flag.Blocks);
             timers.Remove(i);
             float now = Time.time;
             bool blocks;
@@ -289,7 +337,6 @@ namespace KingdomGame.Economy
                 // Used up: a stump or bare bush stays in the way; a rock is gone.
                 blocks = c.Left > 0 || c.Kind.look != NodeLook.Rock;
             }
-            flags[i] &= ~Flag.Blocks;
             SetBlocks(i, blocks);
             Planted?.Invoke(c.Cell);
         }

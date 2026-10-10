@@ -29,6 +29,9 @@ namespace KingdomGame.World
         readonly Queue<int> toShow = new Queue<int>();
         readonly HashSet<int> queued = new HashSet<int>();
         readonly List<int> scratch = new List<int>();
+        readonly List<RectInt> areas = new List<RectInt>();
+        // Squares asked for one at a time (a villager going to a tree there), and until when.
+        readonly Dictionary<int, float> pinned = new Dictionary<int, float>();
         float checkAt;
 
         /// <summary>Follow these (rulers): the map round each is shown out to <see cref="FollowRadius"/> tiles.</summary>
@@ -36,8 +39,8 @@ namespace KingdomGame.World
         public float FollowRadius { get; set; } = 28f;
         /// <summary>The camera whose view is shown (with a margin), or null (a server has none).</summary>
         public Camera View { get; set; }
-        /// <summary>Areas always shown (kingdoms: where their villagers gather), asked for every check.</summary>
-        public readonly List<Func<RectInt>> Areas = new List<Func<RectInt>>();
+        /// <summary>Areas always shown (round each kingdom's buildings, where their villagers work): each adds its areas to the list it's given, every check.</summary>
+        public readonly List<Action<List<RectInt>>> Areas = new List<Action<List<RectInt>>>();
         /// <summary>The camera's view is shown at most this many tiles across (the throne view zoomed far out).</summary>
         public float MaxViewTiles { get; set; } = 220f;
 
@@ -111,11 +114,32 @@ namespace KingdomGame.World
                     var at = (Vector2)t.position;
                     Want(new Rect(at.x - FollowRadius, at.y - FollowRadius, FollowRadius * 2f, FollowRadius * 2f));
                 }
-            foreach (var area in Areas)
-            {
-                var r = area();
+            areas.Clear();
+            foreach (var add in Areas) add(areas);
+            foreach (var r in areas)
                 if (r.width > 0 && r.height > 0) Want(new Rect(r.x, r.y, r.width, r.height));
+            if (pinned.Count > 0)
+            {
+                scratch.Clear();
+                foreach (var pair in pinned)
+                    if (pair.Value < Time.unscaledTime) scratch.Add(pair.Key);
+                    else wanted.Add(pair.Key);
+                foreach (int c in scratch) pinned.Remove(c);
             }
+        }
+
+        /// <summary>
+        /// Makes the square round <paramref name="cell"/> real now and keeps it a minute (a villager is going
+        /// to a tree there), and returns that cell's node object (null if nothing stands there).
+        /// </summary>
+        public ResourceNode ShowAt(Vector2Int cell)
+        {
+            if (map == null || !map.Inside(cell)) return null;
+            int chunk = ChunkOf(cell);
+            pinned[chunk] = Time.unscaledTime + 60f;
+            if (!shown.ContainsKey(chunk)) Show(chunk);
+            else shown[chunk] = Time.unscaledTime;
+            return map.Live(cell);
         }
 
         void Want(Rect r)

@@ -4,6 +4,7 @@ using KingdomGame.Character;
 using KingdomGame.Destruction;
 using KingdomGame.Economy;
 using KingdomGame.Progression;
+using KingdomGame.Villagers;
 using KingdomGame.Zombies;
 using UnityEngine;
 
@@ -30,6 +31,8 @@ namespace KingdomGame.World
         ZombieDirector zombies;
         PixelWorld world;
         bool loaded;
+        // The saved game couldn't be (fully) loaded: it's only saved over when the player saves on purpose.
+        bool keepOldSave;
         float started, nextAutosave;
         string message;
         float messageUntil;
@@ -74,9 +77,22 @@ namespace KingdomGame.World
             if (SafeToOverwrite()) Save(true);
         }
 
-        // Autosaves and saving on the way out: not over a fallen game, and not a brand-new game over an old save.
-        bool SafeToOverwrite() =>
-            CanSave(out _) && (loaded || !HasSave || Time.unscaledTime - started >= NewGameGrace);
+        /// <summary>
+        /// Whether saving now on its own (autosave, going to the menu, quitting) is safe: not over a fallen
+        /// game, not a brand-new game over an old save, and not after a save that couldn't be loaded.
+        /// </summary>
+        public bool SafeToOverwrite() =>
+            !keepOldSave && CanSave(out _) && (loaded || !HasSave || Time.unscaledTime - started >= NewGameGrace);
+
+        /// <summary>
+        /// Continuing a saved game failed (<paramref name="why"/>): this game won't save over it on its
+        /// own, only if the player saves on purpose.
+        /// </summary>
+        public void KeepOldSave(string why)
+        {
+            keepOldSave = true;
+            Say($"{why}. Your saved game is kept: this game only saves over it if you save (Esc).", 10f);
+        }
 
         /// <summary>Whether the game can be saved right now (not once the ruler has fallen).</summary>
         public bool CanSave(out string why)
@@ -96,6 +112,7 @@ namespace KingdomGame.World
             {
                 SaveFiles.Write(mode, Collect());
                 loaded = true;   // this game is the saved one now
+                keepOldSave = false;
                 return quietly ? Say("Game saved", 2f) : Say("Game saved");
             }
             catch (System.Exception e)
@@ -271,7 +288,26 @@ namespace KingdomGame.World
         public int Restore(SaveData data)
         {
             if (data == null) return 0;
+            int missing;
+            try
+            {
+                missing = RestoreAll(data);
+            }
+            catch (System.Exception e)
+            {
+                // Half put back: playing on is fine, but this must never be saved over the real save on its own.
+                Debug.LogError($"Loading the saved game failed partway: {e}");
+                KeepOldSave("Loading the saved game failed partway (see the Console)");
+                return -1;
+            }
             loaded = true;
+            if (missing > 0) KeepOldSave($"{missing} saved things couldn't be put back (their assets are gone or renamed)");
+            else Say("Game loaded");
+            return missing;
+        }
+
+        int RestoreAll(SaveData data)
+        {
             int missing = 0;
             if (content.world != null && data.mapSize != 0 && data.mapSize != content.world.mapSize)
                 Debug.LogWarning($"This game was saved on a map {data.mapSize} tiles across, but World Config's Map Size is now {content.world.mapSize}: the map won't be quite the same.");
@@ -368,13 +404,15 @@ namespace KingdomGame.World
 
             foreach (var v in data.villagers)
             {
-                var villager = kingdom.AddVillager(v.position, (Villagers.Job)v.job);
-                villager.Restore(kingdom.PlaceAt(v.position), (ResourceType)Mathf.Clamp(v.carryType, 0, Inventory.TypeCount - 1), v.carryAmount, v.health);
+                var at = Reachable(v.position);
+                var villager = kingdom.AddVillager(at, (Villagers.Job)v.job);
+                villager.Restore(kingdom.PlaceAt(at), (ResourceType)Mathf.Clamp(v.carryType, 0, Inventory.TypeCount - 1), v.carryAmount, v.health);
             }
 
             foreach (var bag in data.bags) LootBag.Drop(bag.position, bag.amounts);
 
-            ruler.Restore(data.ruler.position, kingdom.PlaceAt(data.ruler.position), data.ruler.onWalls, data.ruler.health, data.ruler.backpack);
+            var rulerAt = Reachable(data.ruler.position);
+            ruler.Restore(rulerAt, kingdom.PlaceAt(rulerAt), data.ruler.onWalls, data.ruler.health, data.ruler.backpack);
 
             if (waves != null && data.hasSurvival)
             {
@@ -387,12 +425,21 @@ namespace KingdomGame.World
             }
 
             if (missing > 0) Debug.LogWarning($"{missing} saved things couldn't be put back: their assets are gone or renamed.");
-            Say(missing > 0 ? $"Game loaded ({missing} things couldn't be put back)" : "Game loaded");
             return missing;
+        }
+
+        // Somewhere they can be: where they were, unless that was inside a house or mine that couldn't
+        // be put back (far off the map, in nothing): then by the throne.
+        Vector2 Reachable(Vector2 position)
+        {
+            if (kingdom.Nav.Cells.Contains(NavGrid.CellAt(position)) || kingdom.PlaceAt(position) != null) return position;
+            return kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero;
         }
 
         DestructibleStructure Wall(StructureMaterial material, RectInt cells)
         {
+            var nature = NatureMap.Current;
+            if (nature != null) foreach (var c in cells.allPositionsWithin) nature.Clear(c);
             var go = new GameObject($"{material.name} wall");
             go.transform.SetParent(kingdom.transform, false);
             go.transform.position = new Vector3(cells.x, cells.y, 0f);

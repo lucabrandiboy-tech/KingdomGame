@@ -41,22 +41,23 @@ namespace KingdomGame.World
             Vector2 focus = Focus != null ? (Vector2)Focus.position : new Vector2(float.MaxValue, float.MaxValue);
             float radius2 = Radius * Radius;
             float step = Time.deltaTime * 4f;
+            // Leaves that are gone (their tree was taken away) are dropped as it goes, in one pass.
+            int kept = 0;
             for (int i = 0; i < canopies.Count; i++)
             {
                 var c = canopies[i];
-                if (c.Renderer == null)
-                {
-                    canopies.RemoveAt(i--);
-                    continue;
-                }
+                if (c.Renderer == null) continue;
                 float target = (c.Center - focus).sqrMagnitude < radius2 ? Mathf.Min(NearAlpha, FarAlpha) : FarAlpha;
-                if (Mathf.Approximately(c.Alpha, target)) continue;
-                c.Alpha = Mathf.MoveTowards(c.Alpha, target, step);
-                var color = c.Renderer.color;
-                color.a = c.Alpha;
-                c.Renderer.color = color;
-                canopies[i] = c;
+                if (!Mathf.Approximately(c.Alpha, target))
+                {
+                    c.Alpha = Mathf.MoveTowards(c.Alpha, target, step);
+                    var color = c.Renderer.color;
+                    color.a = c.Alpha;
+                    c.Renderer.color = color;
+                }
+                canopies[kept++] = c;
             }
+            canopies.RemoveRange(kept, canopies.Count - kept);
         }
     }
 }

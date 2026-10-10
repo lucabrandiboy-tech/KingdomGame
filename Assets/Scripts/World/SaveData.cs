@@ -16,8 +16,8 @@ namespace KingdomGame.World
     [Serializable]
     public sealed class SaveData
     {
-        /// <summary>Goes up when the layout changes in a way old saves can't be read.</summary>
-        public const int CurrentVersion = 1;
+        /// <summary>Goes up when the layout changes (2: nature is saved as changes to the map).</summary>
+        public const int CurrentVersion = 2;
 
         public int version = CurrentVersion;
         public string mode;
@@ -156,19 +156,30 @@ namespace KingdomGame.World
             Directory.CreateDirectory(Folder);
             string path = PathFor(mode), fresh = path + ".new";
             File.WriteAllText(fresh, JsonUtility.ToJson(data));
-            if (File.Exists(path))
-            {
-                File.Copy(path, path + ".bak", true);
-                File.Delete(path);
-            }
-            File.Move(fresh, path);
+            // Swaps the new file in, keeping the old one as .bak, in one step.
+            if (File.Exists(path)) File.Replace(fresh, path, path + ".bak");
+            else File.Move(fresh, path);
         }
 
-        /// <summary>The saved game for a mode, or null (with why in <paramref name="problem"/>) if there's none or it can't be read.</summary>
+        /// <summary>
+        /// The saved game for a mode, or null (with why in <paramref name="problem"/>) if there's none or it
+        /// can't be read. If the save itself is broken, the copy before it (.bak) is tried.
+        /// </summary>
         public static SaveData Read(GameMode mode, out string problem)
         {
-            problem = null;
             string path = PathFor(mode);
+            var data = ReadFile(path, out problem);
+            if (data != null || !File.Exists(path)) return data;
+            var older = ReadFile(path + ".bak", out string olderProblem);
+            if (older == null) return null;
+            Debug.LogWarning($"{problem}: loading the save before it instead ({path}.bak).");
+            problem = null;
+            return older;
+        }
+
+        static SaveData ReadFile(string path, out string problem)
+        {
+            problem = null;
             try
             {
                 if (!File.Exists(path))

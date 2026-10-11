@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 14;
+        const int SettingsVersion = 15;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -94,7 +94,8 @@ namespace KingdomGame.EditorTools
             bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
             bool nightHordes = oldContent != null && oldContent.settingsVersion < 11;
             bool endless = oldContent != null && oldContent.settingsVersion < 12;
-            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 14;
+            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 15;
+            bool costlyAges = oldContent != null && oldContent.settingsVersion < 15;
             bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 14;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
@@ -256,7 +257,8 @@ namespace KingdomGame.EditorTools
             };
             var blasts = new List<DamageType>();
             var defensesByAge = Defenses(blasts);
-            var (medievalMachines, industrialMachines) = Machines();
+            var (ironMachines, medievalMachines, industrialMachines) = Machines();
+            defensesByAge[2].AddRange(ironMachines);
             defensesByAge[3].AddRange(medievalMachines);
             defensesByAge[5].AddRange(industrialMachines);
             var defenses = new List<BuildingConfig>();
@@ -425,6 +427,18 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Survival hordes now come at night, 2 minutes apart. Your other settings were kept.");
             }
 
+            if (costlyAges)
+            {
+                // Research to each new age costs far more now (10,000 wood and stone to the Bronze Age, then steeper).
+                for (int i = 0; i < AdvanceNames.Length; i++)
+                {
+                    var tech = AssetDatabase.LoadAssetAtPath<TechConfig>($"{DataRoot}/{AdvancePath(i)}.asset");
+                    if (tech == null) continue;
+                    AgeTech(tech, i);
+                    EditorUtility.SetDirty(tech);
+                }
+                Debug.Log("Researching the next age costs much more now (10,000 wood and stone for the Bronze Age, rising after). Your other settings were kept.");
+            }
             if (gatesUpdate)
             {
                 // The big gates join the Walls & doors tab, after the doors.
@@ -438,7 +452,8 @@ namespace KingdomGame.EditorTools
             if (machinesUpdate)
             {
                 // The smelter (Medieval) and the machines (Industrial): on the build bar's Industry tab, unlocked with their age.
-                var all = new List<BuildingConfig>(medievalMachines);
+                var all = new List<BuildingConfig>(ironMachines);
+                all.AddRange(medievalMachines);
                 all.AddRange(industrialMachines);
                 var list = new List<BuildingConfig>(content.buildMenu);
                 foreach (var m in all) if (!list.Contains(m)) list.Add(m);
@@ -452,6 +467,7 @@ namespace KingdomGame.EditorTools
                     ages[age].startUnlocks = u.ToArray();
                     EditorUtility.SetDirty(ages[age]);
                 }
+                Unlock(2, ironMachines);
                 Unlock(3, medievalMachines);
                 Unlock(5, industrialMachines);
                 Debug.Log("Added the smelter (Medieval), machines (Industry tab) and electric lights that need a generator (Lights tab), all Industrial. Your other settings were kept.");
@@ -655,13 +671,13 @@ namespace KingdomGame.EditorTools
             int[,] cost =
             {
                 //  wood  stone  food copper iron gold
-                {  800,   800,   400,  150,    0,    0 },
-                { 1500,  1500,   800,  400,  200,    0 },
-                { 2500,  2500,  1500,  600,  600,   50 },
-                { 3500,  3500,  2000,  800, 1200,  150 },
-                { 5000,  5000,  2500, 1000, 2000,  300 },
-                { 6500,  6500,  3500, 1500, 3000,  500 },
-                { 8000,  8000,  4500, 2000, 4500,  800 },
+                {  10000,  10000,  3000,   500,     0,     0 },   // to the Bronze Age
+                {  20000,  20000,  6000,  1500,   500,     0 },
+                {  35000,  35000, 10000,  3000,  2000,   100 },
+                {  55000,  55000, 15000,  5000,  5000,   400 },
+                {  80000,  80000, 22000,  8000, 10000,  1000 },
+                { 115000, 115000, 30000, 12000, 18000,  2000 },
+                { 160000, 160000, 40000, 18000, 30000,  4000 },
             };
             int[] villagers = { 6, 9, 13, 18, 24, 30, 38 };
             t.researchHours = days[i] * 24f;
@@ -721,13 +737,13 @@ namespace KingdomGame.EditorTools
         }
 
         // The smelter (Medieval: iron and wood into steel) and the Industrial machines built with that steel.
-        static (List<BuildingConfig> Medieval, List<BuildingConfig> Industrial) Machines()
+        static (List<BuildingConfig> Iron, List<BuildingConfig> Medieval, List<BuildingConfig> Industrial) Machines()
         {
-            MachineConfig Machine(string file, MachineKind kind, float seconds, int output, float reach, int woodIn, int ironIn) =>
+            MachineConfig Machine(string file, MachineKind kind, float seconds, int output, float reach, int woodIn, int ironIn, bool power = true, float belt = 2f) =>
                 Asset<MachineConfig>("Economy/Machines/" + file, m =>
                 {
                     m.kind = kind; m.workSeconds = seconds; m.output = output; m.reach = reach; m.holds = 60;
-                    m.woodIn = woodIn; m.ironIn = ironIn; m.beltSpeed = 2f;
+                    m.woodIn = woodIn; m.ironIn = ironIn; m.beltSpeed = belt; m.needsPower = power;
                 });
             BuildingConfig Item(string file, string displayName, string art, int size, int wood, int stone, int steel, float seconds,
                 float health, float height, bool flat, MachineConfig machine) =>
@@ -738,6 +754,13 @@ namespace KingdomGame.EditorTools
                     b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = !flat; b.flat = flat;
                     b.dragToPlaceLines = flat; b.roomTag = RoomTag.Workshop; b.machine = machine;
                 });
+            // Iron Age: the first automation, worked by water and treadwheels (no power), slower than the Industrial machines.
+            var iron = new List<BuildingConfig>
+            {
+                Item("WaterSawmill", "Water sawmill", FurnitureArt.Sawmill, 2, 150, 60, 0, 25f, 400f, 0.7f, false, Machine("WaterSawmill", MachineKind.Sawmill, 16f, 4, 6f, 0, 0, false)),
+                Item("TreadwheelQuarry", "Treadwheel quarry", FurnitureArt.Quarry, 2, 120, 80, 0, 25f, 500f, 1f, false, Machine("TreadwheelQuarry", MachineKind.Quarry, 20f, 3, 1f, 0, 0, false)),
+                Item("RollerTrack", "Roller track", FurnitureArt.Conveyor, 1, 4, 1, 0, 2f, 80f, 0.05f, true, Machine("RollerTrack", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 1f)),
+            };
             var medieval = new List<BuildingConfig>
             {
                 Item("Smelter", "Smelter", FurnitureArt.Smelter, 2, 80, 150, 0, 30f, 800f, 0.9f, false, Machine("Smelter", MachineKind.Smelter, 20f, 1, 1f, 2, 2)),
@@ -752,7 +775,7 @@ namespace KingdomGame.EditorTools
                 Lamp(Item("ElectricLamp", "Electric lamp", FurnitureArt.ElectricLamp, 1, 5, 5, 3, 6f, 150f, 1.4f, false, Machine("ElectricLamp", MachineKind.Lamp, 1f, 0, 1.3f, 0, 0))),
                 Lamp(Item("Floodlight", "Floodlight", FurnitureArt.Floodlight, 1, 0, 10, 8, 10f, 250f, 1.5f, false, Machine("Floodlight", MachineKind.Lamp, 1f, 0, 2.6f, 0, 0))),
             };
-            return (medieval, industrial);
+            return (iron, medieval, industrial);
 
             // Lamps go on the Lights tab and can be put up inside houses.
             static BuildingConfig Lamp(BuildingConfig b)

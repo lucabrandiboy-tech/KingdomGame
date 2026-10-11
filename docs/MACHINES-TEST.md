@@ -53,3 +53,9 @@ Machines inside a house get power from a generator within 10 tiles of the house'
 Test: build a house, a quarry inside next to a blue square, a belt on that blue square, a belt on
 the blue square outside the same wall leading to a storehouse, and a generator near the house.
 Stone should go up in storage. Swap the belts onto the red squares: nothing comes out (red only goes in).
+
+## Iron Age automation (no power needed)
+
+On the Industry tab once you reach the Iron Age: **Water sawmill** (cuts trees within 6 tiles,
+4 wood every 16 s), **Treadwheel quarry** (3 stone every 20 s) and **Roller track** (a wooden
+conveyor, slower than the steel belt). They work like the Industrial ones but need no generator.

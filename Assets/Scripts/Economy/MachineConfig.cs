@@ -35,6 +35,8 @@ namespace KingdomGame.Economy
         [Min(0)] public int woodIn = 1;
         [Tooltip("Smelter: iron used for each batch.")]
         [Min(0)] public int ironIn = 2;
+        [Tooltip("Sawmills and quarries: only works within a burning generator's reach (Iron Age water and treadwheel ones don't need it).")]
+        public bool needsPower = true;
         [Tooltip("How fast things ride the conveyor belts, in tiles a second.")]
         [Min(0.2f)] public float beltSpeed = 2f;
     }

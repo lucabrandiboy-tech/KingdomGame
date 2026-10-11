@@ -136,7 +136,7 @@ namespace KingdomGame.Building
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
                 {
-                    if (held >= config.holds || !PoweredAt(PowerSpot())) return false;
+                    if (held >= config.holds || (config.needsPower && !PoweredAt(PowerSpot()))) return false;
                     if (config.kind == MachineKind.Quarry)
                     {
                         held += config.output;

@@ -76,6 +76,7 @@ namespace KingdomGame.EditorTools
             foreach (var area in new[] { "Doors", "Floors", "Furniture", "Lights", "Storage", "Walls", "Houses", "Farming", "Traps", "Towers", "Mining", "Machines" })
                 Folder(DataRoot + "/Building", area);
             Folder(DataRoot + "/Economy", "Machines");
+            Folder(DataRoot + "/Economy", "Plants");
             Folder("Assets", "Scenes");
             Folder("Assets", "Art");
 
@@ -275,6 +276,13 @@ namespace KingdomGame.EditorTools
             {
                 defensesByAge[i].AddRange(furnitureByAge[i]);
                 machinesByAge[i].AddRange(furnitureByAge[i]);
+            }
+            // Each age's better plant (Farming tab).
+            var plantsByAge = AgePlants();
+            for (int i = 0; i < plantsByAge.Length && i < defensesByAge.Length; i++)
+            {
+                defensesByAge[i].AddRange(plantsByAge[i]);
+                machinesByAge[i].AddRange(plantsByAge[i]);
             }
             PartCosts(defensesByAge);
             var tables = Workbenches();
@@ -782,7 +790,7 @@ namespace KingdomGame.EditorTools
             for (int age = 0; age < byAge.Length; age++)
                 foreach (var b in byAge[age])
                 {
-                    if (b == null) continue;
+                    if (b == null || b.kind == BuildingKind.Plant) continue;   // (planting a sapling takes no parts)
                     int scale = b.size.x * b.size.y >= 4 ? 2 : 1;
                     var parts = new List<ResourceAmount>();
                     for (int k = 0; k <= age && k < ResourceText.Parts; k++)
@@ -799,6 +807,46 @@ namespace KingdomGame.EditorTools
             for (int i = 0; i < want.Count; i++)
                 if (have[i].type != want[i].type || have[i].amount != want[i].amount) return false;
             return true;
+        }
+
+        // Each age's better plant for the Farming tab: fruit trees (food, picked by foragers), faster or bigger timber trees,
+        // and better berry bushes. Planted ones grow back after they're cut or picked. Tinted so they can be told apart.
+        static List<BuildingConfig>[] AgePlants()
+        {
+            var plants = new (string Name, NodeLook Look, ResourceType Gives, int Amount, float Grow, Color32 Tint, int Wood, int Food)[]
+            {
+                ("Wild berry patch", NodeLook.BerryBush, ResourceType.Food, 25, 120f, new Color32(255, 235, 235, 255), 1, 5),
+                ("Fruit tree", NodeLook.Tree, ResourceType.Food, 40, 200f, new Color32(255, 214, 200, 255), 3, 6),
+                ("Fast pine", NodeLook.Tree, ResourceType.Wood, 60, 120f, new Color32(190, 225, 200, 255), 2, 2),
+                ("Apple orchard tree", NodeLook.Tree, ResourceType.Food, 60, 180f, new Color32(255, 190, 170, 255), 3, 8),
+                ("Hardwood oak", NodeLook.Tree, ResourceType.Wood, 100, 200f, new Color32(255, 236, 200, 255), 3, 4),
+                ("Fertilised berry bush", NodeLook.BerryBush, ResourceType.Food, 40, 60f, new Color32(220, 255, 210, 255), 1, 8),
+                ("Hybrid poplar", NodeLook.Tree, ResourceType.Wood, 120, 90f, new Color32(210, 255, 190, 255), 2, 6),
+                ("Greenhouse berry bush", NodeLook.BerryBush, ResourceType.Food, 80, 45f, new Color32(200, 240, 255, 255), 1, 10),
+            };
+            var byAge = new List<BuildingConfig>[8];
+            for (int age = 0; age < 8; age++)
+            {
+                var p = plants[age];
+                string file = p.Name.Replace(" ", "");
+                var node = Asset<ResourceNodeConfig>($"Economy/Plants/{file}", n =>
+                {
+                    n.look = p.Look; n.resource = p.Gives; n.amount = p.Amount; n.perHit = p.Look == NodeLook.Tree ? 5 : 4;
+                    n.secondsPerHit = 0.45f; n.replant = p.Look == NodeLook.Tree; n.regrowSeconds = p.Grow;
+                    n.blockRadius = p.Look == NodeLook.Tree ? 0.18f : 0.25f; n.reach = p.Look == NodeLook.Tree ? 0.6f : 0.5f;
+                    n.tint = p.Tint; n.chipColor = p.Gives == ResourceType.Food ? new Color32(200, 60, 70, 255) : new Color32(150, 108, 66, 255);
+                });
+                int a = age;
+                var b = Asset<BuildingConfig>($"Building/Farming/{file}", c =>
+                {
+                    c.displayName = $"{p.Name} ({p.Amount} {(p.Gives == ResourceType.Food ? "food" : "wood")}, grows in {p.Grow / 60f:0.#} min)";
+                    c.kind = BuildingKind.Plant; c.category = BuildCategory.Farming; c.plant = node; c.growSeconds = p.Grow;
+                    c.size = Vector2Int.one; c.woodCost = p.Wood; c.foodCost = p.Food; c.buildSeconds = 2f; c.dragToPlaceLines = true;
+                    c.blocksMovement = true; c.health = 0f; c.roomTag = RoomTag.None;
+                });
+                byAge[age] = new List<BuildingConfig> { b };
+            }
+            return byAge;
         }
 
         // Each age's six pieces of furniture: a bed (homes, and rested villagers walk faster), a table (crafting), shelves

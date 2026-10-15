@@ -76,6 +76,12 @@ namespace KingdomGame.Economy
 
             look = Part("Look", sprites.Full, SortOrder.Nature, rotation);
             if (sprites.Canopy != null) leaves = Part("Leaves", sprites.Canopy, SortOrder.Canopies, rotation * 1.7f + 40f);
+            // Farmed kinds are tinted so they can be told apart.
+            if (config.tint.r != 255 || config.tint.g != 255 || config.tint.b != 255)
+            {
+                if (leaves != null) leaves.color = config.tint;
+                else look.color = config.tint;
+            }
             if (sprites.Shadow != null)
             {
                 // A tree's shadow comes from its leaves; everything else from its own picture.

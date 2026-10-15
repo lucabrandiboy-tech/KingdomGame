@@ -66,3 +66,20 @@ The bonus is in its name on the build bar, like "Feast table (+2.5% crafting)".
 
 They add to the XP upgrades (V). With every age's furniture, walking speed is about +44% and
 the others about +22%.
+
+## Better farming each age (Farming tab)
+
+| Age | Plant | Gives | Grows back in |
+|---|---|---|---|
+| Stone Age | Wild berry patch | 25 food | 2 min |
+| Bronze Age | Fruit tree (picked by foragers) | 40 food | 3.3 min |
+| Iron Age | Fast pine | 60 wood | 2 min |
+| Medieval | Apple orchard tree | 60 food | 3 min |
+| Renaissance | Hardwood oak | 100 wood | 3.3 min |
+| Industrial | Fertilised berry bush | 40 food | 1 min |
+| World War 1 | Hybrid poplar | 120 wood | 1.5 min |
+| World War 2 | Greenhouse berry bush | 80 food | 45 s |
+
+Plant them like saplings (drag a line). Trees grow back where they're cut; bushes refill. Each
+kind is tinted a little (fruit trees reddish, pines bluish green...) so you can tell them apart.
+They don't cost parts. Each age's farm machines are in the automation table above.

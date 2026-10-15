@@ -29,6 +29,8 @@ namespace KingdomGame.Economy
         [Min(0.05f)] public float blockRadius = 0.2f;
         [Tooltip("How close the ruler must be to gather, in tiles from the solid part's edge.")]
         [Min(0.1f)] public float reach = 0.6f;
+        [Tooltip("Tints its picture (white = as drawn): tells the farmed kinds apart (fruit trees, pines, oaks...).")]
+        public Color32 tint = new Color32(255, 255, 255, 255);
         [Tooltip("Color of the chips that fly off each swing.")]
         public Color32 chipColor = new Color32(150, 110, 70, 255);
     }

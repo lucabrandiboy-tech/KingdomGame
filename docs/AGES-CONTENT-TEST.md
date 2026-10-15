@@ -48,3 +48,21 @@ a storehouse. Farms, pits and drills put what they make straight into storage (t
 
 Each belt is faster than the one before (0.6 tiles a second for the log chute up to 4 for the
 express belt). All of them cost their age's parts (see above).
+
+## Furniture with boosts: 6 per age (Furniture tab)
+
+Every age has a bed, a table, shelves, a hearth or stove, a desk and a decoration. Each one makes
+the kingdom better at something; **each kind counts once** (ten feast tables boost as much as one).
+The bonus is in its name on the build bar, like "Feast table (+2.5% crafting)".
+
+| Piece | Boosts | Bonus |
+|---|---|---|
+| Bed | walking speed (rested villagers), and homes for 2 to 5 | +1% (Stone Age) up to +4.5% (World War 2) |
+| Table | crafting (weapons and parts) | same |
+| Shelves / rack / lockers | gathering and digging | same |
+| Hearth / oven / stove / kitchen | building (builders' work) | same |
+| Desk | research speed | same |
+| Decoration (totem, idol, banner, tapestry, bust, clock, flag, poster) | walking speed | same |
+
+They add to the XP upgrades (V). With every age's furniture, walking speed is about +44% and
+the others about +22%.

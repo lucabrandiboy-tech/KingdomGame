@@ -269,6 +269,13 @@ namespace KingdomGame.EditorTools
             // Each age's automation (machines), unlocked with the age; then each age's crafting table and the parts its things take.
             var machinesByAge = Machines(plantedTree);
             for (int i = 0; i < machinesByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(machinesByAge[i]);
+            // Each age's six pieces of furniture (beds give homes; each kind boosts something once).
+            var furnitureByAge = AgeFurniture();
+            for (int i = 0; i < furnitureByAge.Length && i < defensesByAge.Length; i++)
+            {
+                defensesByAge[i].AddRange(furnitureByAge[i]);
+                machinesByAge[i].AddRange(furnitureByAge[i]);
+            }
             PartCosts(defensesByAge);
             var tables = Workbenches();
             for (int i = 0; i < tables.Length && i < defensesByAge.Length; i++)
@@ -792,6 +799,58 @@ namespace KingdomGame.EditorTools
             for (int i = 0; i < want.Count; i++)
                 if (have[i].type != want[i].type || have[i].amount != want[i].amount) return false;
             return true;
+        }
+
+        // Each age's six pieces of furniture: a bed (homes, and rested villagers walk faster), a table (crafting), shelves
+        // (gathering), a hearth or stove (building), a desk (research) and a decoration (walking speed). Later ages' boost more.
+        static List<BuildingConfig>[] AgeFurniture()
+        {
+            string[,] names =
+            {
+                { "Straw bed", "Stone slab table", "Antler rack", "Clay hearth", "Tally-stone desk", "Carved totem" },
+                { "Reed mat bed", "Bronze-trim table", "Bronze tool rack", "Bread oven", "Clay tablet desk", "Bronze idol" },
+                { "Plank bed", "Iron-bound table", "Weapon rack", "Iron stove", "Scroll desk", "War banner" },
+                { "Four-poster bed", "Feast table", "Pantry shelves", "Great hearth", "Scriptorium desk", "Tapestry" },
+                { "Canopy bed", "Drafting table", "Tool cabinet", "Tiled stove", "Globe lectern", "Marble bust" },
+                { "Iron bed", "Factory table", "Supply lockers", "Coal range", "Office desk", "Grandfather clock" },
+                { "Barracks bunk", "Map table", "Ammo shelves", "Field kitchen", "Telegraph desk", "Regimental flag" },
+                { "Steel bunk", "Planning table", "Storage racks", "Canteen kitchen", "Radio desk", "Victory poster" },
+            };
+            var boosts = new[] { BoostKind.Speed, BoostKind.Crafting, BoostKind.Gathering, BoostKind.Building, BoostKind.Research, BoostKind.Speed };
+            var tags = new[] { RoomTag.Bed, RoomTag.Table, RoomTag.Storage, RoomTag.Cooking, RoomTag.Books, RoomTag.Decor };
+            string[] boostNames = { "", "speed", "gathering", "crafting", "building", "research" };
+            var byAge = new List<BuildingConfig>[8];
+            for (int age = 0; age < 8; age++)
+            {
+                byAge[age] = new List<BuildingConfig>();
+                for (int k = 0; k < FurnitureArt.FurnitureKinds; k++)
+                {
+                    int a = age, kind = k;
+                    float percent = 1f + age * 0.5f;
+                    int sleeps = kind == 0 ? 2 + age / 2 : 0;
+                    string label = $"{names[age, kind]} (+{percent:0.#}% {boostNames[(int)boosts[kind]]}{(sleeps > 0 ? $", homes for {sleeps}" : "")})";
+                    var b = Asset<BuildingConfig>($"Building/Furniture/Age{age + 1}_{names[age, kind].Replace(" ", "").Replace("-", "")}", c =>
+                    {
+                        c.kind = BuildingKind.Furniture; c.category = BuildCategory.Furniture; c.art = FurnitureArt.AgeFurniture(a, kind);
+                        var size = FurnitureArt.FurnitureSize(kind);
+                        c.size = size; c.rotations = 1; c.buildSeconds = 6f + a * 2f; c.health = 150f + a * 40f;
+                        c.height = kind == 5 ? 1.4f : kind == 2 ? 0.9f : 0.45f; c.blocksMovement = true; c.flat = false; c.dragToPlaceLines = false;
+                        c.roomTag = tags[kind];
+                        c.woodCost = kind == 3 ? 10 + a * 5 : 25 + a * 10;
+                        c.stoneCost = kind == 3 || kind == 5 ? 30 + a * 12 : a * 4;
+                        c.foodCost = kind == 0 ? 10 + a * 5 : 0;   // (cloth: bedding)
+                        if (kind == 3) { c.lightSize = 0.8f; c.flames = new[] { Vector2.zero }; c.flameSize = 1.2f; }
+                    });
+                    // Set every time (older settings get them too): its name, boost and homes.
+                    if (b.displayName != label || b.boost != boosts[kind] || Mathf.Abs(b.boostPercent - percent) > 0.001f || b.sleeps != sleeps)
+                    {
+                        b.displayName = label; b.boost = boosts[kind]; b.boostPercent = percent; b.sleeps = sleeps;
+                        EditorUtility.SetDirty(b);
+                    }
+                    byAge[age].Add(b);
+                }
+            }
+            return byAge;
         }
 
         // Each age's crafting table: a Crafter villager works at it, making that age's part from what's in storage

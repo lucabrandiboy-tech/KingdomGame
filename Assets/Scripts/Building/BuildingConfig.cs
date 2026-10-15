@@ -46,6 +46,9 @@ namespace KingdomGame.Building
         Industry,
     }
 
+    /// <summary>What a piece of furniture makes the villagers better at (each kind of furniture counts once).</summary>
+    public enum BoostKind { None, Speed, Gathering, Crafting, Building, Research }
+
     /// <summary>What a piece of furniture counts as, for naming the room it's in.</summary>
     public enum RoomTag
     {
@@ -109,6 +112,9 @@ namespace KingdomGame.Building
         public bool flat;
         [Tooltip("What it counts as when the game names the room it's in.")]
         public RoomTag roomTag = RoomTag.Decor;
+        [Tooltip("What it makes the kingdom better at, by Boost Percent: walking speed, gathering, crafting, building or research speed. Each kind of furniture counts once, however many you build.")]
+        public BoostKind boost;
+        [Min(0)] public float boostPercent;
         [Tooltip("Beds: how many villagers it gives a home (survival: more survivors can join).")]
         [Min(0)] public int sleeps;
         [Tooltip("Doors: opened and shut only by a lever (E at it): open, zombies walk straight through; shut, it's a wall to them.")]

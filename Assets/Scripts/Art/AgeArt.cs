@@ -90,6 +90,132 @@ namespace KingdomGame.Art
                 yield return new DefensePiece { Art = Workbench(a), Draw = p => DrawWorkbench(p, a) };
             }
             foreach (var m in MachinePictures) yield return new DefensePiece { Art = AgeMachine(m.Name), Draw = m.Draw, Flat = m.Flat };
+            for (int age = 0; age < 8; age++)
+                for (int k = 0; k < FurnitureKinds; k++)
+                {
+                    int a = age, kind = k;
+                    yield return new DefensePiece { Art = AgeFurniture(a, kind), Draw = p => DrawAgeFurniture(p, a, kind) };
+                }
+        }
+
+        // ----------------------------------------------------------- furniture --
+
+        /// <summary>Each age's six pieces of furniture: bed, table, shelf, hearth, desk and decoration.</summary>
+        public const int FurnitureKinds = 6;
+        public static string AgeFurniture(int age, int kind) => $"Age/F/{age}/{kind}";
+        /// <summary>Tiles each kind takes (bed 1x2, table and shelf 2x1, the rest 1x1).</summary>
+        public static Vector2Int FurnitureSize(int kind) => kind == 0 ? new Vector2Int(1, 2) : kind == 1 || kind == 2 ? new Vector2Int(2, 1) : Vector2Int.one;
+
+        static PixelImage DrawAgeFurniture(int ppu, int age, int kind)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var size = FurnitureSize(kind);
+            var img = Canvas(size.x, size.y, t);
+            uint s = 3000u + (uint)(age * 10 + kind) * 13u;
+            bool modern = age >= 5;
+            var frame = modern ? look.Metal : look.Wood;
+            var frameSurface = modern ? Surface.Metal : Surface.Wood;
+            switch (kind)
+            {
+                case 0:   // a bed: frame, mattress, blanket, pillow (posts and a canopy edge for the grand ones)
+                    if (age == 0)
+                    {
+                        Round(img, t, 0.5f, 1f, 0.45f, PixelImage.Rgb(196, 170, 100), 0.12f, 0.08f, Surface.Cloth, s);   // a heap of straw
+                        Block(img, t, 0.2f, 0.35f, 0.8f, 1.2f, look.Cloth, 0.16f, 0.08f, Surface.Cloth, s + 1);         // a hide
+                        break;
+                    }
+                    Block(img, t, 0.06f, 0.06f, 0.94f, 1.94f, frame, 0.3f, 0.03f, frameSurface, s, false, 0.1f);
+                    Block(img, t, 0.13f, 0.13f, 0.87f, 1.87f, PixelImage.Rgb(214, 206, 186), 0.38f, 0.06f, Surface.Cloth, s + 1);   // the mattress
+                    Block(img, t, 0.13f, 0.13f, 0.87f, 1.3f, look.Cloth, 0.42f, 0.08f, Surface.Cloth, s + 2);                         // the blanket
+                    Block(img, t, 0.22f, 1.5f, 0.78f, 1.8f, PixelImage.Rgb(232, 226, 210), 0.45f, 0.1f, Surface.Cloth, s + 3);         // the pillow
+                    if (age == 3 || age == 4)
+                        foreach (var (x, y) in new[] { (0.08f, 0.08f), (0.92f, 0.08f), (0.08f, 1.92f), (0.92f, 1.92f) })
+                            Round(img, t, x, y, 0.07f, look.Trim, 1.2f, 0.02f, Surface.Wood, s + 4);
+                    if (age >= 6) Block(img, t, 0.06f, 1.88f, 0.94f, 1.96f, look.Metal, 0.7f, 0.01f, Surface.Metal, s + 5);   // a bunk rail
+                    break;
+
+                case 1:   // a table with the age's things on it (bowls, a map, plans)
+                    Block(img, t, 0.05f, 0.08f, 1.95f, 0.92f, age == 0 ? look.Stone : frame, 0.45f, 0.03f, age == 0 ? Surface.Stone : frameSurface, s, true, 0.25f);
+                    if (age >= 4)
+                    {
+                        Block(img, t, 0.4f, 0.25f, 1.4f, 0.75f, PixelImage.Rgb(222, 210, 180), 0.47f, 0.005f, Surface.Plain, s + 1);   // a map / plans
+                        Rod(img, t, 0.6f, 0.4f, 1.2f, 0.6f, 0.01f, PixelImage.Rgb(120, 60, 50), 0.48f, 0.48f);
+                    }
+                    else
+                        for (int i = 0; i < 3; i++)
+                        {
+                            Round(img, t, 0.45f + i * 0.55f, 0.5f, 0.13f, age == 1 ? look.Metal : PixelImage.Rgb(150, 110, 80), 0.5f, 0.04f, Surface.Wood, s + 2 + (uint)i);
+                            Round(img, t, 0.45f + i * 0.55f, 0.5f, 0.08f, PixelImage.Rgb(170, 120, 60), 0.51f, 0f, Surface.Plain, s + 5);
+                        }
+                    if (age == 3) Block(img, t, 0.05f, 0.4f, 1.95f, 0.6f, look.Cloth, 0.46f, 0.005f, Surface.Cloth, s + 6);   // a runner
+                    break;
+
+                case 2:   // shelves (or racks and lockers) with the age's goods
+                    Block(img, t, 0.04f, 0.5f, 1.96f, 0.96f, frame, 0.9f, 0.03f, frameSurface, s, true, 0.2f);
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float x = 0.25f + i * 0.47f;
+                        var goods = age >= 6 ? PixelImage.Rgb(90, 100, 70) : age == 0 ? PixelImage.Rgb(196, 186, 160) : i % 2 == 0 ? look.Metal : look.Cloth;
+                        if (age == 0) Rod(img, t, x - 0.15f, 0.65f, x + 0.15f, 0.85f, 0.03f, goods, 0.95f, 0.95f);   // antlers and bones
+                        else Block(img, t, x - 0.16f, 0.58f, x + 0.16f, 0.9f, goods, 0.95f, 0.02f, Surface.Wood, s + 1 + (uint)i);
+                    }
+                    break;
+
+                case 3:   // a hearth or stove (its fire is drawn by the game)
+                    if (age < 5)
+                    {
+                        Round(img, t, 0.5f, 0.5f, 0.42f, age == 4 ? PixelImage.Rgb(200, 190, 170) : look.Stone, 0.5f, 0.1f, Surface.Stone, s);
+                        Round(img, t, 0.5f, 0.5f, 0.24f, PixelImage.Rgb(40, 30, 26), 0.2f, 0f, Surface.Plain, s + 1);
+                        if (age == 1) Round(img, t, 0.5f, 0.5f, 0.24f, PixelImage.Rgb(140, 90, 60), 0.55f, 0.15f, Surface.Stone, s + 2);   // a bread oven dome
+                    }
+                    else
+                    {
+                        Block(img, t, 0.1f, 0.1f, 0.9f, 0.9f, look.Metal, 0.6f, 0.03f, Surface.Metal, s);
+                        for (int i = 0; i < 2; i++) Ring(img, t, 0.32f + i * 0.36f, 0.62f, 0.07f, 0.12f, PixelImage.Rgb(40, 40, 40), 0.62f, Surface.Metal, s + 1);
+                        Round(img, t, 0.75f, 0.2f, 0.08f, PixelImage.Rgb(40, 40, 40), 1.1f, 0f, Surface.Metal, s + 2);   // the chimney pipe
+                    }
+                    break;
+
+                case 4:   // a desk with the age's knowledge: tally stones, clay tablets, scrolls, books, a globe, a telegraph, a radio
+                    Block(img, t, 0.06f, 0.15f, 0.94f, 0.85f, age == 0 ? look.Stone : frame, 0.45f, 0.03f, age == 0 ? Surface.Stone : frameSurface, s, true, 0.2f);
+                    switch (age)
+                    {
+                        case 0: for (int i = 0; i < 5; i++) Stud(img, t, 0.25f + i * 0.12f, 0.5f, 0.04f, PixelImage.Rgb(200, 196, 186), 0.5f); break;
+                        case 1: Block(img, t, 0.25f, 0.3f, 0.6f, 0.7f, PixelImage.Rgb(170, 130, 90), 0.5f, 0.02f, Surface.Stone, s + 1); break;
+                        case 2: case 3: Rod(img, t, 0.25f, 0.45f, 0.75f, 0.55f, 0.08f, PixelImage.Rgb(222, 210, 180), 0.5f, 0.5f); break;
+                        case 4: Round(img, t, 0.5f, 0.5f, 0.24f, PixelImage.Rgb(70, 110, 150), 0.8f, 0.2f, Surface.Plain, s + 2); Ring(img, t, 0.5f, 0.5f, 0.22f, 0.27f, look.Trim, 0.82f, Surface.Metal, s + 3); break;
+                        default:
+                            Block(img, t, 0.25f, 0.3f, 0.75f, 0.7f, PixelImage.Rgb(60, 64, 58), 0.6f, 0.02f, Surface.Metal, s + 4);
+                            Round(img, t, 0.4f, 0.5f, 0.06f, age >= 6 ? PixelImage.Rgb(240, 200, 120) : look.Trim, 0.62f, 0f, Surface.Plain, s + 5);
+                            break;
+                    }
+                    break;
+
+                default:  // a decoration: totem, idol, banner, tapestry, bust, clock, flag, poster
+                    switch (age)
+                    {
+                        case 0:
+                            Round(img, t, 0.5f, 0.5f, 0.28f, look.Wood, 1.4f, 0.05f, Surface.Wood, s);
+                            Ring(img, t, 0.5f, 0.5f, 0.15f, 0.22f, PixelImage.Rgb(170, 60, 40), 1.42f, Surface.Plain, s + 1);
+                            break;
+                        case 1: case 4:
+                            Block(img, t, 0.25f, 0.25f, 0.75f, 0.75f, look.Stone, 0.4f, 0.04f, Surface.Stone, s);   // the plinth
+                            Round(img, t, 0.5f, 0.5f, 0.17f, age == 1 ? look.Metal : PixelImage.Rgb(226, 222, 214), 1.1f, 0.12f, Surface.Metal, s + 1);
+                            break;
+                        case 5:
+                            Block(img, t, 0.25f, 0.2f, 0.75f, 0.8f, look.Wood, 1.6f, 0.03f, Surface.Wood, s);   // the clock case
+                            Round(img, t, 0.5f, 0.6f, 0.13f, PixelImage.Rgb(230, 224, 200), 1.62f, 0f, Surface.Plain, s + 1);
+                            break;
+                        default:
+                            Round(img, t, 0.5f, 0.5f, 0.06f, look.Wood, 1.5f, 0.02f, Surface.Wood, s);   // a pole with a banner, flag or poster board
+                            Block(img, t, 0.5f, 0.4f, 0.95f, 0.65f, look.Cloth, 1.45f, 0.01f, Surface.Cloth, s + 1);
+                            Block(img, t, 0.55f, 0.48f, 0.9f, 0.57f, look.Trim, 1.46f, 0f, Surface.Cloth, s + 2);
+                            break;
+                    }
+                    break;
+            }
+            return Finish(img, t, 0);
         }
 
         // ------------------------------------------------------------ machines --

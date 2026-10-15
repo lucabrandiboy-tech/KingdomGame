@@ -1413,8 +1413,36 @@ namespace KingdomGame.Building
         public int Level(Upgrade u) => upgradeLevels[(int)u];
         /// <summary>Experience for the next level: more each time (100, 135, 182, 246...).</summary>
         public int UpgradeCost(Upgrade u) => Mathf.RoundToInt(100f * Mathf.Pow(1.35f, Level(u)));
-        /// <summary>How much faster villagers are at it: 1 + 5% a level (and furniture that helps, later).</summary>
-        public float Boost(Upgrade u) => 1f + PerLevel * Level(u);
+        /// <summary>How much faster villagers are at it: 1 + 5% a level, plus what furniture adds.</summary>
+        public float Boost(Upgrade u) => 1f + PerLevel * Level(u)
+            + FurnitureBoost(u == Upgrade.Speed ? BoostKind.Speed : u == Upgrade.Gathering ? BoostKind.Gathering : BoostKind.Crafting);
+
+        /// <summary>Builders' work speed (furniture that helps).</summary>
+        public float BuildBoost => 1f + FurnitureBoost(BoostKind.Building);
+        /// <summary>Research speed (furniture that helps).</summary>
+        public float ResearchBoost => 1f + FurnitureBoost(BoostKind.Research);
+
+        readonly float[] furnitureBoosts = new float[6];
+        readonly HashSet<BuildingConfig> boostSeen = new HashSet<BuildingConfig>();
+        float boostsAt = -1f;
+
+        /// <summary>What the kingdom's furniture adds to <paramref name="kind"/> (0.05 = 5%): each kind of furniture counts once.</summary>
+        public float FurnitureBoost(BoostKind kind)
+        {
+            if (kind == BoostKind.None) return 0f;
+            if (Time.time >= boostsAt)
+            {
+                boostsAt = Time.time + 2f;
+                for (int i = 0; i < furnitureBoosts.Length; i++) furnitureBoosts[i] = 0f;
+                boostSeen.Clear();
+                foreach (var f in furniture)
+                {
+                    if (f == null || f.Config == null || f.Config.boost == BoostKind.None || !boostSeen.Add(f.Config)) continue;
+                    furnitureBoosts[(int)f.Config.boost] += f.Config.boostPercent / 100f;
+                }
+            }
+            return furnitureBoosts[(int)kind];
+        }
 
         /// <summary>Puts a message on screen.</summary>
         public void Report(string text) => Notice?.Invoke(text);

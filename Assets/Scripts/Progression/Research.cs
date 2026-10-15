@@ -200,7 +200,8 @@ namespace KingdomGame.Progression
         }
 
         /// <summary>Real seconds a tech takes at the current research speed.</summary>
-        public double SecondsFor(TechConfig t) => t == null ? 0 : t.researchHours * 3600.0 / Math.Max(0.01, config != null ? config.researchSpeed : 1f);
+        public double SecondsFor(TechConfig t) => t == null ? 0 : t.researchHours * 3600.0
+            / Math.Max(0.01, (config != null ? config.researchSpeed : 1f) * (kingdom != null ? kingdom.ResearchBoost : 1f));
 
         /// <summary>Seconds of the current research left (its whole length if it hasn't started).</summary>
         public double SecondsLeft

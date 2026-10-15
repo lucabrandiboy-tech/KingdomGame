@@ -478,7 +478,7 @@ namespace KingdomGame.Villagers
                         Idle();
                         return;
                     }
-                    blueprint.AddWork(config.workRate * Time.deltaTime);
+                    blueprint.AddWork(config.workRate * kingdom.BuildBoost * Time.deltaTime);
                     var toSite = blueprint.Center - Position;
                     if (toSite.sqrMagnitude > 0.0001f) facing = toSite.normalized;
                     return;

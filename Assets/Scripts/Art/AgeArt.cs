@@ -34,6 +34,53 @@ namespace KingdomGame.Art
 
         public static string Workbench(int age) => $"Age/Workbench{age}";
 
+        /// <summary>The picture key of an age machine (see <see cref="MachinePictures"/>).</summary>
+        public static string AgeMachine(string name) => "Age/M/" + name;
+
+        /// <summary>Each age machine's picture: its name (see <see cref="AgeMachine"/>), whether it lies flat (belts), and how it's drawn.</summary>
+        static readonly (string Name, bool Flat, System.Func<int, PixelImage> Draw)[] MachinePictures =
+        {
+            // Stone Age
+            ("WoodcutterCamp", false, p => DrawHarvester(p, 0)),
+            ("RockPile", false, p => DrawDigger(p, 0, PixelImage.Rgb(130, 124, 116))),
+            ("FishTrap", false, p => DrawFarm(p, 0, FarmKind.Fish)),
+            ("SaplingBed", false, p => DrawFarm(p, 0, FarmKind.Saplings)),
+            ("LogChute", true, p => DrawBelt(p, 0)),
+            // Bronze Age
+            ("CopperSluice", false, p => DrawDigger(p, 1, PixelImage.Rgb(196, 112, 58))),
+            ("BerryOrchard", false, p => DrawFarm(p, 1, FarmKind.Bushes)),
+            ("BronzeSawPit", false, p => DrawHarvester(p, 1)),
+            ("SledgeTrack", true, p => DrawBelt(p, 1)),
+            // Iron Age
+            ("BogIronPit", false, p => DrawDigger(p, 2, PixelImage.Rgb(150, 96, 84))),
+            ("GranaryFarm", false, p => DrawFarm(p, 2, FarmKind.Grain)),
+            // Medieval
+            ("CharcoalKiln", false, p => DrawKiln(p)),
+            ("Windmill", false, p => DrawMill(p, 3, false)),
+            ("WindSawmill", false, p => DrawHarvester(p, 3)),
+            ("CoalPit", false, p => DrawDigger(p, 3, PixelImage.Rgb(34, 32, 32))),
+            // Renaissance
+            ("WaterMill", false, p => DrawMill(p, 4, true)),
+            ("ClockworkCrafter", false, p => DrawAutoCrafter(p, 4)),
+            ("WaterQuarry", false, p => DrawDigger(p, 4, PixelImage.Rgb(140, 134, 126))),
+            ("StampMill", false, p => DrawDigger(p, 4, PixelImage.Rgb(150, 96, 84))),
+            ("CanvasBelt", true, p => DrawBelt(p, 4)),
+            // Industrial
+            ("SteamDrill", false, p => DrawDigger(p, 5, PixelImage.Rgb(34, 32, 32))),
+            // World War 1
+            ("DieselGenerator", false, p => DrawEngine(p, 6)),
+            ("ElectricSawmill", false, p => DrawHarvester(p, 6)),
+            ("OreDrill", false, p => DrawDigger(p, 6, PixelImage.Rgb(236, 190, 64))),
+            ("TractorFarm", false, p => DrawFarm(p, 6, FarmKind.Grain)),
+            ("FastBelt", true, p => DrawBelt(p, 6)),
+            // World War 2
+            ("PowerPlant", false, p => DrawEngine(p, 7)),
+            ("AssemblyLine", false, p => DrawAutoCrafter(p, 7)),
+            ("Excavator", false, p => DrawDigger(p, 7, PixelImage.Rgb(130, 124, 116))),
+            ("MechanizedFarm", false, p => DrawFarm(p, 7, FarmKind.Greenhouse)),
+            ("ExpressBelt", true, p => DrawBelt(p, 7)),
+        };
+
         /// <summary>Every picture of the ages' newer things (see the class summary).</summary>
         public static IEnumerable<DefensePiece> AgePieces()
         {
@@ -42,6 +89,244 @@ namespace KingdomGame.Art
                 int a = age;
                 yield return new DefensePiece { Art = Workbench(a), Draw = p => DrawWorkbench(p, a) };
             }
+            foreach (var m in MachinePictures) yield return new DefensePiece { Art = AgeMachine(m.Name), Draw = m.Draw, Flat = m.Flat };
+        }
+
+        // ------------------------------------------------------------ machines --
+
+        internal enum FarmKind { Fish, Saplings, Bushes, Grain, Greenhouse }
+
+        // Something that cuts trees by itself: a platform with a log pile and the age's cutter (axe, saw, sails, motor).
+        static PixelImage DrawHarvester(int ppu, int age)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(2f, 2f, t);
+            uint s = 1700u + (uint)age * 30u;
+            if (age == 0) Round(img, t, 1f, 1f, 0.85f, PixelImage.Rgb(80, 66, 48), 0.03f, 0.02f, Surface.Stone, s);   // trampled earth
+            else Block(img, t, 0.1f, 0.1f, 1.9f, 1.9f, age >= 5 ? look.Stone : look.Wood, 0.12f, 0.03f, age >= 5 ? Surface.Stone : Surface.Wood, s, true, 0.25f);
+            // The log pile.
+            for (int i = 0; i < 4; i++)
+                Rod(img, t, 0.25f, 0.35f + i * 0.13f, 1.0f, 0.35f + i * 0.13f, 0.06f, PixelImage.Scale(PaleWood, 0.85f + 0.05f * i), 0.35f, 0.35f);
+            if (age == 0)
+            {
+                Round(img, t, 1.45f, 1.35f, 0.28f, PixelImage.Scale(Oak, 0.8f), 0.4f, 0.04f, Surface.Wood, s + 1);   // a chopping stump
+                Rod(img, t, 1.25f, 1.6f, 1.6f, 1.2f, 0.035f, Oak, 0.5f, 0.5f);                                          // the axe handle
+                Block(img, t, 1.55f, 1.12f, 1.72f, 1.3f, look.Metal, 0.52f, 0.02f, Surface.Stone, s + 2);
+            }
+            else
+            {
+                Round(img, t, 1.4f, 1.3f, 0.32f, PixelImage.Rgb(176, 178, 174), 0.4f, 0f, Surface.Metal, s + 1);   // the blade
+                Round(img, t, 1.4f, 1.3f, 0.07f, look.Metal, 0.45f, 0f, Surface.Metal, s + 2);
+                if (age == 3) Sails(img, t, 1.4f, 1.3f, 0.55f, look.Cloth, s + 3);
+                if (age >= 5) Block(img, t, 1.0f, 1.55f, 1.85f, 1.88f, look.Metal, 0.7f, 0.03f, Surface.Metal, s + 4);   // the motor
+                if (age >= 6) Round(img, t, 1.7f, 1.72f, 0.06f, PixelImage.Rgb(240, 200, 80), 0.75f, 0f, Surface.Plain, s + 5);
+            }
+            return Finish(img, t, 0);
+        }
+
+        // Something that digs by itself: a pit with what it digs in it, under the age's frame (wood, treadwheel, steel rig).
+        static PixelImage DrawDigger(int ppu, int age, Color32 ore)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(2f, 2f, t);
+            uint s = 1900u + (uint)age * 30u + ore.r;
+            Block(img, t, 0.1f, 0.1f, 1.9f, 1.9f, look.Stone, 0.08f, 0.08f, Surface.Stone, s);
+            Round(img, t, 1f, 1f, 0.62f, PixelImage.Scale(look.Stone, 0.5f), 0.01f, 0f, Surface.Stone, s + 1);   // the pit
+            var dice = new Dice(s + 2);
+            for (int i = 0; i < 9; i++)
+            {
+                float a = dice.Range(0f, Mathf.PI * 2f), r = dice.Range(0.05f, 0.45f);
+                Round(img, t, 1f + Mathf.Cos(a) * r, 1f + Mathf.Sin(a) * r, dice.Range(0.05f, 0.1f), PixelImage.Scale(ore, dice.Range(0.8f, 1.1f)), 0.06f, 0.03f, Surface.Stone, s + 3 + (uint)i);
+            }
+            var frame = age >= 5 ? look.Metal : look.Wood;
+            Rod(img, t, 0.3f, 0.3f, 1.7f, 1.7f, 0.05f, frame, 0.9f, 0.9f);
+            Rod(img, t, 0.3f, 1.7f, 1.7f, 0.3f, 0.05f, frame, 0.9f, 0.9f);
+            if (age == 2) Ring(img, t, 1.6f, 0.5f, 0.24f, 0.32f, look.Wood, 0.8f, Surface.Wood, s + 20);          // treadwheel
+            if (age == 4) Ring(img, t, 0.4f, 1.6f, 0.2f, 0.3f, look.Wood, 0.8f, Surface.Wood, s + 21);           // waterwheel
+            Round(img, t, 1f, 1f, 0.14f, age >= 5 ? PixelImage.Rgb(120, 70, 44) : look.Metal, 1f, 0.04f, Surface.Metal, s + 22);   // the bucket / drill head
+            if (age >= 5) Block(img, t, 1.35f, 1.5f, 1.85f, 1.85f, look.Metal, 0.75f, 0.03f, Surface.Metal, s + 23);   // the engine
+            return Finish(img, t, 0);
+        }
+
+        // Something that grows food (or saplings) by itself.
+        static PixelImage DrawFarm(int ppu, int age, FarmKind kind)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(2f, 2f, t);
+            uint s = 2100u + (uint)age * 30u + (uint)kind * 7u;
+            if (kind == FarmKind.Fish)
+            {
+                Round(img, t, 1f, 1f, 0.85f, PixelImage.Rgb(46, 70, 84), 0.02f, 0f, Surface.Plain, s);   // the pond
+                Ring(img, t, 1f, 1f, 0.82f, 0.92f, look.Stone, 0.12f, Surface.Stone, s + 1);
+                Round(img, t, 1.1f, 0.95f, 0.3f, look.Cloth, 0.2f, 0.1f, Surface.Cloth, s + 2);          // the woven trap
+                Ring(img, t, 1.1f, 0.95f, 0.22f, 0.3f, PixelImage.Scale(look.Cloth, 0.7f), 0.22f, Surface.Cloth, s + 3);
+                return Finish(img, t, 0);
+            }
+            var soil = kind == FarmKind.Greenhouse ? PixelImage.Rgb(70, 60, 48) : PixelImage.Rgb(84, 62, 40);
+            Block(img, t, 0.08f, 0.08f, 1.92f, 1.92f, soil, 0.03f, 0.02f, Surface.Stone, s);
+            var green = PixelImage.Rgb(78, 120, 54);
+            for (int row = 0; row < 4; row++)
+                for (int i = 0; i < 4; i++)
+                {
+                    float x = 0.3f + i * 0.45f, y = 0.3f + row * 0.45f;
+                    switch (kind)
+                    {
+                        case FarmKind.Saplings: Round(img, t, x, y, 0.1f, green, 0.25f, 0.06f, Surface.Plain, s + (uint)(row * 4 + i)); break;
+                        case FarmKind.Bushes:
+                            Round(img, t, x, y, 0.17f, PixelImage.Scale(green, 0.85f), 0.25f, 0.08f, Surface.Plain, s + (uint)(row * 4 + i));
+                            Stud(img, t, x + 0.05f, y + 0.04f, 0.03f, PixelImage.Rgb(200, 40, 60), 0.3f);
+                            break;
+                        default:
+                            Block(img, t, x - 0.18f, y - 0.06f, x + 0.18f, y + 0.06f, PixelImage.Rgb(196, 168, 90), 0.15f, 0.01f, Surface.Plain, s + (uint)(row * 4 + i));
+                            break;
+                    }
+                }
+            if (kind == FarmKind.Greenhouse)
+            {
+                // Glass panes over it and a steel frame.
+                for (int i = 0; i <= 4; i++) Rod(img, t, 0.1f + i * 0.45f, 0.1f, 0.1f + i * 0.45f, 1.9f, 0.025f, look.Metal, 0.9f, 0.9f);
+                Rod(img, t, 0.1f, 1f, 1.9f, 1f, 0.025f, look.Metal, 0.9f, 0.9f);
+            }
+            if (age >= 6) Block(img, t, 1.45f, 0.1f, 1.9f, 0.45f, PixelImage.Rgb(140, 40, 34), 0.5f, 0.04f, Surface.Metal, s + 40);   // a tractor
+            if (age == 2) Round(img, t, 1.7f, 1.7f, 0.2f, look.Wood, 0.6f, 0.1f, Surface.Wood, s + 41);                            // the granary
+            return Finish(img, t, 0);
+        }
+
+        // A stretch of the age's conveyor, 1 tile, lying flat: a log trough, sledge rails, rollers, canvas, rubber with arrows.
+        static PixelImage DrawBelt(int ppu, int age)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(1f, 1f, t);
+            uint s = 2300u + (uint)age * 10u;
+            switch (age)
+            {
+                case 0:
+                    Block(img, t, 0.12f, 0.05f, 0.88f, 0.95f, PixelImage.Scale(look.Wood, 0.8f), 0.08f, 0.1f, Surface.Wood, s, false, 0f);
+                    Block(img, t, 0.24f, 0.05f, 0.76f, 0.95f, PixelImage.Scale(look.Wood, 0.5f), 0.04f, 0.02f, Surface.Wood, s + 1, false);
+                    break;
+                case 1:
+                    Block(img, t, 0.15f, 0.05f, 0.27f, 0.95f, look.Wood, 0.06f, 0.01f, Surface.Wood, s, false);
+                    Block(img, t, 0.73f, 0.05f, 0.85f, 0.95f, look.Wood, 0.06f, 0.01f, Surface.Wood, s + 1, false);
+                    for (int i = 0; i < 4; i++) Block(img, t, 0.1f, 0.1f + i * 0.24f, 0.9f, 0.18f + i * 0.24f, PixelImage.Scale(look.Wood, 0.8f), 0.05f, 0.01f, Surface.Wood, s + 2);
+                    break;
+                default:
+                    var frame = age >= 5 ? look.Metal : look.Wood;
+                    Block(img, t, 0.05f, 0.05f, 0.95f, 0.95f, frame, 0.06f, 0.02f, age >= 5 ? Surface.Metal : Surface.Wood, s);
+                    var belt = age == 4 ? look.Cloth : PixelImage.Rgb(34, 34, 36);
+                    Block(img, t, 0.14f, 0.05f, 0.86f, 0.95f, belt, 0.08f, 0.01f, age == 4 ? Surface.Cloth : Surface.Plain, s + 1, false);
+                    for (int i = 0; i < 4; i++)
+                        Rod(img, t, 0.16f, 0.15f + i * 0.23f, 0.84f, 0.15f + i * 0.23f, 0.012f, PixelImage.Scale(belt, 1.6f), 0.09f, 0.09f);
+                    if (age >= 6)
+                        for (int i = 0; i < 2; i++)
+                        {
+                            // Arrows: the faster belts.
+                            float y = 0.3f + i * 0.4f;
+                            var c = age == 7 ? PixelImage.Rgb(230, 190, 60) : PixelImage.Rgb(200, 200, 200);
+                            Rod(img, t, 0.35f, y, 0.5f, y + 0.12f, 0.02f, c, 0.1f, 0.1f);
+                            Rod(img, t, 0.65f, y, 0.5f, y + 0.12f, 0.02f, c, 0.1f, 0.1f);
+                        }
+                    break;
+            }
+            return Finish(img, t, 0);
+        }
+
+        // A mill: a round mill house with sails (wind) or a waterwheel and a race of water beside it.
+        static PixelImage DrawMill(int ppu, int age, bool water)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(2f, 2f, t);
+            uint s = 2400u + (uint)age * 10u + (water ? 5u : 0u);
+            if (water) Block(img, t, 0.05f, 0.05f, 0.5f, 1.95f, PixelImage.Rgb(46, 70, 84), 0.01f, 0f, Surface.Plain, s);
+            float cx = water ? 1.2f : 1f;
+            Round(img, t, cx, 1f, 0.6f, look.Stone, 0.9f, 0.15f, Surface.Stone, s + 1);
+            Round(img, t, cx, 1f, 0.48f, PixelImage.Scale(look.Wood, 0.9f), 1.1f, 0.25f, Surface.Wood, s + 2);   // the roof
+            if (water) Ring(img, t, 0.45f, 1f, 0.3f, 0.4f, look.Wood, 0.6f, Surface.Wood, s + 3);
+            else Sails(img, t, cx, 1f, 0.82f, look.Cloth, s + 4);
+            return Finish(img, t, 0);
+        }
+
+        static void Sails(PixelImage img, float t, float cx, float cy, float r, Color32 cloth, uint seed)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                float a = i * Mathf.PI * 0.5f + 0.4f;
+                float ex = cx + Mathf.Cos(a) * r, ey = cy + Mathf.Sin(a) * r;
+                Rod(img, t, cx, cy, ex, ey, 0.03f, Oak, 1.25f, 1.25f);
+                Rod(img, t, cx + Mathf.Cos(a) * r * 0.35f + Mathf.Cos(a + 1.57f) * 0.08f, cy + Mathf.Sin(a) * r * 0.35f + Mathf.Sin(a + 1.57f) * 0.08f,
+                    ex + Mathf.Cos(a + 1.57f) * 0.08f, ey + Mathf.Sin(a + 1.57f) * 0.08f, 0.07f, cloth, 1.24f, 1.24f);
+            }
+            Round(img, t, cx, cy, 0.07f, Oak, 1.3f, 0.03f, Surface.Wood, seed);
+        }
+
+        // A charcoal kiln: a domed earth mound with a smoking vent and a stack of logs waiting.
+        static PixelImage DrawKiln(int ppu)
+        {
+            float t = ppu;
+            var img = Canvas(2f, 2f, t);
+            Round(img, t, 1f, 1.05f, 0.75f, PixelImage.Rgb(86, 70, 54), 0.7f, 0.35f, Surface.Stone, 2501u);
+            Round(img, t, 1f, 1.05f, 0.14f, PixelImage.Rgb(30, 26, 24), 0.72f, 0f, Surface.Plain, 2502u);
+            Round(img, t, 1f, 1.05f, 0.07f, PixelImage.Rgb(240, 120, 40), 0.73f, 0f, Surface.Plain, 2503u);
+            for (int i = 0; i < 3; i++) Rod(img, t, 0.2f, 0.18f + i * 0.1f, 0.9f, 0.18f + i * 0.1f, 0.045f, PaleWood, 0.25f, 0.25f);
+            return Finish(img, t, 0);
+        }
+
+        // An engine house: a generator (diesel engine with exhausts, or a power plant with cooling and pylons).
+        static PixelImage DrawEngine(int ppu, int age)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(2f, 2f, t);
+            uint s = 2600u + (uint)age * 10u;
+            Block(img, t, 0.08f, 0.08f, 1.92f, 1.92f, look.Stone, 0.15f, 0.03f, Surface.Stone, s);
+            if (age == 6)
+            {
+                Block(img, t, 0.3f, 0.5f, 1.5f, 1.3f, look.Metal, 0.8f, 0.05f, Surface.Metal, s + 1);
+                for (int i = 0; i < 4; i++) Round(img, t, 0.5f + i * 0.28f, 0.9f, 0.08f, PixelImage.Scale(look.Metal, 1.3f), 0.85f, 0.02f, Surface.Metal, s + 2);
+                Round(img, t, 1.7f, 1.6f, 0.12f, PixelImage.Rgb(40, 40, 40), 1.2f, 0f, Surface.Metal, s + 3);   // the exhaust
+                Block(img, t, 1.55f, 0.3f, 1.85f, 0.7f, PixelImage.Rgb(140, 40, 34), 0.6f, 0.03f, Surface.Metal, s + 4);   // the fuel tank
+            }
+            else
+            {
+                Round(img, t, 0.65f, 1.3f, 0.45f, PixelImage.Scale(look.Stone, 1.15f), 1.3f, 0.2f, Surface.Stone, s + 1);   // cooling tower
+                Round(img, t, 0.65f, 1.3f, 0.3f, PixelImage.Rgb(50, 52, 50), 1.31f, 0f, Surface.Plain, s + 2);
+                Block(img, t, 1.1f, 0.3f, 1.8f, 1.0f, look.Metal, 0.9f, 0.04f, Surface.Metal, s + 3);
+                Rod(img, t, 1.45f, 1.1f, 1.45f, 1.8f, 0.03f, look.Metal, 1.4f, 1.4f);   // a pylon
+                Rod(img, t, 1.25f, 1.6f, 1.65f, 1.6f, 0.02f, look.Metal, 1.4f, 1.4f);
+            }
+            return Finish(img, t, 0);
+        }
+
+        // An auto-crafter: the age's part made with no crafter. Clockwork (gears under glass) or an assembly line (belt and arms).
+        static PixelImage DrawAutoCrafter(int ppu, int age)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(2f, 2f, t);
+            uint s = 2700u + (uint)age * 10u;
+            Block(img, t, 0.1f, 0.1f, 1.9f, 1.9f, age >= 5 ? look.Metal : look.Wood, 0.4f, 0.04f, age >= 5 ? Surface.Metal : Surface.Wood, s, true, 0.3f);
+            if (age < 5)
+            {
+                Gear(img, t, 0.7f, 0.7f, 0.3f, look.Trim, s + 1);
+                Gear(img, t, 1.25f, 1.15f, 0.22f, look.Metal, s + 2);
+                Gear(img, t, 0.7f, 1.45f, 0.17f, look.Trim, s + 3);
+            }
+            else
+            {
+                Block(img, t, 0.2f, 0.85f, 1.8f, 1.15f, PixelImage.Rgb(34, 34, 36), 0.5f, 0.01f, Surface.Plain, s + 1);   // the belt
+                for (int i = 0; i < 3; i++)
+                {
+                    float x = 0.5f + i * 0.5f;
+                    Rod(img, t, x, 1.5f, x, 1.05f, 0.04f, look.Trim, 0.9f, 0.7f);   // robot arms
+                    Round(img, t, x, 1.55f, 0.08f, look.Metal, 0.9f, 0.03f, Surface.Metal, s + 2 + (uint)i);
+                    Block(img, t, x - 0.08f, 0.92f, x + 0.08f, 1.08f, PixelImage.Rgb(90, 110, 80), 0.55f, 0.01f, Surface.Metal, s + 5);
+                }
+            }
+            return Finish(img, t, 0);
         }
 
         // ---------------------------------------------------- crafting tables --

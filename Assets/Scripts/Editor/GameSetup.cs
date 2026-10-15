@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 15;
+        const int SettingsVersion = 16;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -94,8 +94,9 @@ namespace KingdomGame.EditorTools
             bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
             bool nightHordes = oldContent != null && oldContent.settingsVersion < 11;
             bool endless = oldContent != null && oldContent.settingsVersion < 12;
-            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 15;
-            bool costlyAges = oldContent != null && oldContent.settingsVersion < 15;
+            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 16;
+            bool costlyAges = oldContent != null && oldContent.settingsVersion < 16;
+            bool darkNights = oldContent != null && oldContent.settingsVersion < 16;
             bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 14;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
@@ -257,18 +258,17 @@ namespace KingdomGame.EditorTools
             };
             var blasts = new List<DamageType>();
             var defensesByAge = Defenses(blasts);
-            var (ironMachines, medievalMachines, industrialMachines) = Machines();
-            defensesByAge[2].AddRange(ironMachines);
-            defensesByAge[3].AddRange(medievalMachines);
-            defensesByAge[5].AddRange(industrialMachines);
-            var defenses = new List<BuildingConfig>();
-            foreach (var age in defensesByAge) defenses.AddRange(age);
             // Planted trees grow back after they're cut (a tree farm); a little less wood than a wild one.
             var plantedTree = Asset<ResourceNodeConfig>("Economy/PlantedTree", n =>
             {
                 n.look = NodeLook.Tree; n.resource = ResourceType.Wood; n.amount = 45; n.perHit = 5; n.secondsPerHit = 0.5f;
                 n.regrowSeconds = 300f; n.replant = true; n.blockRadius = 0.18f; n.reach = 0.6f; n.chipColor = new Color32(150, 108, 66, 255);
             });
+            // Each age's automation (machines), unlocked with the age.
+            var machinesByAge = Machines(plantedTree);
+            for (int i = 0; i < machinesByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(machinesByAge[i]);
+            var defenses = new List<BuildingConfig>();
+            foreach (var age in defensesByAge) defenses.AddRange(age);
             var farming = new List<BuildingConfig>
             {
                 Asset<BuildingConfig>("Building/Farming/TreeSapling", b =>
@@ -437,7 +437,15 @@ namespace KingdomGame.EditorTools
                     AgeTech(tech, i);
                     EditorUtility.SetDirty(tech);
                 }
-                Debug.Log("Researching the next age costs much more now (10,000 wood and stone for the Bronze Age, rising after). Your other settings were kept.");
+                Debug.Log("Research costs and times for each age were updated (a third of the earlier big costs). Your other settings were kept.");
+            }
+            if (darkNights && content.dayNight != null)
+            {
+                // Nights are pitch black now except where something gives light, and fires light twice as far.
+                content.dayNight.nightBrightness = 0f;
+                if (content.dayNight.fireRadius < 9f) content.dayNight.fireRadius *= 2f;
+                EditorUtility.SetDirty(content.dayNight);
+                Debug.Log("Nights are pitch black now (only lights show anything), and fires and lamps light twice as far.");
             }
             if (gatesUpdate)
             {
@@ -452,9 +460,8 @@ namespace KingdomGame.EditorTools
             if (machinesUpdate)
             {
                 // The smelter (Medieval) and the machines (Industrial): on the build bar's Industry tab, unlocked with their age.
-                var all = new List<BuildingConfig>(ironMachines);
-                all.AddRange(medievalMachines);
-                all.AddRange(industrialMachines);
+                var all = new List<BuildingConfig>();
+                foreach (var age in machinesByAge) all.AddRange(age);
                 var list = new List<BuildingConfig>(content.buildMenu);
                 foreach (var m in all) if (!list.Contains(m)) list.Add(m);
                 content.buildMenu = list.ToArray();
@@ -467,10 +474,8 @@ namespace KingdomGame.EditorTools
                     ages[age].startUnlocks = u.ToArray();
                     EditorUtility.SetDirty(ages[age]);
                 }
-                Unlock(2, ironMachines);
-                Unlock(3, medievalMachines);
-                Unlock(5, industrialMachines);
-                Debug.Log("Added the smelter (Medieval), machines (Industry tab) and electric lights that need a generator (Lights tab), all Industrial. Your other settings were kept.");
+                for (int i = 0; i < machinesByAge.Length; i++) Unlock(i, machinesByAge[i]);
+                Debug.Log("Added each age's machines (Industry tab: tree farm, sawmills, quarries, belts, smelter, generator) and electric lights (Lights tab). Your other settings were kept.");
             }
 
             if (endless && content.network != null && content.network.kingdomSpacing < 560)
@@ -680,9 +685,11 @@ namespace KingdomGame.EditorTools
                 { 160000, 160000, 40000, 18000, 30000,  4000 },
             };
             int[] villagers = { 6, 9, 13, 18, 24, 30, 38 };
-            t.researchHours = days[i] * 24f;
-            t.woodCost = cost[i, 0]; t.stoneCost = cost[i, 1]; t.foodCost = cost[i, 2];
-            t.copperCost = cost[i, 3]; t.ironCost = cost[i, 4]; t.goldCost = cost[i, 5];
+            // A third of the table above (going through the ages was made 3 times easier): costs and research time.
+            const int Easier = 3;
+            t.researchHours = days[i] * 24f / Easier;
+            t.woodCost = cost[i, 0] / Easier; t.stoneCost = cost[i, 1] / Easier; t.foodCost = cost[i, 2] / Easier;
+            t.copperCost = cost[i, 3] / Easier; t.ironCost = cost[i, 4] / Easier; t.goldCost = cost[i, 5] / Easier;
             t.minVillagers = villagers[i];
         }
 
@@ -737,13 +744,16 @@ namespace KingdomGame.EditorTools
         }
 
         // The smelter (Medieval: iron and wood into steel) and the Industrial machines built with that steel.
-        static (List<BuildingConfig> Iron, List<BuildingConfig> Medieval, List<BuildingConfig> Industrial) Machines()
+        // Each age's machines (index = age: 0 Stone Age ... 7 World War 2).
+        static List<BuildingConfig>[] Machines(ResourceNodeConfig plantedTree)
         {
-            MachineConfig Machine(string file, MachineKind kind, float seconds, int output, float reach, int woodIn, int ironIn, bool power = true, float belt = 2f) =>
+            MachineConfig Machine(string file, MachineKind kind, float seconds, int output, float reach, int woodIn, int ironIn, bool power = true, float belt = 2f,
+                ResourceNodeConfig plant = null, float grow = 0f) =>
                 Asset<MachineConfig>("Economy/Machines/" + file, m =>
                 {
                     m.kind = kind; m.workSeconds = seconds; m.output = output; m.reach = reach; m.holds = 60;
                     m.woodIn = woodIn; m.ironIn = ironIn; m.beltSpeed = belt; m.needsPower = power;
+                    m.plant = plant; m.growSeconds = grow;
                 });
             BuildingConfig Item(string file, string displayName, string art, int size, int wood, int stone, int steel, float seconds,
                 float health, float height, bool flat, MachineConfig machine) =>
@@ -754,6 +764,12 @@ namespace KingdomGame.EditorTools
                     b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = !flat; b.flat = flat;
                     b.dragToPlaceLines = flat; b.roomTag = RoomTag.Workshop; b.machine = machine;
                 });
+            // Bronze Age: a tree farm that keeps trees planted round it (they grow back when cut, so a sawmill or woodcutters never run out).
+            var bronze = new List<BuildingConfig>
+            {
+                Item("TreeFarm", "Tree farm", FurnitureArt.TreeFarm, 2, 120, 20, 0, 20f, 300f, 0.3f, false,
+                    Machine("TreeFarm", MachineKind.TreeFarm, 12f, 16, 5f, 0, 0, false, 2f, plantedTree, 180f)),
+            };
             // Iron Age: the first automation, worked by water and treadwheels (no power), slower than the Industrial machines.
             var iron = new List<BuildingConfig>
             {
@@ -775,7 +791,7 @@ namespace KingdomGame.EditorTools
                 Lamp(Item("ElectricLamp", "Electric lamp", FurnitureArt.ElectricLamp, 1, 5, 5, 3, 6f, 150f, 1.4f, false, Machine("ElectricLamp", MachineKind.Lamp, 1f, 0, 1.3f, 0, 0))),
                 Lamp(Item("Floodlight", "Floodlight", FurnitureArt.Floodlight, 1, 0, 10, 8, 10f, 250f, 1.5f, false, Machine("Floodlight", MachineKind.Lamp, 1f, 0, 2.6f, 0, 0))),
             };
-            return (iron, medieval, industrial);
+            return new[] { new List<BuildingConfig>(), bronze, iron, medieval, new List<BuildingConfig>(), industrial, new List<BuildingConfig>(), new List<BuildingConfig>() };
 
             // Lamps go on the Lights tab and can be put up inside houses.
             static BuildingConfig Lamp(BuildingConfig b)

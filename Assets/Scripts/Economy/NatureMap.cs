@@ -424,6 +424,14 @@ namespace KingdomGame.Economy
                 return;
             }
             if (live.ContainsKey(c.Cell)) Clear(c.Cell);
+            // A stump from an older save: cut-down wild trees leave nothing now.
+            if (c.Kind.look == NodeLook.Tree && c.Left <= 0 && c.Kind.regrowSeconds <= 0f && !(c.Grown >= 0f && c.Grown < 1f))
+            {
+                Clear(c.Cell);
+                var gone = ChunkFor(c.Cell, out int g);
+                MarkChanged(gone, g);
+                return;
+            }
             var chunk = ChunkFor(c.Cell, out int i);
             chunk.Kind[i] = KindIndex(c.Kind);
             chunk.Variant[i] = (byte)Mathf.Clamp(c.Variant, 0, 255);

@@ -133,6 +133,9 @@ namespace KingdomGame.Building
                     return stored > 0;
                 }
 
+                case MachineKind.TreeFarm:
+                    return PlantTree();
+
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
                 {
@@ -164,6 +167,38 @@ namespace KingdomGame.Building
                 }
             }
             return false;
+        }
+
+        // Tree farm: counts the trees round it and plants a young one on open ground if there are fewer than it keeps.
+        bool PlantTree()
+        {
+            var nature = NatureMap.Current;
+            if (nature == null || config.plant == null || kingdom.Nav == null) return false;
+            var cells = piece.Cells;
+            int r = Mathf.CeilToInt(config.reach), trees = 0;
+            var open = new List<Vector2Int>();
+            for (int y = cells.yMin - r; y < cells.yMax + r; y++)
+                for (int x = cells.xMin - r; x < cells.xMax + r; x++)
+                {
+                    var c = new Vector2Int(x, y);
+                    if (cells.Contains(c)) continue;
+                    var kind = nature.KindAt(c);
+                    if (kind != null)
+                    {
+                        if (kind.resource == ResourceType.Wood) trees++;
+                        continue;
+                    }
+                    // Open ground on the kingdom's lands: nothing built, no floor, no belt, no wall.
+                    if (!kingdom.Nav.Cells.Contains(c) || !kingdom.Nav.Walkable(c) || kingdom.ThingAt(c) != null || kingdom.BuiltAt(c) != null
+                        || kingdom.BlueprintAt(c) != null || belts.Contains(c)) continue;
+                    // Every other cell only, so there's always room to walk between the trees.
+                    if (((x + y) & 1) != 0 || (x & 1) != 0) continue;
+                    open.Add(c);
+                }
+            if (trees >= config.output) return true;   // all planted: nothing to do (not stuck)
+            if (open.Count == 0) return false;
+            kingdom.Plant(config.plant, open[Random.Range(0, open.Count)], config.growSeconds);
+            return true;
         }
 
         // Where power is measured from: here, or for a machine inside a house (far off the map), the house's door.

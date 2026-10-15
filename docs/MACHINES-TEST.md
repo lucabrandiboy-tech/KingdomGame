@@ -59,3 +59,12 @@ Stone should go up in storage. Swap the belts onto the red squares: nothing come
 On the Industry tab once you reach the Iron Age: **Water sawmill** (cuts trees within 6 tiles,
 4 wood every 16 s), **Treadwheel quarry** (3 stone every 20 s) and **Roller track** (a wooden
 conveyor, slower than the steel belt). They work like the Industrial ones but need no generator.
+
+## Tree farm (Bronze Age)
+
+Industry tab: **Tree farm** (2x2, wood and a little stone, no power). Every 12 seconds it plants a
+young tree on open ground within 5 tiles (every other tile, so there's room to walk), until 16
+trees stand round it. They grow in 3 minutes and grow back after they're cut, so woodcutters or a
+sawmill next to it never run out. It doesn't plant on floors, belts or anything built.
+
+Test: build one on open ground; within a minute saplings should appear round it and grow.

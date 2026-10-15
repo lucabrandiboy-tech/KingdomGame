@@ -220,6 +220,14 @@ namespace KingdomGame.Economy
                 Grow(config.regrowSeconds);
                 return;
             }
+            // A wild tree cut down is gone, stump and all (a stump would block paths, zombies' too).
+            if (config.look == NodeLook.Tree && config.regrowSeconds <= 0f && map != null)
+            {
+                var nature = map;
+                ShowEmpty();
+                nature.Clear(mapCell);   // (takes this object away at the end of the frame)
+                return;
+            }
             ShowEmpty();
             if (config.regrowSeconds > 0) regrowAt = Time.time + config.regrowSeconds;
         }

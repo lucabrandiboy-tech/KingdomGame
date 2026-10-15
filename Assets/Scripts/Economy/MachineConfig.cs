@@ -16,6 +16,8 @@ namespace KingdomGame.Economy
         Conveyor,
         /// <summary>An electric light: shines only while a generator's power reaches it.</summary>
         Lamp,
+        /// <summary>Keeps young trees planted round it, up to <see cref="MachineConfig.output"/> trees within its reach.</summary>
+        TreeFarm,
     }
 
     /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
@@ -37,6 +39,10 @@ namespace KingdomGame.Economy
         [Min(0)] public int ironIn = 2;
         [Tooltip("Sawmills and quarries: only works within a burning generator's reach (Iron Age water and treadwheel ones don't need it).")]
         public bool needsPower = true;
+        [Tooltip("Tree farm: what it plants (a tree that grows back when it's cut).")]
+        public ResourceNodeConfig plant;
+        [Tooltip("Tree farm: seconds until a young tree it plants is grown.")]
+        [Min(0)] public float growSeconds = 180f;
         [Tooltip("How fast things ride the conveyor belts, in tiles a second.")]
         [Min(0.2f)] public float beltSpeed = 2f;
     }

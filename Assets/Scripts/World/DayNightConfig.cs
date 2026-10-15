@@ -20,7 +20,8 @@ namespace KingdomGame.World
         public Color duskColor = new Color(1f, 0.62f, 0.42f);
         public Color nightColor = new Color(0.52f, 0.64f, 0.95f);
         [Range(0, 2)] public float dayBrightness = 0.8f;
-        [Range(0, 2)] public float nightBrightness = 0.3f;
+        [Tooltip("0 = pitch black at night: only fires, lamps and the ruler's own light show anything.")]
+        [Range(0, 2)] public float nightBrightness = 0f;
 
         [Header("The ruler's light at night")]
         public Color torchColor = new Color(1f, 0.82f, 0.55f);
@@ -32,7 +33,7 @@ namespace KingdomGame.World
         public Color fireColor = new Color(1f, 0.68f, 0.38f);
         [Range(0, 4)] public float fireBrightness = 1.3f;
         [Tooltip("Radius in tiles.")]
-        [Min(0.5f)] public float fireRadius = 5f;
+        [Min(0.5f)] public float fireRadius = 10f;
         [Tooltip("How strong fires are in daylight compared to night (they're always burning).")]
         [Range(0, 1)] public float fireDaytimeShare = 0.35f;
     }

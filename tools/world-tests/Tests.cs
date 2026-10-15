@@ -13,6 +13,7 @@ static class Tests
     {
         Run(nameof(SameSeedSameWorldEverywhere), SameSeedSameWorldEverywhere);
         Run(nameof(TheEdgeIsSolid), TheEdgeIsSolid);
+        Run(nameof(OldStumpsAreGoneWhenLoaded), OldStumpsAreGoneWhenLoaded);
         Run(nameof(ChangesSurviveSavingAndLoading), ChangesSurviveSavingAndLoading);
         Run(nameof(ForgettingKeepsChangesAndShownSquares), ForgettingKeepsChangesAndShownSquares);
         Run(nameof(SavingWhileListenersLookElsewhere), SavingWhileListenersLookElsewhere);
@@ -89,6 +90,17 @@ static class Tests
         }
         cells.Reverse();
         foreach (var c in cells) Check(b.KindAt(c) == a.KindAt(c), $"{c}: the second map differs");
+    }
+
+    // A save from before stumps were taken away: a cut-down wild tree comes back as nothing (not a solid stump).
+    static void OldStumpsAreGoneWhenLoaded()
+    {
+        var map = NewMap();
+        var cell = FirstWith(map, Tree, 40);
+        map.Apply(new NatureMap.Change { Cell = cell, Kind = Tree, Left = 0, Grown = -1f, RegrowLeft = -1f });
+        Check(map.KindAt(cell) == null && !map.Blocks(cell), "the old stump is still there");
+        var changes = map.Changes();
+        Check(changes.Count == 1 && changes[0].Kind == null, "the stump's removal isn't saved");
     }
 
     static void TheEdgeIsSolid()

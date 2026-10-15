@@ -6,7 +6,7 @@ namespace KingdomGame.Art
     public static partial class FurnitureArt
     {
         public const string Smelter = "Machine/Smelter", Generator = "Machine/Generator", Sawmill = "Machine/Sawmill",
-            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight";
+            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight", TreeFarm = "Machine/TreeFarm";
 
         static readonly Color32 Soot = PixelImage.Rgb(38, 34, 32);
         static readonly Color32 Rust = PixelImage.Rgb(120, 70, 44);
@@ -84,6 +84,29 @@ namespace KingdomGame.Art
             Rod(img, t, 0.2f, 0.8f, 0.8f, 0.2f, 0.03f, Steel, 0.6f, 0.6f);
             Block(img, t, 0.26f, 0.26f, 0.74f, 0.74f, PixelImage.Rgb(52, 56, 52), 1.5f, 0.03f, Surface.Metal, 1461u);
             Round(img, t, 0.5f, 0.5f, 0.18f, PixelImage.Rgb(232, 236, 222), 1.55f, 0.04f, Surface.Plain, 1462u);   // the lens
+            return Finish(img, t, 0);
+        }
+
+        // A tree nursery: a fenced bed of earth with saplings in rows and a water trough.
+        static PixelImage DrawTreeFarm(int ppu)
+        {
+            float t = ppu;
+            var img = Canvas(2f, 2f, t);
+            Block(img, t, 0.12f, 0.12f, 1.88f, 1.88f, PixelImage.Rgb(66, 50, 34), 0.03f, 0.02f, Surface.Stone, 1471u);   // tilled earth
+            foreach (float v in new[] { 0.1f, 1.84f })
+            {
+                Block(img, t, 0.06f, v, 1.94f, v + 0.06f, PaleWood, 0.25f, 0.01f, Surface.Wood, 1472u);   // fence rails
+                Block(img, t, v, 0.06f, v + 0.06f, 1.94f, PaleWood, 0.25f, 0.01f, Surface.Wood, 1473u, false);
+            }
+            var leaf = PixelImage.Rgb(70, 112, 52);
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                {
+                    float x = 0.45f + i * 0.45f, y = 0.55f + j * 0.45f;
+                    Round(img, t, x, y, 0.13f, PixelImage.Scale(leaf, 0.85f + 0.1f * ((i + j) % 2)), 0.3f, 0.08f, Surface.Plain, 1474u + (uint)(i * 3 + j));
+                }
+            Block(img, t, 1.3f, 0.22f, 1.8f, 0.4f, Oak, 0.2f, 0.01f, Surface.Wood, 1483u);
+            Block(img, t, 1.34f, 0.26f, 1.76f, 0.36f, PixelImage.Rgb(60, 90, 120), 0.18f, 0f, Surface.Plain, 1484u);   // water
             return Finish(img, t, 0);
         }
 

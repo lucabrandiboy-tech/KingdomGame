@@ -113,7 +113,8 @@ build), then ages with real-time research, roofs, and **houses** you go into
 `Interior.cs`: each house's inside is a room far off the map at
 `Kingdom.InsideOrigin`, reached through the door; villagers walk through doors
 in `Villager.Walk`). 2A, 2B and these updates are written and compile-checked but **not yet
-run in Unity**; the user tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
+run in Unity**; the user starts with `docs/START-HERE.md` (one session that touches every
+update), then tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
 and `docs/HOUSES-TEST.md` (plus `docs/PHASE-2B-TEST.md` for the details; later
 updates: `docs/SAVE-TEST.md`, `WEAPONS-TEST.md`, `ONLINE-TEST.md`, `ENDLESS-WORLD-TEST.md`, `MACHINES-TEST.md`,
 `ZOMBIE-BASES-TEST.md`, `AGES-CONTENT-TEST.md`, `ZOMBIE-KINDS-TEST.md`). Don't start 2C before they

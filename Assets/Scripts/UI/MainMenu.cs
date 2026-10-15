@@ -147,8 +147,8 @@ namespace KingdomGame.UI
             y += font * 3f;
             GUI.Label(new Rect(x - font * 4f, y, width + font * 8f, font * 5f),
                 "<color=#8f877a>Friends on your home network join with your computer's address. Over the internet you also need " +
-                "the port forwarded on your router: see docs/ONLINE-TEST.md. Joined players walk, chat and get a kingdom spot; " +
-                "building together comes in the next update.</color>", text);
+                "the port forwarded on your router: see docs/ONLINE-TEST.md. Everyone who joins gets a kingdom of their own and " +
+                "sees the others'; zombies are only in the host's game for now.</color>", text);
         }
 
         void Play(GameMode mode, bool continueSaved, NetRole role)

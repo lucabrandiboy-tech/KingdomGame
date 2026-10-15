@@ -735,7 +735,7 @@ namespace KingdomGame.Character
             var builder = kingdom.GetComponent<BuildController>();
             if (builder == null)
             {
-                Hint = "Your throne. Building online comes in the next update";
+                Hint = "Your throne";
                 return;
             }
             Hint = "E: sit on the throne (build your kingdom)";

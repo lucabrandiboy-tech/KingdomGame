@@ -65,6 +65,8 @@ namespace KingdomGame.World
     {
         public List<KingdomSpotSave> kingdoms = new List<KingdomSpotSave>();
         public List<PlayerSpotSave> players = new List<PlayerSpotSave>();
+        /// <summary>What each of their kingdoms has built (for the others to see) and each one's saved kingdom.</summary>
+        public List<KingdomBuiltSave> built = new List<KingdomBuiltSave>();
 
         public static OthersSave From(Networking.ServerCore core)
         {
@@ -74,6 +76,13 @@ namespace KingdomGame.World
             foreach (var k in kingdoms) save.kingdoms.Add(new KingdomSpotSave { id = k.Id, owner = k.Owner, x = k.X, y = k.Y });
             foreach (var p in players)
                 save.players.Add(new PlayerSpotSave { key = p.Key, name = p.Name, kingdom = p.KingdomId, placed = p.HasPosition, x = p.X, y = p.Y });
+            foreach (var m in core.Memories())
+            {
+                var b = new KingdomBuiltSave { kingdom = m.KingdomId, save = m.Save != null ? Convert.ToBase64String(m.Save) : "" };
+                foreach (var p in m.Pieces)
+                    b.pieces.Add(new PieceSave { wall = p.Wall, name = p.Name, x = p.X, y = p.Y, w = p.W, h = p.H, rotation = p.Rotation, level = p.Level });
+                save.built.Add(b);
+            }
             return save;
         }
 
@@ -87,7 +96,47 @@ namespace KingdomGame.World
             foreach (var s in players)
                 if (s != null) p.Add(new Networking.PlayerRecord { Key = s.key, Name = s.name, KingdomId = s.kingdom, HasPosition = s.placed, X = s.x, Y = s.y });
             core.Remember(k, p);
+            var memories = new List<Networking.KingdomMemory>();
+            if (built != null)
+                foreach (var b in built)
+                {
+                    if (b == null) continue;
+                    var m = new Networking.KingdomMemory { KingdomId = b.kingdom };
+                    if (!string.IsNullOrEmpty(b.save))
+                    {
+                        try { m.Save = Convert.FromBase64String(b.save); }
+                        catch (FormatException) { Debug.LogWarning($"Kingdom {b.kingdom}'s saved kingdom is broken: its player starts afresh."); }
+                    }
+                    if (b.pieces != null)
+                        foreach (var s in b.pieces)
+                            if (s != null)
+                                m.Pieces.Add(new Networking.BuiltPiece
+                                {
+                                    Wall = s.wall, Name = s.name, X = s.x, Y = s.y, W = s.w, H = s.h,
+                                    Rotation = (byte)Mathf.Clamp(s.rotation, 0, 255), Level = (byte)Mathf.Clamp(s.level, 0, 255),
+                                });
+                    memories.Add(m);
+                }
+            core.RememberBuilt(memories);
         }
+    }
+
+    /// <summary>What one other player's kingdom has built, and their saved kingdom (compressed, as text).</summary>
+    [Serializable]
+    public sealed class KingdomBuiltSave
+    {
+        public int kingdom;
+        public List<PieceSave> pieces = new List<PieceSave>();
+        public string save;
+    }
+
+    /// <summary>One wall tile or building of another player's kingdom (see Networking.BuiltPiece).</summary>
+    [Serializable]
+    public sealed class PieceSave
+    {
+        public bool wall;
+        public string name;
+        public int x, y, w, h, rotation, level;
     }
 
     [Serializable]

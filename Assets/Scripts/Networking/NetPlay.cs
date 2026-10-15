@@ -36,7 +36,9 @@ namespace KingdomGame.Networking
     /// <summary>
     /// Hosting: your own game, open to others. This computer runs the server
     /// (<see cref="ServerCore"/>) and you play on it at the same time: your ruler is one of
-    /// the players. Others who join get a kingdom spot, see you, each other and chat.
+    /// the players. Others who join get a kingdom of their own (run on their computer), see you,
+    /// each other, each other's kingdoms and villagers, and chat. Your kingdom is sent to them by
+    /// a <see cref="KingdomMirror"/>; theirs are shown here by <see cref="RemoteKingdoms"/>.
     /// </summary>
     public sealed class NetHost : MonoBehaviour
     {
@@ -44,6 +46,7 @@ namespace KingdomGame.Networking
         PlayerSession me;
         RulerController ruler;
         RemotePlayers remotes;
+        RemoteKingdoms kingdoms;
         ChatBox chat;
         Vector2 lastSent;
         bool failed;
@@ -53,12 +56,13 @@ namespace KingdomGame.Networking
 
         /// <summary><paramref name="others"/>: the players who joined before, from the saved game (null: nobody yet).</summary>
         public void Setup(ServerSettings settings, Kingdom kingdom, RulerController rulerController, RemotePlayers remotePlayers, ChatBox chatBox,
-            NatureMap nature, DayNightCycle dayNight, OthersSave others)
+            NatureMap nature, DayNightCycle dayNight, OthersSave others, RemoteKingdoms otherKingdoms, KingdomMirror mirror, bool survival)
         {
             ruler = rulerController;
             remotes = remotePlayers;
+            kingdoms = otherKingdoms;
             chat = chatBox;
-            core = new ServerCore(settings);
+            core = new ServerCore(settings) { Survival = survival };
             core.Log += line => Debug.Log("[Host] " + line);
             core.Clock = () => dayNight != null ? (dayNight.Day, dayNight.Hour) : (1, 8f);
             core.SpotIsGood = (x, y) => KingdomGround.IsGood(nature, x, y);
@@ -66,7 +70,11 @@ namespace KingdomGame.Networking
             {
                 KingdomGround.Clear(nature, k);
                 remotes.AddKingdom(k);
+                kingdoms.Place(k);
             };
+            // The others' kingdoms and villagers, as their games send them.
+            core.KingdomBuilt += (k, replaceAll, removed, added) => kingdoms.Apply(k, replaceAll, removed, added);
+            core.FolkMoved += (k, time, folk) => kingdoms.HeardFolk(k, time, folk);
             core.Joined += p =>
             {
                 remotes.Add(p.Id, p.Name);
@@ -88,7 +96,10 @@ namespace KingdomGame.Networking
                 {
                     KingdomGround.Clear(nature, k);
                     remotes.AddKingdom(k);
+                    kingdoms.Place(k);
                 }
+                // What they had built: shown even while they're away.
+                foreach (var (k, pieces) in core.AllBuilt()) kingdoms.Apply(k, true, System.Array.Empty<BuiltPiece>(), new List<BuiltPiece>(pieces));
             }
             failed = !core.Start();
 
@@ -97,6 +108,9 @@ namespace KingdomGame.Networking
             var mine = new KingdomInfo { X = throne.x, Y = throne.y };
             KingdomGround.Clear(nature, mine);   // as the others' games clear it
             me = core.AddLocalPlayer(GameSession.PlayerKey, GameSession.PlayerName, mine);
+            // Your kingdom, as the others see it.
+            mirror.SendBuilt = (replaceAll, removed, added) => core.LocalBuilt(me, replaceAll, removed, added);
+            mirror.SendFolk = folk => core.LocalFolk(me, folk);
             chat.Send = text => core.ChatLocal(me, text);
             chat.Notice(failed ? $"Couldn't open UDP port {settings.Port}: nobody can join (is another game hosting on this computer?)"
                 : $"Hosting on port {core.Port}. Friends join with your address (Esc shows how).");
@@ -109,6 +123,7 @@ namespace KingdomGame.Networking
             if (ruler != null) core.MoveLocal(me, RulerMotion.Of(ruler, ref lastSent));
             core.Poll(now);
             remotes.RenderTime = now;
+            kingdoms.RenderTime = now;
         }
 
         void OnDestroy() => core?.Stop();
@@ -138,7 +153,9 @@ namespace KingdomGame.Networking
     /// <summary>
     /// Playing in someone else's game: connects (showing "Connecting..." until the host
     /// answers), hands the world's seed to the game to make the same world, then
-    /// sends where your ruler is and shows the others. If the connection goes, it says why.
+    /// sends where your ruler is and shows the others. Your kingdom runs on this computer:
+    /// the host keeps it for you (saved there every few minutes and when you leave) and hands
+    /// it back when you join again; the others see it. If the connection goes, it says why.
     /// </summary>
     public sealed class NetClient : MonoBehaviour
     {
@@ -147,17 +164,23 @@ namespace KingdomGame.Networking
         readonly Dictionary<int, string> players = new Dictionary<int, string>();
         RulerController ruler;
         RemotePlayers remotes;
+        RemoteKingdoms kingdoms;
+        KingdomMirror mirror;
+        World.SaveSystem saves;
         ChatBox chat;
         DayNightCycle dayNight;
         NatureMap nature;
         float sendEvery = 1f / 15f, sendAt;
         Vector2 lastSent;
         string address, failure;
-        bool inWorld;
+        bool inWorld, leaving, quitting, kingdomBack;
+        int myKingdom;
         GUIStyle big, style, button;
 
         /// <summary>The host answered: make the world (seed, size, kingdoms) and then call <see cref="Enter"/>.</summary>
         public Action<WelcomeInfo> WorldReady { get; set; }
+        /// <summary>The host's copy of our kingdom couldn't be read: start a new kingdom instead.</summary>
+        public Action SaveUnreadable { get; set; }
 
         public void Connect(string host, int port, float sendRate)
         {
@@ -189,6 +212,35 @@ namespace KingdomGame.Networking
                 if (!inWorld) return;
                 KingdomGround.Clear(nature, k);
                 remotes.AddKingdom(k);
+                kingdoms.Place(k);
+            };
+            // The others' kingdoms and villagers.
+            core.Built += (k, replaceAll, removed, added) =>
+            {
+                if (inWorld && k != myKingdom) kingdoms.Apply(k, replaceAll, removed, added);
+            };
+            core.Folk += (k, time, folk) =>
+            {
+                clock.Heard(time, Time.realtimeSinceStartupAsDouble);
+                if (inWorld && k != myKingdom) kingdoms.HeardFolk(k, time, folk);
+            };
+            // Our kingdom as we left it on this server: put back, then the others are sent all of it.
+            // (It comes every time, empty the first time: then there's nothing to wait for.)
+            core.YourSave += bytes =>
+            {
+                if (!inWorld || kingdomBack) return;
+                kingdomBack = true;
+                var data = bytes.Length > 0 ? World.SaveSystem.Unpack(bytes) : null;
+                if (data != null) saves.Restore(data);
+                else
+                {
+                    // Never saved over on its own: the host keeps the old one unless you save on purpose (Esc).
+                    SaveUnreadable?.Invoke();
+                    saves.KeepOldSave("Your kingdom from last time couldn't be read, so you have a new one");
+                }
+                saves.Waiting = null;
+                mirror.enabled = true;
+                mirror.SendAllAgain();
             };
             core.Snapshot += (time, list) =>
             {
@@ -202,14 +254,32 @@ namespace KingdomGame.Networking
             core.Connect(host, port, GameSession.PlayerKey, GameSession.PlayerName);
         }
 
-        /// <summary>The world is made: start showing the others and sending where the ruler is.</summary>
-        public void Enter(WelcomeInfo welcome, RulerController rulerController, RemotePlayers remotePlayers, ChatBox chatBox, DayNightCycle clockOfDay, NatureMap natureMap)
+        /// <summary>
+        /// The world is made: start showing the others and sending where the ruler is. <paramref name="saveSystem"/>
+        /// saves our kingdom on the host; <paramref name="kingdomMirror"/> (switched on once our kingdom from last time
+        /// is back) sends it to the others; <paramref name="otherKingdoms"/> shows theirs.
+        /// </summary>
+        public void Enter(WelcomeInfo welcome, RulerController rulerController, RemotePlayers remotePlayers, ChatBox chatBox, DayNightCycle clockOfDay,
+            NatureMap natureMap, RemoteKingdoms otherKingdoms, KingdomMirror kingdomMirror, World.SaveSystem saveSystem)
         {
             ruler = rulerController;
             remotes = remotePlayers;
             chat = chatBox;
             dayNight = clockOfDay;
             nature = natureMap;
+            kingdoms = otherKingdoms;
+            mirror = kingdomMirror;
+            saves = saveSystem;
+            myKingdom = welcome.YourKingdom;
+            foreach (var k in welcome.Kingdoms) if (k.Id != myKingdom) kingdoms.Place(k);
+            mirror.SendBuilt = (replaceAll, removed, added) => core.SendBuilt(replaceAll, removed, added);
+            mirror.SendFolk = folk => core.SendFolk(folk);
+            saves.Upload = bytes => core.SendKingdomSave(bytes);
+            // Coming back: until our kingdom from last time is here (Msg.YourSave, right after the welcome), the
+            // others aren't sent it and it isn't saved (that would put an empty kingdom over the real one).
+            kingdomBack = !welcome.HasSave;
+            mirror.enabled = kingdomBack;
+            if (!kingdomBack) saves.Waiting = "Your kingdom from last time is still on its way";
             foreach (var p in welcome.Players)
             {
                 players[p.Id] = p.Name;
@@ -234,6 +304,7 @@ namespace KingdomGame.Networking
             core.Poll();
             if (!inWorld) return;
             remotes.RenderTime = clock.Known ? clock.Now(Time.realtimeSinceStartupAsDouble) : 0;
+            kingdoms.RenderTime = remotes.RenderTime;
             if (ruler != null && Time.unscaledTime >= sendAt)
             {
                 sendAt = Time.unscaledTime + sendEvery;
@@ -244,14 +315,43 @@ namespace KingdomGame.Networking
         void OnDestroy() => core?.Disconnect();
         void OnApplicationQuit() => core?.Disconnect();
 
-        /// <summary>Leaves the game and goes back to the main menu.</summary>
-        public void Leave()
+        /// <summary>
+        /// Leaves the game (saving our kingdom on the host first, if we're in) and goes back to the main menu,
+        /// or with <paramref name="quit"/> closes the game.
+        /// </summary>
+        public void Leave(bool quit = false)
+        {
+            if (leaving) return;
+            leaving = true;
+            quitting = quit;
+            if (core != null && core.Connected && inWorld && saves != null && saves.SafeToOverwrite())
+            {
+                saves.Save(true);
+                StartCoroutine(LeaveSoon());   // a moment for the save to get there
+                return;
+            }
+            LeaveNow();
+        }
+
+        System.Collections.IEnumerator LeaveSoon()
+        {
+            float until = Time.unscaledTime + 1f;
+            while (Time.unscaledTime < until)
+            {
+                core?.Poll();
+                yield return null;
+            }
+            LeaveNow();
+        }
+
+        void LeaveNow()
         {
             core?.Disconnect();
             core = null;
             GameSession.Role = NetRole.Offline;
             Time.timeScale = 1f;
-            if (Application.CanStreamedLevelBeLoaded(GameSession.MenuScene)) SceneManager.LoadScene(GameSession.MenuScene);
+            if (quitting) PauseMenu.Quit();
+            else if (Application.CanStreamedLevelBeLoaded(GameSession.MenuScene)) SceneManager.LoadScene(GameSession.MenuScene);
             else Application.Quit();
         }
 

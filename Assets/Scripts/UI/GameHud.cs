@@ -215,7 +215,7 @@ namespace KingdomGame.UI
                 GUI.color = old;
                 GUI.Label(new Rect(x, y, width, height), health.Dead ? "<b>Fallen</b>" : $"<b>Health {Mathf.CeilToInt(health.Current)} / {Mathf.CeilToInt(health.Max)}</b>", barLabel);
                 y += height + 6f;
-                if (ruler.Armory != null && !ruler.Visiting)
+                if (ruler.Armory != null)
                 {
                     GUI.Box(new Rect(x, y, width, height), $"In hand: <b>{ruler.WeaponName}</b>   <color=#b8ad98>(Q / 1-9)</color>", box);
                     y += height + 6f;

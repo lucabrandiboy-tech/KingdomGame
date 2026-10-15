@@ -338,7 +338,11 @@ namespace KingdomGame.Zombies
                 float extent = 0f;
                 if (world != null)
                     foreach (var cell in world.ChunkCells)
+                    {
+                        var wall = world.ChunkAt(cell)?.Owner;
+                        if (wall == null || wall.Remote) continue;   // (online: another player's kingdom, far off)
                         extent = Mathf.Max(extent, ((Vector2)cell + new Vector2(0.5f, 0.5f) - center).magnitude);
+                    }
                 if (kingdom != null)
                 {
                     foreach (var s in kingdom.Storages) if (s != null && fullMap.Contains(s.Cells.position)) extent = Mathf.Max(extent, (s.Center - center).magnitude);

@@ -75,11 +75,6 @@ namespace KingdomGame.Character
         public bool Busy { get; private set; }
         /// <summary>Typing in the chat: stands still.</summary>
         public bool Typing { get; set; }
-        /// <summary>
-        /// In someone else's game: walking about, doors and chat, but no shooting, gathering or
-        /// building yet (those aren't shared over the network yet).
-        /// </summary>
-        public bool Visiting { get; set; }
         /// <summary>The kingdom's weapons: the one in hand is fired (null: the weapons given in Setup).</summary>
         public Combat.Armory Armory { get; set; }
         /// <summary>Opens the weapons screen (E at an anvil).</summary>
@@ -201,12 +196,6 @@ namespace KingdomGame.Character
             }
 
             float now = Time.time;
-            if (Visiting)
-            {
-                Interact(now);
-                if (now > noticeUntil) Notice = null;
-                return;
-            }
             // The weapons: from the armory (the one in hand, the heavy one, the explosive), or those given in Setup.
             SwitchWeapons();
             var primary = Armory != null ? Armory.Selected?.weapon : primaryWeapon;
@@ -591,15 +580,7 @@ namespace KingdomGame.Character
                         if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; }
                     }
 
-            if (Visiting)
-            {
-                // Visiting: no gathering or building (yet).
-                node = null;
-                blueprint = null;
-                storage = null;
-                anvil = null;
-            }
-            if (lever != null && !Visiting)
+            if (lever != null)
             {
                 Hint = "E: pull the lever (opens or shuts the gates near it)";
                 if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) kingdom.PullLever(lever);

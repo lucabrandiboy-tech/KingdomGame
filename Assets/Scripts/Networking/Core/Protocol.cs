@@ -127,6 +127,8 @@ namespace KingdomGame.Networking
         public float Hour;
         /// <summary>The host's game: survival (research the ages) or free build (everything open).</summary>
         public bool Survival;
+        /// <summary>The server has your kingdom from last time (it comes straight after, as <see cref="Msg.YourSave"/>).</summary>
+        public bool HasSave;
         /// <summary>Where you were when you last left this server (false the first time: start at your throne).</summary>
         public bool HasSpawn;
         public float SpawnX, SpawnY;
@@ -143,6 +145,7 @@ namespace KingdomGame.Networking
             w.Put(Day);
             w.Put(Hour);
             w.Put(Survival);
+            w.Put(HasSave);
             w.Put(HasSpawn);
             w.Put(SpawnX);
             w.Put(SpawnY);
@@ -164,6 +167,7 @@ namespace KingdomGame.Networking
                 Day = r.GetInt(),
                 Hour = r.GetFloat(),
                 Survival = r.GetBool(),
+                HasSave = r.GetBool(),
                 HasSpawn = r.GetBool(),
                 SpawnX = r.GetFloat(),
                 SpawnY = r.GetFloat(),
@@ -292,7 +296,7 @@ namespace KingdomGame.Networking
     public static class Protocol
     {
         /// <summary>Goes up whenever messages change: a game and a server must have the same one.</summary>
-        public const int Version = 3;
+        public const int Version = 4;
         /// <summary>Longest name of a building or wall material in a Built message.</summary>
         public const int MaxPieceName = 64;
         /// <summary>Most pieces in one Built message (so each is a modest size).</summary>

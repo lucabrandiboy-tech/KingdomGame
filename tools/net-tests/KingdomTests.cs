@@ -63,7 +63,7 @@ static partial class Tests
         try
         {
             Pump(server, new[] { a }, () => a.Welcome != null && a.YourSave != null);
-            Check(a.YourSave.Length == 0, "a new player has a save");
+            Check(a.YourSave.Length == 0 && !a.Welcome.HasSave, "a new player has a save");
             int ka = a.Welcome.YourKingdom;
             a.Core.SendBuilt(true, Pieces(), Pieces(WallAt(0, 0), WallAt(1, 0), Piece("Bed", 3, 3)));
             Pump(server, new[] { a }, () => server.BuiltIn(ka).Count == 3);
@@ -155,6 +155,7 @@ static partial class Tests
             again = new Player(server.Port, "key-a", "Alice");
             Pump(server, new[] { again }, () => again.YourSave != null, 10);
             Check(again.Welcome.YourKingdom == ka, "Alice came back to another kingdom");
+            Check(again.Welcome.HasSave, "the welcome doesn't say Alice's save is coming");
             Check(again.YourSave.SequenceEqual(bytes), $"Alice got back {again.YourSave.Length} bytes, not her save");
         }
         finally

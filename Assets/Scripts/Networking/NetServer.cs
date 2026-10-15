@@ -73,7 +73,8 @@ namespace KingdomGame.Networking
             nature = natureMap;
             dayNight = clock;
             worldName = world;
-            core = new ServerCore(settings);
+            // -survival: players research the ages (free build otherwise: everything open).
+            core = new ServerCore(settings) { Survival = CommandLine.Has("-survival") };
             core.Log += Write;
             core.Clock = () => dayNight != null ? (dayNight.Day, dayNight.Hour) : (1, 8f);
             core.SpotIsGood = (x, y) => KingdomGround.IsGood(nature, x, y);

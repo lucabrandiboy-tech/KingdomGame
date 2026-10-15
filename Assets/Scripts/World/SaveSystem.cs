@@ -41,7 +41,7 @@ namespace KingdomGame.World
 
         public GameMode Mode => mode;
         /// <summary>Whether this mode has a saved game to load.</summary>
-        public bool HasSave => SaveFiles.Exists(mode, hosted);
+        public bool HasSave => Upload == null && SaveFiles.Exists(mode, hosted);
         /// <summary>A game you host (saved in its own file).</summary>
         public bool Hosted { get => hosted; set => hosted = value; }
         /// <summary>The game being hosted (its players are saved too), or null.</summary>
@@ -49,6 +49,40 @@ namespace KingdomGame.World
         OthersSave loadedOthers;
         /// <summary>The zombie bases (survival), saved with the game, or null.</summary>
         public Zombies.ZombieBases Bases { get; set; }
+        /// <summary>
+        /// Online, in someone else's game: saving sends this kingdom to the host, who keeps it for next time (no file here).
+        /// </summary>
+        public System.Action<byte[]> Upload { get; set; }
+        /// <summary>Why the game can't be saved yet (online: your kingdom from last time is still on its way), or null.</summary>
+        public string Waiting { get; set; }
+
+        /// <summary>A saved game as compressed bytes (to send), and back (null if they aren't one).</summary>
+        public static byte[] Pack(SaveData data)
+        {
+            var json = System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(data));
+            using (var output = new System.IO.MemoryStream())
+            {
+                using (var zip = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionLevel.Optimal)) zip.Write(json, 0, json.Length);
+                return output.ToArray();
+            }
+        }
+
+        public static SaveData Unpack(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length == 0) return null;
+            try
+            {
+                using (var input = new System.IO.MemoryStream(bytes))
+                using (var zip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress))
+                using (var reader = new System.IO.StreamReader(zip, System.Text.Encoding.UTF8))
+                    return JsonUtility.FromJson<SaveData>(reader.ReadToEnd());
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Couldn't read the kingdom the server kept: {e.Message}");
+                return null;
+            }
+        }
 
         public void Setup(GameContent gameContent, GameMode gameMode, int mapSeed, Kingdom owner, RulerController rulerController,
             Research tech, DayNightCycle clock, SurvivalDirector survival, ZombieDirector zombieDirector, PixelWorld pixelWorld)
@@ -109,6 +143,7 @@ namespace KingdomGame.World
             if (kingdom == null || ruler == null) why = "Nothing to save";
             else if (waves != null && waves.Now == SurvivalDirector.Phase.Over) why = "You have fallen: there's nothing to save";
             else if (ruler.Dead) why = "Wait until you're back on your feet";
+            else if (Waiting != null) why = Waiting;
             return why == null;
         }
 
@@ -118,6 +153,13 @@ namespace KingdomGame.World
             if (!CanSave(out string why)) return Say(why);
             try
             {
+                if (Upload != null)
+                {
+                    Upload(Pack(Collect()));
+                    loaded = true;
+                    keepOldSave = false;
+                    return Say("Kingdom saved on the host", 2f);
+                }
                 SaveFiles.Write(mode, Collect(), hosted);
                 loaded = true;   // this game is the saved one now
                 keepOldSave = false;
@@ -186,7 +228,7 @@ namespace KingdomGame.World
                 foreach (var cell in world.ChunkCells)
                 {
                     var wall = world.ChunkAt(cell)?.Owner;
-                    if (wall == null || wall.Collapsed || wall.Material == null || !seen.Add(wall)) continue;
+                    if (wall == null || wall.Collapsed || wall.Remote || wall.Material == null || !seen.Add(wall)) continue;
                     var save = new WallSave { material = wall.Material.name, cells = wall.Cells, battered = wall.Battered };
                     foreach (var c in wall.Cells.allPositionsWithin)
                         if (world.ChunkAt(c)?.Owner != wall) save.gone.Add(c);
@@ -320,7 +362,7 @@ namespace KingdomGame.World
             }
             loaded = true;
             if (missing > 0) KeepOldSave($"{missing} saved things couldn't be put back (their assets are gone or renamed)");
-            else Say("Game loaded");
+            else Say(Upload != null ? "Your kingdom is back" : "Game loaded");
             return missing;
         }
 
@@ -330,7 +372,7 @@ namespace KingdomGame.World
             if (data.version < 3)
                 Debug.LogWarning("This game was saved before worlds were endless: what you built comes back, but the trees and ground round it are new.");
 
-            if (dayNight != null) dayNight.SetTime(data.day, data.hour);
+            if (dayNight != null && Upload == null) dayNight.SetTime(data.day, data.hour);   // (online the host's clock is the time)
             if (research != null && data.research != null) research.Load(data.research);
             if (kingdom.Armory != null && data.armory != null) kingdom.Armory.Load(data.armory);
 

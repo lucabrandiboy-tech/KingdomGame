@@ -98,31 +98,9 @@ namespace KingdomGame.World
             var rig = Follow(parts, kingdom, ruler);
 
             // The ages: survival researches them (days of real time each), free build has them all.
-            var research = gameObject.AddComponent<Research>();
             var unlocking = !survival ? Research.Unlocking.Everything
                 : content.progression != null && content.progression.survivalAgesByWaves ? Research.Unlocking.ByAge : Research.Unlocking.ByResearch;
-            research.Setup(content.progression, kingdom, unlocking);
-            gameObject.AddComponent<TechScreen>().Setup(research);
-            gameObject.AddComponent<VillagersPanel>().Setup(kingdom);
-
-            // The ruler's weapons: a club to start with, the rest made at an anvil (free build has them all).
-            if (content.armory != null)
-            {
-                var armory = kingdom.gameObject.AddComponent<Armory>();
-                armory.Setup(content.armory, kingdom, unlocking == Research.Unlocking.Everything);
-                kingdom.Armory = armory;
-                rulerController.Armory = armory;
-                var armoryPanel = gameObject.AddComponent<ArmoryPanel>();
-                armoryPanel.Setup(armory, kingdom);
-                rulerController.OpenArmory = armoryPanel.Open;
-            }
-            else Debug.LogWarning("The Game Content has no Armory Config, so the ruler has the old rifle. Run KingdomGame > Build Game Scenes again.", this);
-            var storagePanel = gameObject.AddComponent<StoragePanel>();
-            storagePanel.Setup(rulerController);
-            rulerController.OpenStorage = storagePanel.Open;
-
-            var builder = kingdom.gameObject.AddComponent<BuildController>();
-            builder.Setup(kingdom, rulerController, rig, parts.Canopies, content.view);
+            var (research, builder) = KingdomTools(kingdom, rulerController, rig, parts, unlocking);
 
             // Survival: the zombies, and the waves they come in. Falling ends the game.
             SurvivalDirector waves = null;
@@ -172,8 +150,11 @@ namespace KingdomGame.World
                 remotes.Setup(content.player);
                 var chat = gameObject.AddComponent<ChatBox>();
                 chat.Ruler = rulerController;
+                // The others' kingdoms shown here, and yours sent to them.
+                var (others, mirror) = KingdomSharing(world, kingdom, ruler.transform);
                 host = gameObject.AddComponent<NetHost>();
-                host.Setup(Settings(network, seed), kingdom, rulerController, remotes, chat, parts.Nature, dayNight, saved != null ? saved.others : null);
+                host.Setup(Settings(network, seed), kingdom, rulerController, remotes, chat, parts.Nature, dayNight, saved != null ? saved.others : null,
+                    others, mirror, survival);
                 saves.Host = host;
             }
             gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves, host, null);
@@ -182,6 +163,48 @@ namespace KingdomGame.World
             if (!hosting && (content.progression == null || content.progression.allowCheats))
                 gameObject.AddComponent<CheatMenu>().Setup(kingdom, rulerController, research, dayNight, waves, zombies,
                     content.survival != null ? content.survival.zombies : null);
+        }
+
+        // What a ruler needs to run their own kingdom: the ages and research, the panels (villagers, armory,
+        // storage) and building from the throne. The same alone, hosting, or in someone else's game.
+        (Research Research, BuildController Builder) KingdomTools(Kingdom kingdom, RulerController rulerController, CameraRig rig, WorldParts parts,
+            Research.Unlocking unlocking)
+        {
+            var research = gameObject.AddComponent<Research>();
+            research.Setup(content.progression, kingdom, unlocking);
+            gameObject.AddComponent<TechScreen>().Setup(research);
+            gameObject.AddComponent<VillagersPanel>().Setup(kingdom);
+
+            // The ruler's weapons: a club to start with, the rest made at an anvil (free build has them all).
+            if (content.armory != null)
+            {
+                var armory = kingdom.gameObject.AddComponent<Armory>();
+                armory.Setup(content.armory, kingdom, unlocking == Research.Unlocking.Everything);
+                kingdom.Armory = armory;
+                rulerController.Armory = armory;
+                var armoryPanel = gameObject.AddComponent<ArmoryPanel>();
+                armoryPanel.Setup(armory, kingdom);
+                rulerController.OpenArmory = armoryPanel.Open;
+            }
+            else Debug.LogWarning("The Game Content has no Armory Config, so the ruler has the old rifle. Run KingdomGame > Build Game Scenes again.", this);
+            var storagePanel = gameObject.AddComponent<StoragePanel>();
+            storagePanel.Setup(rulerController);
+            rulerController.OpenStorage = storagePanel.Open;
+
+            var builder = kingdom.gameObject.AddComponent<BuildController>();
+            builder.Setup(kingdom, rulerController, rig, parts.Canopies, content.view);
+            return (research, builder);
+        }
+
+        // Online: the other players' kingdoms as shown here, and the one that sends yours to them.
+        (RemoteKingdoms Others, KingdomMirror Mirror) KingdomSharing(PixelWorld world, Kingdom kingdom, Transform ruler)
+        {
+            var others = new GameObject("Other kingdoms").AddComponent<RemoteKingdoms>();
+            others.transform.SetParent(transform, false);
+            others.Setup(content, kingdom, world, ruler);
+            var mirror = kingdom.gameObject.AddComponent<KingdomMirror>();
+            mirror.Setup(kingdom, world);
+            return (others, mirror);
         }
 
         // Playing in someone else's game: connect first; the world is made once the host says what it is.
@@ -200,17 +223,24 @@ namespace KingdomGame.World
             // Every kingdom's ground is cleared the same way the host cleared it.
             foreach (var k in welcome.Kingdoms) KingdomGround.Clear(parts.Nature, k);
 
-            // Your kingdom (just its throne and storehouse for now: building online comes next), others as markers.
+            // Your own kingdom, run on this computer. The first time on this server it starts like a new game;
+            // after that the host hands back what you had (just after this), so it starts with only its throne.
             var mine = welcome.Kingdoms.Find(k => k.Id == welcome.YourKingdom);
             var throneCell = mine != null ? new Vector2Int(mine.X, mine.Y) : Vector2Int.zero;
-            var kingdom = MakeKingdom(world, null, true, LandsSize(), throneCell, false);
+            var survival = welcome.Survival ? content.survival : null;
+            var kingdom = MakeKingdom(world, survival, false, LandsSize(), throneCell, true);
+            if (!welcome.HasSave) StartKingdom(kingdom, survival);
             // Back where you left off last time on this server, or by your throne the first time.
             var start = kingdom.Throne != null ? kingdom.Throne.Front : Vector2.zero;
             if (welcome.HasSpawn && NatureMap.Inside(new Vector2Int(Mathf.FloorToInt(welcome.SpawnX), Mathf.FloorToInt(welcome.SpawnY)))) start = new Vector2(welcome.SpawnX, welcome.SpawnY);
             var ruler = SpawnRuler(start);
             var rulerController = ruler.GetComponent<RulerController>();
-            rulerController.Visiting = true;
             var rig = Follow(parts, kingdom, ruler);
+
+            // The ages as the host's game has them: researched in survival, all open in free build.
+            // (No zombies here yet: they come with a later online stage.)
+            var unlocking = welcome.Survival ? Research.Unlocking.ByResearch : Research.Unlocking.Everything;
+            var (research, builder) = KingdomTools(kingdom, rulerController, rig, parts, unlocking);
 
             var remotes = new GameObject("Other players").AddComponent<RemotePlayers>();
             remotes.transform.SetParent(transform, false);
@@ -218,13 +248,20 @@ namespace KingdomGame.World
             foreach (var k in welcome.Kingdoms) if (k.Id != welcome.YourKingdom) remotes.AddKingdom(k);
             var chat = gameObject.AddComponent<ChatBox>();
             chat.Ruler = rulerController;
+            var (others, mirror) = KingdomSharing(world, kingdom, ruler.transform);
 
             var hud = gameObject.AddComponent<GameHud>();
-            hud.Setup(rulerController, dayNight, kingdom, null, rig, null);
+            hud.Setup(rulerController, dayNight, kingdom, builder, rig, null);
             gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);
+            // Saving sends your kingdom to the host (it keeps it for you), not to a file here.
+            var saves = gameObject.AddComponent<SaveSystem>();
+            saves.Setup(content, Mode, welcome.Seed, kingdom, rulerController, research, dayNight, null, null, world);
             parts.Streamer.ShowNow();
-            client.Enter(welcome, rulerController, remotes, chat, dayNight, parts.Nature);
-            gameObject.AddComponent<PauseMenu>().Setup(null, null, null, null, client);
+            rulerController.ShowWeapon();
+            // If the host's copy of your kingdom can't be read: start a new one (it isn't saved over unless you save).
+            client.SaveUnreadable = () => StartKingdom(kingdom, survival);
+            client.Enter(welcome, rulerController, remotes, chat, dayNight, parts.Nature, others, mirror, saves);
+            gameObject.AddComponent<PauseMenu>().Setup(builder, null, saves, null, client);
             AddDebug();
         }
 
@@ -301,30 +338,45 @@ namespace KingdomGame.World
 
         int LandsSize() => content.kingdom != null ? content.kingdom.landsSize : 512;
 
-        // `fresh`: a new game (a loaded one puts back its own storehouses and villagers). `lands`: tiles across the
-        // kingdom's lands, a square round the throne. `throneCell`: where the throne goes (null: the Kingdom Config's),
-        // the storehouse next to it the same way. `villagers`: false makes none.
+        // `fresh`: a new game, so it gets its storehouse and villagers (a loaded one puts back its own). `lands`: tiles
+        // across the kingdom's lands, a square round the throne. `throneCell`: where the throne goes (null: the Kingdom
+        // Config's), the storehouse next to it the same way. `villagers`: false makes none.
         Kingdom MakeKingdom(PixelWorld world, SurvivalConfig survival, bool fresh, int lands, Vector2Int? throneCell, bool villagers)
         {
             var go = new GameObject("Kingdom");
             go.transform.SetParent(transform, false);
             var kingdom = go.AddComponent<Kingdom>();
-            var storehouse = content.storehouse;
-            if (storehouse == null && content.buildMenu != null)
-                foreach (var b in content.buildMenu)
-                    if (b != null && b.kind == BuildingKind.Storage) { storehouse = b; break; }
             var at = throneCell ?? (content.kingdom != null ? content.kingdom.throneCell : new Vector2Int(-1, 2));
             lands = Mathf.Clamp(lands, 128, 2048);
             var landsCells = new RectInt(at.x - lands / 2, at.y - lands / 2, lands, lands);
-            kingdom.Setup(content.kingdom, content.villager, content.buildMenu, world, landsCells, storehouse);
+            kingdom.Setup(content.kingdom, content.villager, content.buildMenu, world, landsCells, Storehouse());
+            kingdom.PlaceThrone(at);
+            if (fresh) StartKingdom(kingdom, survival, villagers);
+            return kingdom;
+        }
 
+        BuildingConfig Storehouse()
+        {
+            if (content.storehouse != null) return content.storehouse;
+            if (content.buildMenu != null)
+                foreach (var b in content.buildMenu)
+                    if (b != null && b.kind == BuildingKind.Storage) return b;
+            return null;
+        }
+
+        // A new kingdom's start: the storehouse next to the throne with the starting wood, stone and food, and the
+        // first villagers (unless `villagers` is false).
+        void StartKingdom(Kingdom kingdom, SurvivalConfig survival, bool villagers = true)
+        {
             var config = kingdom.Config;
-            var throne = kingdom.PlaceThrone(at);
-            if (!fresh) return kingdom;
+            var throne = kingdom.Throne;
+            if (config == null || throne == null) return;
+            var at = throne.Cells.position;
+            var storehouse = Storehouse();
             if (storehouse != null)
             {
                 var storage = kingdom.AddStorage(storehouse, at + (config.storageCell - config.throneCell));
-                if (!villagers) return kingdom;
+                if (!villagers) return;
                 storage.Deposit(ResourceType.Wood, survival != null ? survival.startWood : config.startWood);
                 storage.Deposit(ResourceType.Stone, survival != null ? survival.startStone : config.startStone);
                 storage.Deposit(ResourceType.Food, survival != null ? survival.startFood : config.startFood);
@@ -343,7 +395,6 @@ namespace KingdomGame.World
                 // Two builders to start with, the rest cutting wood (V changes it).
                 kingdom.AddVillager(spot, i < 2 ? Villagers.Job.Builder : Villagers.Job.Woodcutter);
             }
-            return kingdom;
         }
 
         void OnDestroy()

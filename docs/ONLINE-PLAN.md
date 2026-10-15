@@ -11,10 +11,11 @@ you can test.
 
 ## How it works
 
-- **The server runs the real game.** It decides where everyone's villagers walk,
-  what gets built, what the zombies do and what breaks. Players' copies of the game
-  show what the server tells them and send it what they want to do ("build a wall
-  here", "I walked here").
+- **Each player's computer runs their own kingdom** (changed in stage 3, see
+  `DECISIONS.md` section 16): villagers, building, storage and research run on your
+  computer exactly as offline, and it sends the others what's built and where its
+  villagers are. The host or server passes that on, and keeps each player's kingdom
+  for when they come back. Zombies (stage 4) will be run by the host or server.
 - **Built things go over the network as events** ("a stone wall went up on these
   cells", "this blow hit the wall here"). Every computer rebuilds the same result
   itself. Wall damage was written for this from the start: every computer breaks
@@ -39,16 +40,18 @@ you can test.
    main menu and play it while friends **join** with your address. Everyone sees each
    other walk around, chats, and each new player gets a kingdom spot. (A dedicated
    server with no player, started with `-server`, also exists for later.)
-3. **Own kingdoms, synced.** Several kingdoms in one world. Building, blueprints,
-   villagers, storage and research all go through the server. Late joiners see
-   everything.
+3. **Own kingdoms, synced** (done, `docs/ONLINE-TEST.md` part 4). Everyone who joins
+   gets a real kingdom: villagers, building, research, weapons, saved by the host.
+   Everyone sees everyone's walls, buildings and villagers; late joiners see all of
+   it. Not yet: zombies for players who joined, others' roofs and house insides,
+   trees cut by others.
 4. **Nights.** Hordes every night at every kingdom, getting harder over the days.
    Zombies, towers, traps and wall damage are synced. Falling means respawning at
    your throne.
 5. **The server keeps the world.** Started: a hosted game's save and a dedicated
-   server's world file keep every player's kingdom spot and where they were. Once
-   stage 3 shares kingdoms, their buildings and villagers are saved the same way. Then
-   we measure with test players (bots) and tune how much each player is sent.
+   server's world file keep every player's kingdom spot, where they were, what each
+   kingdom has built and each player's whole kingdom (since stage 3). Then we measure
+   with test players (bots) and tune how much each player is sent.
 
 Steam, server browsers, PvP raiding, clans and anti-cheat are later phases (see
 `ROADMAP.md`).
@@ -58,8 +61,9 @@ Steam, server browsers, PvP raiding, clans and anti-cheat are later phases (see
 - None of this can be run in Unity from the cloud. The networking part is tested
   with real connections outside Unity. Everything that needs Unity is untested until
   you try it.
-- To start with, your own character's movement is decided by your computer, and
-  the server only checks it's believable (not too fast, not through walls). That's
-  the simple, responsive way. Proper anti-cheat comes later.
+- Your own character's movement and your own kingdom are decided by your computer;
+  the server only checks movement is believable (not too fast). That's the simple,
+  responsive way, and fine between friends, but a modded game could cheat. Proper
+  anti-cheat comes later.
 - The "100+ players" goal from the brief needs measuring (stage 5). The first goal is
   you and a few friends playing smoothly.

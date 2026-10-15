@@ -1,14 +1,16 @@
 # Testing online play (hosting on your own PC)
 
 **What works so far:** you host your own game (survival or free build) and play it as
-normal while friends join. Everyone sees each other walk around, chat with **Enter**,
-and every player who joins gets their own kingdom spot (a throne and storehouse) in
-the same endless world.
+normal while friends join. Everyone sees each other walk around and chats with **Enter**.
+Every player who joins gets **a real kingdom of their own** in the same endless world
+(villagers, building, research, weapons), runs it on their own computer, and sees
+everyone else's walls, buildings and villagers. The host keeps each player's kingdom
+for when they come back (part 4 below).
 
-**What doesn't yet:** players who joined see the map and everyone walking, but not
-yet what you've built, your villagers, the zombies or wall damage. They can't build,
-gather or shoot yet. Sharing all of that is the next online step. See
-`docs/ONLINE-PLAN.md`.
+**What doesn't yet:** players who joined have no zombies (only the host's game has
+them), others' walls can't be damaged, roofs and the insides of other players' houses
+and mines aren't shown, and trees someone else cuts down are still standing on your
+screen. Zombies online are the next step. See `docs/ONLINE-PLAN.md`.
 
 Nothing here has been run in Unity yet. The networking part was tested with a real
 server and players outside Unity, which is the part I can run here. Tell me what goes
@@ -28,8 +30,9 @@ A game can only join another game that's running separately, so you need a **bui
    address `127.0.0.1` > **Join**.
 5. You should see:
    - "Joining 127.0.0.1..." and then the map.
-   - Your new kingdom (a throne and a storehouse) near the host's, about 560 tiles away
-     (a few minutes' walk: each kingdom has lands 512 tiles across).
+   - Your new kingdom near the host's, about 560 tiles away (a few minutes' walk: each
+     kingdom has lands 512 tiles across): a throne, a storehouse with the starting wood,
+     stone and food, and villagers, just like a new game alone.
    - The other ruler walking about, with their name over their head, moving smoothly.
    - A throne marker with the host's name at the host's kingdom.
    - Enter, type, Enter: the message shows in both windows.
@@ -65,6 +68,33 @@ forward is **UDP** (not TCP), and that you're hosting at the time. Some internet
 don't give you a public address of your own ("CGNAT"); if nothing works, tell me and
 we'll look at the other options.
 
+## 4. Everyone's own kingdom
+
+Two copies on one computer as in part 1 (host in the .exe, join from the Editor) is enough.
+
+1. **Joined player builds.** In the joining window, build like in a game alone: a few
+   wall tiles, a door, a house, a torch. Your villagers build them.
+2. **The host sees it.** Walk the host's ruler towards the joined player's kingdom
+   (the cheat menu is off online, so it's a walk of a minute or two). From about 400
+   tiles away the kingdom appears: walls, buildings, lit torches at night,
+   the villagers walking about carrying things. Walk up to their door: it opens for you.
+   Their walls stop you; shooting them does nothing.
+3. **The other way round.** Build something at the host's kingdom: the joined player
+   sees it appear within a second or so if they're near.
+4. **Coming back.** In the joining window: Esc > **Leave the game** (it says
+   "Kingdom saved on the host" first). Join again with the same name: your kingdom
+   comes back as you left it ("Your kingdom is back"), villagers, storehouse stock,
+   research and all. While you were away, the host could still see your kingdom.
+5. **Kept by the host's save.** Host: Esc > Save, close both. Host again with
+   **Continue**, join again with the same name: still your kingdom.
+6. **A late joiner sees everything.** With something built in both kingdoms, join with
+   a third name (a second build of the game, or close and rejoin with a new name): both
+   kingdoms show up when you get near them.
+
+What to tell me: anything that doesn't appear, appears in the wrong place or facing the
+wrong way, anything you can walk through that you shouldn't, and how smooth it is
+(F3 shows frames per second) near a big kingdom.
+
 ## Settings
 
 `Assets/Data/Network/NetworkConfig`: port, most players, server name, how far apart
@@ -78,8 +108,9 @@ were when they left). Their kingdoms stay in the world while they're away.
 ## A server with no player (optional, later)
 
 The game can also run as a dedicated server with no player of its own: start the built
-game with `-server` (plus `-batchmode -nographics` to run without a window). For now
-that's only useful for testing. Hosting from the menu is the way to play.
+game with `-server` (plus `-batchmode -nographics` to run without a window). Players
+get free build there (everything open); add `-survival` and they research the ages
+instead. For now that's only useful for testing. Hosting from the menu is the way to play.
 
 A dedicated server keeps its world in `saves/server-world.json` (in the game's folder,
 `C:\Users\you\AppData\LocalLow\...\saves`): the seed, the time of day, and every player's

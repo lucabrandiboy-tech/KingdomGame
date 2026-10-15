@@ -313,6 +313,14 @@ namespace KingdomGame.Building
             return sprite;
         }
 
+        /// <summary>The picture of a floor tile at <paramref name="cell"/> (each floor has a few, picked by where it is).</summary>
+        public Sprite FloorLook(BuildingConfig b, Vector2Int cell)
+        {
+            uint pick = DamageShape.Hash(0xF1u, cell.x, cell.y) % (uint)FloorVariants;
+            var sprites = b != null && looks.TryGetValue(b, out var s) ? s : null;
+            return sprites != null && sprites[pick] != null ? sprites[pick] : LookOf(b);
+        }
+
         /// <summary>The picture for a building facing <paramref name="rotation"/> (its blueprint ghost uses it too).</summary>
         public Sprite LookOf(BuildingConfig b, int rotation = 0)
         {
@@ -321,7 +329,8 @@ namespace KingdomGame.Building
             return sprite != null ? sprite : White;
         }
 
-        Sprite ShadowOf(BuildingConfig b, int rotation) =>
+        /// <summary>A building's shadow facing <paramref name="rotation"/> (null if it has none).</summary>
+        public Sprite ShadowOf(BuildingConfig b, int rotation) =>
             b != null && shadows.TryGetValue(b, out var s) ? s[b.ClampRotation(rotation)] : null;
 
         // --------------------------------------------------------- buildings --
@@ -832,8 +841,7 @@ namespace KingdomGame.Building
             var thing = BuiltAt(cell);
             if (thing is House house) return $"Right click: tear down the {house.Name} and everything inside (half the cost back)";
             if (thing != null) return $"Right click: tear down the {thing.Config.displayName} (half its cost back)";
-            var wall = world != null ? world.ChunkAt(cell) : null;
-            return wall != null ? "Right click: tear down this wall (half its cost back)" : null;
+            return OwnWallAt(cell) != null ? "Right click: tear down this wall (half its cost back)" : null;
         }
 
         /// <summary>Tears down what's at <paramref name="cell"/> and gives half its cost back. Returns a message for the player.</summary>
@@ -881,9 +889,8 @@ namespace KingdomGame.Building
                 return $"Tore down the {thing.Config.displayName}{spilled}";
             }
 
-            var chunk = world != null ? world.ChunkAt(cell) : null;
-            if (chunk == null) return null;
-            var structure = chunk.Owner;
+            var structure = OwnWallAt(cell);
+            if (structure == null) return null;
             var wallConfig = WallConfigOf(structure.Material);
             if (wallConfig != null) Refund(wallConfig, structure.Cells.width * structure.Cells.height, structure.Cells.center);
             structure.Remove();
@@ -1059,8 +1066,15 @@ namespace KingdomGame.Building
         // A wall tile on its own (not part of a bigger structure like the test outpost's): a door can replace it.
         bool SingleWallAt(Vector2Int cell)
         {
-            var chunk = world != null ? world.ChunkAt(cell) : null;
-            return chunk != null && chunk.Owner != null && chunk.Owner.Cells.width == 1 && chunk.Owner.Cells.height == 1;
+            var wall = OwnWallAt(cell);
+            return wall != null && wall.Cells.width == 1 && wall.Cells.height == 1;
+        }
+
+        // The wall at a cell, if it's one of ours (online, another player's walls can be shown here: not ours to change).
+        DestructibleStructure OwnWallAt(Vector2Int cell)
+        {
+            var wall = world != null ? world.ChunkAt(cell)?.Owner : null;
+            return wall != null && !wall.Remote ? wall : null;
         }
 
         BuildingConfig WallConfigOf(StructureMaterial material)

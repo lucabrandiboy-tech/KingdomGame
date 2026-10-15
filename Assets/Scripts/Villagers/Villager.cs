@@ -337,6 +337,10 @@ namespace KingdomGame.Villagers
         /// <summary>Carrying something that nobody needs right now.</summary>
         public bool HasLeftovers => carryAmount > 0 && task == Task.Idle;
         public ResourceType CarryType => carryType;
+        /// <summary>Which way it faces, in degrees (for showing it to other players).</summary>
+        public float Facing => body != null ? body.localEulerAngles.z : 0f;
+        /// <summary>Walking (not standing still).</summary>
+        public bool Moving { get; private set; }
         public int CarryAmount => carryAmount;
 
         // ------------------------------------------------------------ update --
@@ -664,6 +668,7 @@ namespace KingdomGame.Villagers
         void Animate(Vector2 velocity)
         {
             float speed = velocity.magnitude;
+            Moving = speed > 0.1f;
             if (speed > 0.1f)
             {
                 facing = velocity / speed;

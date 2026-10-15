@@ -162,12 +162,19 @@ namespace KingdomGame.UI
             y += row + font * 0.6f;
             if (client != null)
             {
-                // In someone else's game: nothing to save here (it's theirs).
+                // In someone else's game: your kingdom is kept by the host (saved every few minutes and when you leave).
                 if (client.Status != null) GUI.Label(new Rect(x - width * 0.5f, y, width * 2f, font * 2.4f), client.Status, text);
                 y += font * 2.6f;
+                if (saves != null)
+                {
+                    if (GUI.Button(new Rect(x, y, width, row), "Save my kingdom (the host keeps it)", button)) saveMessage = saves.Save();
+                    y += row + font * 0.6f;
+                }
                 if (GUI.Button(new Rect(x, y, width, row), "Leave the game", button)) client.Leave();
                 y += row + font * 0.6f;
-                if (GUI.Button(new Rect(x, y, width, row), "Quit the game", button)) Quit();
+                if (GUI.Button(new Rect(x, y, width, row), "Quit the game", button)) client.Leave(true);
+                y += row + font * 0.6f;
+                if (saveMessage != null) GUI.Label(new Rect(x - width * 0.5f, y, width * 2f, font * 2f), $"<color=#e8dcc0>{saveMessage}</color>", text);
                 return;
             }
             if (host != null)

@@ -507,7 +507,7 @@ namespace KingdomGame.Networking
             var welcome = new WelcomeInfo
             {
                 YourId = session.Id, YourKingdom = kingdomId, ServerName = settings.Name, Seed = settings.Seed,
-                Day = day, Hour = hour, Survival = Survival, HasSpawn = record.HasPosition, SpawnX = record.X, SpawnY = record.Y,
+                Day = day, Hour = hour, Survival = Survival, HasSave = SaveOf(kingdomId) != null, HasSpawn = record.HasPosition, SpawnX = record.X, SpawnY = record.Y,
             };
             foreach (var p in players) welcome.Players.Add(new PlayerInfo { Id = p.Id, Name = p.Name, KingdomId = p.KingdomId });
             welcome.Kingdoms.AddRange(kingdoms);

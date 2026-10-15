@@ -198,7 +198,7 @@ namespace KingdomGame.Destruction
             foreach (var pixel in damaged)
             {
                 var cell = new Vector2Int(DamageShape.FloorDiv(pixel.X, PixelChunk.Size), DamageShape.FloorDiv(pixel.Y, PixelChunk.Size));
-                if (!chunks.TryGetValue(cell, out var chunk)) continue;
+                if (!chunks.TryGetValue(cell, out var chunk) || chunk.Owner.Remote) continue;   // (another player's walls: theirs to break)
                 // The wall material decides how much of this kind of hit gets through (whole numbers only).
                 int damage = pixel.Damage * chunk.Owner.Material.PercentFor(type.category) / 100;
                 if (damage <= 0) continue;

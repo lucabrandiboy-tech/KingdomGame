@@ -34,6 +34,8 @@ namespace KingdomGame.Destruction
         public int SolidCount { get; private set; }
         public int InitialSolidCount { get; private set; }
         public bool Collapsed { get; private set; }
+        /// <summary>A wall of another player's kingdom, shown here (online): it can't be damaged here and isn't saved here.</summary>
+        public bool Remote { get; set; }
         /// <summary>Zombie damage taken so far (see <see cref="Batter"/>).</summary>
         public float Battered { get; private set; }
 
@@ -60,7 +62,7 @@ namespace KingdomGame.Destruction
         /// </summary>
         public void Batter(float amount)
         {
-            if (Collapsed || amount <= 0f) return;
+            if (Collapsed || Remote || amount <= 0f) return;
             Battered += amount;
             if (SiegeHealthLeft <= 0f) Collapse();
         }

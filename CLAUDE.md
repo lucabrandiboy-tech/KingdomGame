@@ -29,9 +29,13 @@ Fish-Net because it can be tested with real connections outside Unity (see
 `Networking/NetPlay.cs` runs it in the game: `NetHost` (you host your own game and
 play it) and `NetClient` (you join one); `NetServer` is a dedicated server (`-server`).
 The role comes from `GameSession.Role`; `KingdomBootstrap` starts each.
-So far joined players see the map, everyone walking (`RemotePlayers`) and chat
-(`UI/ChatBox`); the host's buildings, villagers and zombies aren't shared yet.
-`ServerCore` remembers each player (`PlayerRecord`: key, kingdom, last position);
+Everyone sees everyone walking (`RemotePlayers`) and chats (`UI/ChatBox`). Each player's own
+computer runs their kingdom (`docs/DECISIONS.md` section 16): `Networking/KingdomMirror.cs` sends
+what's built (`BuiltPiece` changes) and where its villagers are; the server relays them and keeps
+each joined player's whole kingdom (`SaveSystem.Upload`, handed back as `Msg.YourSave`);
+`Networking/RemoteKingdoms.cs` shows the others' (walls with `DestructibleStructure.Remote`: not
+damaged, not saved, not torn down). Zombies are only in the host's game so far (stage 4).
+`ServerCore` remembers each player (`PlayerRecord`: key, kingdom, last position) and kingdom;
 hosted saves keep them (`SaveData.others`) and a dedicated server keeps its world in
 `saves/server-world.json` (`ServerWorldFile`). Bump `Protocol.Version` when messages change.
 The tool projects' `.csproj` files are committed (the root `.gitignore` ignores Unity's).

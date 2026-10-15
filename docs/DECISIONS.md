@@ -366,3 +366,44 @@ Breaking into a base should take explosives, like in Rust.
   zombies on a much bigger server map will need the field computed in pieces
   or less often far away. Not needed yet.
 
+
+## 16. Online: each player's own computer runs their kingdom (decided in online stage 3)
+
+`ONLINE-PLAN.md` first said "the server runs the real game": every villager,
+blueprint and storehouse of every kingdom simulated on the server, players only
+sending what they want to do. Stage 3 does it differently:
+
+- **Your computer runs your kingdom** (villagers, building, storage, research,
+  the armory), exactly the code that runs offline. Twice a second it sends what's
+  built as a list of changes (each wall tile and each building: name, cells,
+  facing, house level), and five times a second where its villagers are
+  (`Networking/KingdomMirror.cs`).
+- **The host or server only passes it on and keeps it.** It sends each kingdom's
+  pieces to everyone (all of them to a player who joins), villager positions only
+  to players within 400 tiles of that kingdom's throne, and keeps a compressed copy
+  of each joined player's whole kingdom (sent when they save, every few minutes and
+  when they leave) to hand back when they join again. Hosted saves and the dedicated
+  server's world file keep these (`OthersSave.built`).
+- **Other kingdoms are shown, not run** (`Networking/RemoteKingdoms.cs`): their
+  walls are real walls you can't damage (`DestructibleStructure.Remote`), their
+  buildings are pictures that block the way, their villagers are figures. Only the
+  kingdoms within 420 tiles of the camera are made, a few hundred pieces a frame.
+
+Why: running every kingdom on the server means rewriting nearly every system
+(building, villagers, storage, research, houses, mines, machines) to work for many
+kingdoms at once and as commands over the network, with a long stretch where
+nothing works. This way the kingdom code that's already written (and that you're
+testing offline) is the same code online, and the network part could be tested
+here with real connections (`tools/net-tests/KingdomTests.cs`).
+
+What it costs, honestly:
+
+- **Cheating is easy**: a modded game can send any kingdom it likes. Fine between
+  friends; a public server would need the server to check what's sent, or the
+  original plan. This replaces "the server is the authority on everything" in
+  section 10 for kingdoms, for now.
+- **Nature isn't shared yet**: trees you cut are cut on your computer only.
+- **Roofs and the insides of houses and mines aren't shown** to others.
+- **Zombies and fights between kingdoms** need one computer to decide them; that's
+  stage 4 (most likely the host or server runs every horde, which is the original
+  plan for zombies only).

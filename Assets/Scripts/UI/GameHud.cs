@@ -25,8 +25,10 @@ namespace KingdomGame.UI
         CameraRig rig;
         SurvivalDirector waves;
         bool showControls = true;
-        GUIStyle box, hint, button, selectedButton, announce, announceShadow, roomLabel, roomShadow, barLabel;
-        Rect buildBar;
+        GUIStyle box, hint, button, selectedButton, announce, announceShadow, roomLabel, roomShadow, barLabel, field, tip;
+        Rect buildBar, searchBox;
+        bool searchFocused;
+        const string SearchControl = "BuildSearch";
         float shownHealth = -1f, flash;
         readonly StringBuilder text = new StringBuilder(256);
 
@@ -50,6 +52,7 @@ namespace KingdomGame.UI
         const string ThroneControls =
             "Tab or click a tab  walls, floors & roofs, furniture, lights, storage, traps, towers\n" +
             "[ and ]  earlier / later ages          T  research          V  villagers' jobs\n" +
+            "Search box (top right of the bar): find anything you can build; hover one to see what it does\n" +
             "1-9 or click  pick something (again = put away)     R  turn it\n" +
             "Left click  place  (walls: drag for a line, floors and roofs: drag for an area)\n" +
             "Right click  stop placing / cancel a blueprint / tear down\n" +
@@ -105,6 +108,12 @@ namespace KingdomGame.UI
             flash = Mathf.Max(0f, flash - Time.unscaledDeltaTime * 0.9f);
         }
 
+        void OnDisable()
+        {
+            if (searchFocused) UiFocus.Typing = false;
+            searchFocused = false;
+        }
+
         void OnGUI()
         {
             if (box == null)
@@ -121,9 +130,11 @@ namespace KingdomGame.UI
                 roomShadow = new GUIStyle(roomLabel);
                 roomShadow.normal.textColor = new Color(0f, 0f, 0f, 0.8f);
                 barLabel = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, richText = true };
+                field = new GUIStyle(GUI.skin.textField) { alignment = TextAnchor.MiddleLeft };
+                tip = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, richText = true, wordWrap = true };
             }
             int font = Mathf.Max(12, Screen.height / 50);
-            box.fontSize = hint.fontSize = button.fontSize = selectedButton.fontSize = barLabel.fontSize = font;
+            box.fontSize = hint.fontSize = button.fontSize = selectedButton.fontSize = barLabel.fontSize = field.fontSize = tip.fontSize = font;
             announce.fontSize = announceShadow.fontSize = Mathf.RoundToInt(font * 1.6f);
             roomLabel.fontSize = roomShadow.fontSize = Mathf.RoundToInt(font * 0.9f);
 
@@ -136,7 +147,11 @@ namespace KingdomGame.UI
             DrawAnnouncement(font);
 
             if (throne) DrawBuildBar(font);
-            else buildBar = Rect.zero;
+            else
+            {
+                buildBar = Rect.zero;
+                LetGoOfSearch();
+            }
 
             // Bottom middle (above the build bar on the throne): what you can do right now, or about what's under the mouse.
             string now = null;
@@ -299,12 +314,17 @@ namespace KingdomGame.UI
             }
         }
 
-        // The build bar: a row of tabs, and the open tab's buildings under them (more rows if needed).
+        // The build bar: at the top the age page (with arrows to the other ages), "show locked" and the search box; under
+        // them a row of tabs, and the open tab's buildings (more rows if needed). Hovering one shows what it costs and does.
         void DrawBuildBar(int font)
         {
             var tabs = builder.Categories;
-            var items = builder.Items;
             if (tabs.Count == 0) return;
+            var e = Event.current;
+            // Clicking anywhere but the search box lets go of it (before any button takes the click).
+            if (searchFocused && e.type == EventType.MouseDown && !searchBox.Contains(e.mousePosition)) LetGoOfSearch();
+
+            var items = builder.Items;
             float gap = font * 0.4f;
             float tabWidth = font * 7.5f, tabHeight = font * 1.9f;
             float width = font * 9.5f, height = font * 3.2f;
@@ -312,40 +332,56 @@ namespace KingdomGame.UI
             int rows = Mathf.Max(1, Mathf.CeilToInt(items.Count / (float)perRow));
             float rowWidth = Mathf.Max(width * 2f, perRow * width + (perRow - 1) * gap);
             float tabsWidth = tabs.Count * tabWidth + (tabs.Count - 1) * gap;
-            float total = Mathf.Max(rowWidth, tabsWidth);
+            var research = Progression.Research.Current;
+            bool pages = research != null && builder.LastAgePage > 0;
+            bool lockSwitch = research != null && research.Mode == Progression.Research.Unlocking.ByResearch;
+            float pagerWidth = font * 18f, sideWidth = font * 11f;
+            float topWidth = pagerWidth + (sideWidth + gap) * 2f;
+            float total = Mathf.Max(Mathf.Max(rowWidth, tabsWidth), topWidth);
             float bottom = Screen.height - font;
             float itemsTop = bottom - rows * height - (rows - 1) * gap;
             float tabsTop = itemsTop - gap - tabHeight;
-            // Above the tabs: which age's buildings these are, with arrows to the other ages.
-            var research = Progression.Research.Current;
-            bool pages = research != null && builder.LastAgePage > 0;
-            float pagerTop = tabsTop - (pages ? gap + tabHeight : 0f);
+            float topRow = tabsTop - gap - tabHeight;
             float left = (Screen.width - total) / 2f;
-            buildBar = new Rect(left - gap, pagerTop - gap, total + gap * 2, bottom - pagerTop + gap * 2);
+            buildBar = new Rect(left - gap, topRow - gap, total + gap * 2, bottom - topRow + gap * 2);
             GUI.Box(buildBar, GUIContent.none);
+
+            float pagerLeft = (Screen.width - pagerWidth) / 2f;
             if (pages)
             {
                 var age = research.AgeAt(builder.AgePage);
-                float pagerWidth = font * 18f, arrow = font * 2.4f;
-                float pagerLeft = (Screen.width - pagerWidth) / 2f;
+                float arrow = font * 2.4f;
                 GUI.enabled = builder.AgePage > 0;
-                if (GUI.Button(new Rect(pagerLeft, pagerTop, arrow, tabHeight), "<b>[ <</b>", button)) builder.SelectAge(builder.AgePage - 1);
+                if (GUI.Button(new Rect(pagerLeft, topRow, arrow, tabHeight), "<b>[ <</b>", button)) builder.SelectAge(builder.AgePage - 1);
                 GUI.enabled = builder.AgePage < builder.LastAgePage;
-                if (GUI.Button(new Rect(pagerLeft + pagerWidth - arrow, pagerTop, arrow, tabHeight), "<b>> ]</b>", button)) builder.SelectAge(builder.AgePage + 1);
+                if (GUI.Button(new Rect(pagerLeft + pagerWidth - arrow, topRow, arrow, tabHeight), "<b>> ]</b>", button)) builder.SelectAge(builder.AgePage + 1);
                 GUI.enabled = true;
-                GUI.Label(new Rect(pagerLeft + arrow, pagerTop, pagerWidth - arrow * 2f, tabHeight), $"<b>{(age != null ? age.displayName : "")}</b>", barLabel);
+                GUI.Label(new Rect(pagerLeft + arrow, topRow, pagerWidth - arrow * 2f, tabHeight), $"<b>{(age != null ? age.displayName : "")}</b>", barLabel);
             }
+            if (lockSwitch)
+            {
+                bool show = builder.ShowLocked;
+                if (GUI.Button(new Rect(pagerLeft - gap - sideWidth, topRow, sideWidth, tabHeight), show ? "<b>Showing locked</b>" : "Show locked", show ? selectedButton : button))
+                    builder.ShowLocked = !show;
+            }
+            SearchBox(new Rect(pagerLeft + pagerWidth + gap, topRow, sideWidth, tabHeight));
 
+            bool searching = builder.Search.Trim().Length > 0;
             float tabsLeft = (Screen.width - tabsWidth) / 2f;
             for (int i = 0; i < tabs.Count; i++)
             {
-                bool open = tabs[i] == builder.Category;
+                bool open = !searching && tabs[i] == builder.Category;
                 if (GUI.Button(new Rect(tabsLeft + i * (tabWidth + gap), tabsTop, tabWidth, tabHeight), $"<b>{TabName(tabs[i])}</b>", open ? selectedButton : button))
                     builder.SelectCategory(tabs[i]);
             }
             float rowLeft = (Screen.width - rowWidth) / 2f;
             if (items.Count == 0)
-                GUI.Label(new Rect(rowLeft, itemsTop, rowWidth, height), "<color=#a09888>Nothing on this tab in this age</color>", barLabel);
+            {
+                string why = searching ? "Nothing you can build matches that"
+                    : builder.HiddenLocked > 0 ? $"Nothing researched on this tab in this age yet ({builder.HiddenLocked} to research: T, or Show locked)"
+                    : "Nothing on this tab in this age";
+                GUI.Label(new Rect(left, itemsTop, total, height), $"<color=#a09888>{why}</color>", barLabel);
+            }
             for (int i = 0; i < items.Count; i++)
             {
                 var b = items[i];
@@ -358,9 +394,60 @@ namespace KingdomGame.UI
                 string label = locked == null ? $"<b>{key}{b.displayName}</b>\n{b.CostText()}"
                     : $"<color=#8a8478><b>{key}{b.displayName}</b>\n{locked}</color>";
                 var rect = new Rect(rowLeft + column * (width + gap), itemsTop + row * (height + gap), width, height);
-                if (GUI.Button(rect, label, selected ? selectedButton : button))
+                // (the tooltip is its number: the box above the bar says the rest)
+                if (GUI.Button(rect, new GUIContent(label, i.ToString()), selected ? selectedButton : button))
                     builder.Select(i);
             }
+            if (int.TryParse(GUI.tooltip, out int hovered) && hovered >= 0 && hovered < items.Count && items[hovered] != null)
+                DrawTip(items[hovered], research, font);
+        }
+
+        // The search box: type to find anything you can build. Enter or a click elsewhere lets go of it, Esc clears it.
+        void SearchBox(Rect r)
+        {
+            searchBox = r;
+            var e = Event.current;
+            if (searchFocused && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Escape || e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter))
+            {
+                if (e.keyCode == KeyCode.Escape) builder.SetSearch("");
+                LetGoOfSearch();
+                e.Use();
+            }
+            GUI.SetNextControlName(SearchControl);
+            string typed = GUI.TextField(r, builder.Search, 30, field);
+            if (typed != builder.Search) builder.SetSearch(typed);
+            bool focused = GUI.GetNameOfFocusedControl() == SearchControl;
+            if (!focused && builder.Search.Length == 0)
+                GUI.Label(new Rect(r.x + 6f, r.y, r.width - 6f, r.height), "<color=#8a8478>Search...</color>", barLabel);
+            if (focused != searchFocused)
+            {
+                // While typing, keys are letters (WASD doesn't move the view, numbers don't pick).
+                searchFocused = focused;
+                UiFocus.Typing = focused;
+            }
+        }
+
+        void LetGoOfSearch()
+        {
+            if (!searchFocused) return;
+            searchFocused = false;
+            UiFocus.Typing = false;
+            GUI.FocusControl(null);
+        }
+
+        // Above the build bar: what the thing under the mouse costs and does (and what it needs, if it's locked).
+        void DrawTip(BuildingConfig b, Progression.Research research, int font)
+        {
+            string body = BuildInfo.Describe(b);
+            string locked = research != null ? research.LockedReason(b) : null;
+            if (locked != null) body += $"\n<color=#f0b060>{locked}</color>";
+            var content = new GUIContent(body);
+            float w = Mathf.Min(font * 30f, Screen.width - 20f);
+            float h = tip.CalcHeight(content, w);
+            float x = Mathf.Clamp(Event.current.mousePosition.x - w / 2f, 10f, Screen.width - w - 10f);
+            var rect = new Rect(x, buildBar.yMin - h - font * 0.4f, w, h);
+            GUI.Box(rect, GUIContent.none);   // twice as dark
+            GUI.Box(rect, content, tip);
         }
 
         static string TabName(BuildCategory c)

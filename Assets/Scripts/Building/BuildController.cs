@@ -87,6 +87,30 @@ namespace KingdomGame.Building
         public string Message { get; private set; }
         /// <summary>Set by the HUD each frame while the mouse is over its buttons, so clicks there don't place anything.</summary>
         public bool PointerOverHud { get; set; }
+        /// <summary>The build bar's search: when not empty, it shows what matches from every tab and every age reached.</summary>
+        public string Search { get; private set; } = "";
+        /// <summary>How many things on the open tab and page aren't shown because they still need researching.</summary>
+        public int HiddenLocked { get; private set; }
+
+        /// <summary>Whether the build bar shows things that still need researching (greyed). Kept on this computer.</summary>
+        public bool ShowLocked
+        {
+            get => PlayerPrefs.GetInt("ShowLocked", 0) == 1;
+            set
+            {
+                PlayerPrefs.SetInt("ShowLocked", value ? 1 : 0);
+                RefreshItems();
+            }
+        }
+
+        /// <summary>Searches the build bar (from the HUD's search box).</summary>
+        public void SetSearch(string text)
+        {
+            text = text ?? "";
+            if (text == Search) return;
+            Search = text;
+            RefreshItems();
+        }
 
         public void Setup(Kingdom owner, RulerController rulerController, CameraRig cameraRig, CanopyFader fader, ViewConfig look)
         {
@@ -222,16 +246,41 @@ namespace KingdomGame.Building
             if (canopies != null) canopies.FarAlpha = 1f;
         }
 
-        /// <summary>Opens a tab of the build bar.</summary>
+        /// <summary>Opens a tab of the build bar (and clears the search).</summary>
         public void SelectCategory(BuildCategory c)
         {
             category = c;
+            Search = "";
+            RefreshItems();
+        }
+
+        // What the bar shows: the open tab on the open age page, or, searching, whatever matches from every tab and
+        // every age reached. Things still to research only if Show Locked is on.
+        void RefreshItems()
+        {
             items.Clear();
-            var research = Research.Current;
-            foreach (var b in kingdom.BuildMenu)
-                if (b != null && b.category == c && Fits(b) && (research == null || research.AgeOf(b) == agePage)) items.Add(b);
+            HiddenLocked = 0;
             selected = -1;
             dragging = false;
+            if (kingdom == null) return;
+            var research = Research.Current;
+            string find = Search.Trim();
+            foreach (var b in kingdom.BuildMenu)
+            {
+                if (b == null || !Fits(b)) continue;
+                if (find.Length > 0)
+                {
+                    if (b.displayName == null || b.displayName.IndexOf(find, System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (research != null && research.AgeOf(b) > LastAgePage) continue;   // ages not reached yet stay a surprise
+                }
+                else if (b.category != category || (research != null && research.AgeOf(b) != agePage)) continue;
+                if (!Unlocked(b) && !ShowLocked)
+                {
+                    HiddenLocked++;
+                    continue;
+                }
+                items.Add(b);
+            }
         }
 
         /// <summary>Picks item number <paramref name="index"/> on the open tab (again = put it away).</summary>
@@ -255,9 +304,30 @@ namespace KingdomGame.Building
             messageUntil = Time.unscaledTime + 3f;
         }
 
+        Research listening;   // the research whose news refreshes the bar
+
+        // Something was researched: what it unlocked shows on the bar straight away (what's picked stays picked).
+        void OnResearchChanged()
+        {
+            var keep = Selected;
+            RefreshItems();
+            if (keep != null) selected = items.IndexOf(keep);
+        }
+
+        void OnDestroy()
+        {
+            if (listening != null) listening.Changed -= OnResearchChanged;
+        }
+
         void Update()
         {
             if (Time.unscaledTime > messageUntil) Message = null;
+            if (listening != Research.Current)
+            {
+                if (listening != null) listening.Changed -= OnResearchChanged;
+                listening = Research.Current;
+                if (listening != null) listening.Changed += OnResearchChanged;
+            }
             // A new age: the build bar opens on its page.
             if (Research.Current != null && Research.Current.Age != shownAge)
             {

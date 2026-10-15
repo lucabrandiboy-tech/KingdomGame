@@ -103,7 +103,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 13;
+        public const int Version = 14;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -198,6 +198,21 @@ namespace KingdomGame.Art
                     Add(items, ArtKeys.DoorOpen(art, r), "Doors", p => FurnitureArt.Gate(p, width, castle, true, rotation), true, half);
                     Shadow(items, ArtKeys.DoorClosed(art, r), "FurnitureShadows", 0.02f);
                 }
+            // Each age's newer things (crafting tables, machines, furniture, towers): there are many, so a quarter of the detail.
+            const float quarter = 0.25f;
+            foreach (var d in FurnitureArt.AgePieces())
+            {
+                var piece = d;
+                string key = ArtKeys.Turned(piece.Art, 0);
+                Add(items, key, "AgeContent", p => piece.Draw(p), true, quarter);
+                if (!piece.Flat) Shadow(items, key, "FurnitureShadows", 0.03f);
+                if (piece.Head == null) continue;
+                for (int h = 0; h < FurnitureArt.HeadDirections; h++)
+                {
+                    float degrees = h * 360f / FurnitureArt.HeadDirections;
+                    Add(items, ArtKeys.Head(piece.Art, h), "AgeHeads", p => piece.Head(p, degrees), true, 0.18f);
+                }
+            }
             // Traps and towers (their turning heads drawn for each direction).
             foreach (var d in FurnitureArt.Defenses)
             {

@@ -62,7 +62,7 @@ namespace KingdomGame.Villagers
                 case Job.Miner: return "break rocks for stone";
                 case Job.Forager: return "pick berries for food";
                 case Job.Guard: return "man the towers (archer tower, ballista, cannon)";
-                case Job.Crafter: return "make the weapons you order at an anvil (E at one)";
+                case Job.Crafter: return "make the weapons you order at an anvil (E at one), and each age's parts at its crafting table";
                 default: return "";
             }
         }

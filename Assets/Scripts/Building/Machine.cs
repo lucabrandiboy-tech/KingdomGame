@@ -44,6 +44,38 @@ namespace KingdomGame.Building
         readonly List<Parcel> parcels = new List<Parcel>();
 
         public MachineConfig Config => config;
+        float progress, lastWorked = -99f;
+
+        /// <summary>A crafting table that needs a crafter: storage is short of what it makes and the ingredients are there.</summary>
+        public bool WantsWork => config.kind == MachineKind.Workbench && kingdom != null
+            && kingdom.Stock(config.makes) < config.keep && HasInputs();
+
+        bool HasInputs()
+        {
+            if (config.inputs == null) return true;
+            foreach (var i in config.inputs) if (i.amount > 0 && kingdom.Available(i.type) < i.amount) return false;
+            return true;
+        }
+
+        bool SpendInputs()
+        {
+            if (config.inputs == null || config.inputs.Length == 0) return true;
+            var cost = new int[Inventory.TypeCount];
+            foreach (var i in config.inputs) if (i.amount > 0) cost[(int)i.type] += i.amount;
+            return kingdom.TrySpend(cost);
+        }
+
+        /// <summary>A crafter worked at this crafting table for <paramref name="seconds"/>: a batch is made each Work Seconds.</summary>
+        public void Work(float seconds)
+        {
+            lastWorked = Time.time;
+            progress += seconds;
+            if (progress < config.workSeconds) return;
+            progress = 0f;
+            if (!SpendInputs()) return;
+            int stored = kingdom.Store(config.makes, config.output, transform.position);
+            if (stored < config.output) kingdom.Report($"Storage is full: {config.output - stored} {ResourceText.Name(config.makes)} were lost");
+        }
         /// <summary>A generator that's burning now.</summary>
         public bool Burning => Time.time < poweredUntil;
 
@@ -100,6 +132,12 @@ namespace KingdomGame.Building
                 if (look != null) look.color = on ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
                 return;
             }
+            if (config.kind == MachineKind.Workbench)
+            {
+                // Worked by a crafter (see Work): drawn darker while nobody is.
+                if (look != null) look.color = now - lastWorked < 1f ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
+                return;
+            }
             Move(now);
             if (now >= workAt)
             {
@@ -146,6 +184,22 @@ namespace KingdomGame.Building
 
                 case MachineKind.TreeFarm:
                     return PlantTree();
+
+                case MachineKind.Producer:
+                {
+                    if (config.needsPower && !PoweredAt(PowerSpot())) return false;
+                    // Auto-crafters stop when there's plenty; anything made to go out on belts waits while it's full.
+                    if (config.keep > 0 && kingdom.Stock(config.makes) >= config.keep && config.inputs != null && config.inputs.Length > 0) return true;
+                    if (config.toBelts && held >= config.holds) return false;
+                    if (!HasInputs() || !SpendInputs()) return false;
+                    if (config.toBelts)
+                    {
+                        held += config.output;
+                        return true;
+                    }
+                    int stored = kingdom.Store(config.makes, config.output, at);
+                    return stored > 0;
+                }
 
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
@@ -219,7 +273,7 @@ namespace KingdomGame.Building
             return place != null ? place.Outside : (Vector2)transform.position;
         }
 
-        ResourceType Makes => config.kind == MachineKind.Quarry ? ResourceType.Stone : ResourceType.Wood;
+        ResourceType Makes => config.kind == MachineKind.Quarry ? ResourceType.Stone : config.kind == MachineKind.Producer ? config.makes : ResourceType.Wood;
 
         // What's held goes out along the belts to storage, if there's a way and room.
         void Send(float now)

@@ -58,7 +58,8 @@ namespace KingdomGame.Villagers
         ResourceNode node;       // what it's gathering from
         Defenses.Defense post;   // the tower it guards
         MineLevel mine;          // the mine it's digging in
-        Furniture bench;         // the anvil it's making weapons at
+        Furniture bench;         // the anvil it's making weapons at (or the crafting table it's making parts at)
+        Machine benchMachine;    // the crafting table's machine (null at an anvil)
         Furniture shelter;       // the shelter flag it's going to or waiting at
         Vector2Int digCell;
         float digClock;
@@ -100,17 +101,17 @@ namespace KingdomGame.Villagers
             {
                 switch (task)
                 {
-                    case Task.Fetch: return $"fetching {promised} {carryType.ToString().ToLowerInvariant()}";
-                    case Task.Deliver: return $"carrying {carryAmount} {carryType.ToString().ToLowerInvariant()}";
+                    case Task.Fetch: return $"fetching {promised} {ResourceText.Name(carryType)}";
+                    case Task.Deliver: return $"carrying {carryAmount} {ResourceText.Name(carryType)}";
                     case Task.Build: return "building";
                     case Task.Return: return "taking things back to storage";
                     case Task.MakeRoom: return "making room";
                     case Task.Flee: return "running from zombies";
                     case Task.Dig: return "digging";
-                    case Task.Craft: return "making weapons";
+                    case Task.Craft: return benchMachine != null ? $"making {ResourceText.Name(benchMachine.Config.makes)}" : "making weapons";
                     case Task.Shelter: return "sheltering from the zombies";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
-                    case Task.Gather: return node != null ? $"gathering {node.Config.resource.ToString().ToLowerInvariant()}" : "gathering";
+                    case Task.Gather: return node != null ? $"gathering {ResourceText.Name(node.Config.resource)}" : "gathering";
                     default: return Scared ? "hiding" : "idle";
                 }
             }
@@ -196,6 +197,7 @@ namespace KingdomGame.Villagers
         {
             if (anvil == null) return false;
             bench = anvil;
+            benchMachine = anvil.Config.machine != null && anvil.Config.machine.kind == MachineKind.Workbench ? anvil.GetComponent<Machine>() : null;
             task = Task.Craft;
             if (Walk(anvil.Cells, true)) return true;
             Idle();
@@ -378,7 +380,7 @@ namespace KingdomGame.Villagers
                 Idle();   // the mark was taken off, or the mine is gone
                 thinkAt = Time.time;
             }
-            else if (task == Task.Craft && (bench == null || kingdom.Armory == null || !kingdom.Armory.HasWork))
+            else if (task == Task.Craft && (bench == null || (benchMachine != null ? !benchMachine.WantsWork : kingdom.Armory == null || !kingdom.Armory.HasWork)))
             {
                 Idle();   // the anvil went, or there's nothing left to make
                 thinkAt = Time.time;
@@ -490,7 +492,9 @@ namespace KingdomGame.Villagers
                 {
                     var toBench = bench.Cells.center - Position;
                     if (toBench.sqrMagnitude > 0.0001f) facing = toBench.normalized;
-                    kingdom.Armory.Work(Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Crafting));
+                    float work = Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Crafting);
+                    if (benchMachine != null) benchMachine.Work(work);   // a crafting table: the age's part
+                    else kingdom.Armory.Work(work);                       // an anvil: weapons
                     return;
                 }
                 case Task.Dig:
@@ -568,6 +572,7 @@ namespace KingdomGame.Villagers
             if (mine != null) mine.Release(digCell, this);
             mine = null;
             bench = null;
+            benchMachine = null;
             shelter = null;
             CountAsBuilder(null);
             blueprint = null;

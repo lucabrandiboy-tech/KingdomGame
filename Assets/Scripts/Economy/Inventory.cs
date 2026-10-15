@@ -15,10 +15,55 @@ namespace KingdomGame.Economy
         Steel,
         /// <summary>Dug in mines (near the shaft); burns in generators three times as long as wood.</summary>
         Coal,
+        // The parts made at each age's crafting table (from the Stone Age to World War 2). Building an
+        // age's things takes some of its part, and of every earlier age's part too.
+        Rope,
+        BronzeBar,
+        IronBar,
+        Gear,
+        Gunpowder,
+        MachineParts,
+        Wire,
+        Electronics,
+    }
+
+    /// <summary>An amount of one resource (extra building costs: an age's parts).</summary>
+    [Serializable]
+    public struct ResourceAmount
+    {
+        public ResourceType type;
+        public int amount;
+
+        public ResourceAmount(ResourceType t, int n)
+        {
+            type = t;
+            amount = n;
+        }
     }
 
     public static class ResourceText
     {
+        /// <summary>The first age part (Rope); the one for age N is FirstPart + N.</summary>
+        public const ResourceType FirstPart = ResourceType.Rope;
+        public const int Parts = 8;
+
+        /// <summary>The part made at age <paramref name="age"/>'s crafting table (0 = Stone Age).</summary>
+        public static ResourceType PartOf(int age) => FirstPart + (age < 0 ? 0 : age >= Parts ? Parts - 1 : age);
+        public static bool IsPart(ResourceType type) => type >= FirstPart && type < FirstPart + Parts;
+
+        /// <summary>How a resource is called in text, lower case ("wood", "bronze bars", "machine parts").</summary>
+        public static string Name(ResourceType type)
+        {
+            switch (type)
+            {
+                case ResourceType.BronzeBar: return "bronze bars";
+                case ResourceType.IronBar: return "iron bars";
+                case ResourceType.Gear: return "gears";
+                case ResourceType.MachineParts: return "machine parts";
+                default: return type.ToString().ToLowerInvariant();
+            }
+        }
+
         /// <summary>Like "120 wood, 4 iron" for everything there's some of, or "nothing".</summary>
         public static string Describe(Inventory inventory)
         {
@@ -26,7 +71,7 @@ namespace KingdomGame.Economy
             for (int i = 0; i < Inventory.TypeCount; i++)
             {
                 int n = inventory.Get((ResourceType)i);
-                if (n > 0 || i < 3) parts.Add($"{n} {((ResourceType)i).ToString().ToLowerInvariant()}");
+                if (n > 0 || i < 3) parts.Add($"{n} {Name((ResourceType)i)}");
             }
             return parts.Count > 0 ? string.Join(", ", parts) : "nothing";
         }

@@ -71,7 +71,7 @@ namespace KingdomGame.Art
         static readonly Color32 Brass = PixelImage.Rgb(170, 130, 60);
         static readonly Color32 Granite = PixelImage.Rgb(118, 114, 108);
 
-        enum Surface { Wood, Stone, Metal, Cloth, Wax, Plain }
+        internal enum Surface { Wood, Stone, Metal, Cloth, Wax, Plain }
 
         // ------------------------------------------------------------ toolkit --
 

@@ -255,7 +255,7 @@ namespace KingdomGame.Progression
             {
                 var type = (Economy.ResourceType)k;
                 int n = t.Cost(type);
-                if (n > 0) parts.Add($"{n} {type.ToString().ToLowerInvariant()}");
+                if (n > 0) parts.Add($"{n} {Economy.ResourceText.Name(type)}");
             }
             string cost = parts.Count > 0 ? string.Join(", ", parts) : "free";
             return t.minVillagers > 0 ? $"{cost}; {t.minVillagers} villagers" : cost;

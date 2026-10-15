@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 18;
+        const int SettingsVersion = 19;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -94,7 +94,9 @@ namespace KingdomGame.EditorTools
             bool hardAges = oldContent != null && oldContent.settingsVersion < 10;
             bool nightHordes = oldContent != null && oldContent.settingsVersion < 11;
             bool endless = oldContent != null && oldContent.settingsVersion < 12;
-            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 16;
+            // Each age's newer content (machines, crafting tables, furniture, farming, towers): whatever's missing joins
+            // the build bar and its age's unlocks whenever the settings version goes up.
+            bool machinesUpdate = oldContent != null && oldContent.settingsVersion < SettingsVersion;
             bool costlyAges = oldContent != null && oldContent.settingsVersion < 16;
             bool darkNights = oldContent != null && oldContent.settingsVersion < 16;
             bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 18;
@@ -264,9 +266,16 @@ namespace KingdomGame.EditorTools
                 n.look = NodeLook.Tree; n.resource = ResourceType.Wood; n.amount = 45; n.perHit = 5; n.secondsPerHit = 0.5f;
                 n.regrowSeconds = 300f; n.replant = true; n.blockRadius = 0.18f; n.reach = 0.6f; n.chipColor = new Color32(150, 108, 66, 255);
             });
-            // Each age's automation (machines), unlocked with the age.
+            // Each age's automation (machines), unlocked with the age; then each age's crafting table and the parts its things take.
             var machinesByAge = Machines(plantedTree);
             for (int i = 0; i < machinesByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(machinesByAge[i]);
+            PartCosts(defensesByAge);
+            var tables = Workbenches();
+            for (int i = 0; i < tables.Length && i < defensesByAge.Length; i++)
+            {
+                defensesByAge[i].Add(tables[i]);
+                machinesByAge[i].Add(tables[i]);
+            }
             var defenses = new List<BuildingConfig>();
             foreach (var age in defensesByAge) defenses.AddRange(age);
             var farming = new List<BuildingConfig>
@@ -757,6 +766,84 @@ namespace KingdomGame.EditorTools
         }
 
         // The smelter (Medieval: iron and wood into steel) and the Industrial machines built with that steel.
+        // ---------------------------------------------------------- age parts --
+
+        // What every age's things take on top of wood and stone: some of that age's part (from its crafting table) and of every
+        // earlier age's part. Set every time (so older settings get them too); big things (2x2 and up) take twice as many.
+        static void PartCosts(List<BuildingConfig>[] byAge)
+        {
+            for (int age = 0; age < byAge.Length; age++)
+                foreach (var b in byAge[age])
+                {
+                    if (b == null) continue;
+                    int scale = b.size.x * b.size.y >= 4 ? 2 : 1;
+                    var parts = new List<ResourceAmount>();
+                    for (int k = 0; k <= age && k < ResourceText.Parts; k++)
+                        parts.Add(new ResourceAmount(ResourceText.PartOf(k), (k == age ? 4 : 2) * scale));
+                    if (SameParts(b.extraCosts, parts)) continue;
+                    b.extraCosts = parts.ToArray();
+                    EditorUtility.SetDirty(b);
+                }
+        }
+
+        static bool SameParts(ResourceAmount[] have, List<ResourceAmount> want)
+        {
+            if (have == null || have.Length != want.Count) return false;
+            for (int i = 0; i < want.Count; i++)
+                if (have[i].type != want[i].type || have[i].amount != want[i].amount) return false;
+            return true;
+        }
+
+        // Each age's crafting table: a Crafter villager works at it, making that age's part from what's in storage
+        // (until there are 40). The table itself takes the earlier ages' parts.
+        static BuildingConfig[] Workbenches()
+        {
+            string[] names = { "Stone Age crafting table", "Bronze Age crafting table", "Iron Age forge table", "Medieval workshop bench",
+                "Renaissance powder table", "Industrial machine bench", "World War 1 wiring bench", "World War 2 electronics bench" };
+            // What each batch takes and makes (2 or 3 parts), and seconds of a crafter's work.
+            var recipes = new[]
+            {
+                (new[] { R(ResourceType.Food, 2), R(ResourceType.Wood, 1) }, 2, 10f),
+                (new[] { R(ResourceType.Copper, 3), R(ResourceType.Coal, 1) }, 2, 18f),
+                (new[] { R(ResourceType.Iron, 3), R(ResourceType.Coal, 2) }, 2, 22f),
+                (new[] { R(ResourceType.Steel, 2), R(ResourceType.Wood, 2) }, 2, 24f),
+                (new[] { R(ResourceType.Coal, 2), R(ResourceType.Stone, 1), R(ResourceType.Food, 1) }, 2, 20f),
+                (new[] { R(ResourceType.Steel, 2), R(ResourceType.Gear, 1), R(ResourceType.Coal, 1) }, 2, 28f),
+                (new[] { R(ResourceType.Copper, 3), R(ResourceType.Steel, 1) }, 3, 24f),
+                (new[] { R(ResourceType.Gold, 1), R(ResourceType.Copper, 2), R(ResourceType.Wire, 1) }, 2, 32f),
+            };
+            var tables = new BuildingConfig[ResourceText.Parts];
+            for (int age = 0; age < tables.Length; age++)
+            {
+                int a = age;
+                var (inputs, output, seconds) = recipes[age];
+                var machine = Asset<MachineConfig>($"Economy/Machines/Workbench{age + 1}", m =>
+                {
+                    m.kind = MachineKind.Workbench; m.makes = ResourceText.PartOf(a); m.inputs = inputs; m.output = output;
+                    m.workSeconds = seconds; m.keep = 40; m.needsPower = false; m.holds = 60;
+                });
+                var table = Asset<BuildingConfig>($"Building/Machines/Workbench{age + 1}", b =>
+                {
+                    b.displayName = names[a]; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Industry; b.art = FurnitureArt.Workbench(a);
+                    b.size = new Vector2Int(2, 1); b.rotations = 1; b.woodCost = 40 + a * 20; b.stoneCost = 20 + a * 20;
+                    b.buildSeconds = 12f + a * 3f; b.health = 300f + a * 80f; b.height = 0.5f; b.blocksMovement = true;
+                    b.dragToPlaceLines = false; b.roomTag = RoomTag.Workshop; b.machine = machine;
+                });
+                // The table takes the earlier ages' parts (not its own: it's what makes it).
+                var parts = new List<ResourceAmount>();
+                for (int k = 0; k < age; k++) parts.Add(new ResourceAmount(ResourceText.PartOf(k), 2));
+                if (!SameParts(table.extraCosts, parts))
+                {
+                    table.extraCosts = parts.ToArray();
+                    EditorUtility.SetDirty(table);
+                }
+                tables[age] = table;
+            }
+            return tables;
+
+            static ResourceAmount R(ResourceType t, int n) => new ResourceAmount(t, n);
+        }
+
         // Each age's machines (index = age: 0 Stone Age ... 7 World War 2).
         static List<BuildingConfig>[] Machines(ResourceNodeConfig plantedTree)
         {

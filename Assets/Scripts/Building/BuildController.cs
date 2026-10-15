@@ -483,7 +483,7 @@ namespace KingdomGame.Building
                 var parts = new List<string>();
                 foreach (var type in new[] { Economy.ResourceType.Wood, Economy.ResourceType.Stone, Economy.ResourceType.Food })
                     if (b.Required(type) > 0)
-                        parts.Add($"{b.Delivered(type)}/{b.Required(type)} {(type == Economy.ResourceType.Food ? "cloth" : type.ToString().ToLowerInvariant())}");
+                        parts.Add($"{b.Delivered(type)}/{b.Required(type)} {(type == Economy.ResourceType.Food ? "cloth" : Economy.ResourceText.Name(type))}");
                 return $"{b.Config.displayName}: builders are bringing resources ({string.Join(", ", parts)})";
             }
             int percent = Mathf.FloorToInt(b.Work / Mathf.Max(0.01f, b.Config.buildSeconds) * 100f);

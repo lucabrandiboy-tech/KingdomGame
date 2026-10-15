@@ -107,7 +107,7 @@ namespace KingdomGame.Economy
         {
             var parts = new List<string>(3);
             for (int i = 0; i < amounts.Length; i++)
-                if (amounts[i] > 0) parts.Add($"{amounts[i]} {((ResourceType)i).ToString().ToLowerInvariant()}");
+                if (amounts[i] > 0) parts.Add($"{amounts[i]} {ResourceText.Name((ResourceType)i)}");
             return string.Join(", ", parts);
         }
 

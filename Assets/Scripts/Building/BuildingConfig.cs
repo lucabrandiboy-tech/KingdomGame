@@ -87,6 +87,8 @@ namespace KingdomGame.Building
         [Min(0)] public int foodCost;
         [Tooltip("Steel, smelted at a smelter (machines).")]
         [Min(0)] public int steelCost;
+        [Tooltip("Anything else it takes (an age's parts from the crafting tables: rope, bronze bars, gears...).")]
+        public ResourceAmount[] extraCosts = new ResourceAmount[0];
         [Tooltip("Seconds of work for one builder once all the resources are there. Two builders take half as long.")]
         [Min(0.1f)] public float buildSeconds = 4f;
 
@@ -167,14 +169,17 @@ namespace KingdomGame.Building
 
         public int Cost(ResourceType type)
         {
+            int n = 0;
             switch (type)
             {
-                case ResourceType.Wood: return woodCost;
-                case ResourceType.Stone: return stoneCost;
-                case ResourceType.Food: return foodCost;
-                case ResourceType.Steel: return steelCost;
-                default: return 0;
+                case ResourceType.Wood: n = woodCost; break;
+                case ResourceType.Stone: n = stoneCost; break;
+                case ResourceType.Food: n = foodCost; break;
+                case ResourceType.Steel: n = steelCost; break;
             }
+            if (extraCosts != null)
+                foreach (var e in extraCosts) if (e.type == type) n += Mathf.Max(0, e.amount);
+            return n;
         }
 
         /// <summary>Like "10 stone" or "60 wood, 20 stone".</summary>
@@ -185,6 +190,8 @@ namespace KingdomGame.Building
             if (stoneCost > 0) parts.Add($"{stoneCost * count} stone");
             if (foodCost > 0) parts.Add($"{foodCost * count} cloth (food)");
             if (steelCost > 0) parts.Add($"{steelCost * count} steel");
+            if (extraCosts != null)
+                foreach (var e in extraCosts) if (e.amount > 0) parts.Add($"{e.amount * count} {ResourceText.Name(e.type)}");
             return parts.Count > 0 ? string.Join(", ", parts) : "free";
         }
     }

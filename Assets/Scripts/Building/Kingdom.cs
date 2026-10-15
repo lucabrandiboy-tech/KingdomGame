@@ -1508,6 +1508,22 @@ namespace KingdomGame.Building
         /// <summary>The ruler's weapons and the order book crafters work on (null if there's no armory).</summary>
         public Combat.Armory Armory { get; set; }
 
+        /// <summary>The nearest crafting table that wants a crafter (short of its part, ingredients there), or null.</summary>
+        Furniture NearestWorkbench(Vector2 from)
+        {
+            Furniture best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var f in furniture)
+            {
+                if (f == null || f.Config.machine == null || f.Config.machine.kind != MachineKind.Workbench) continue;
+                var m = f.GetComponent<Machine>();
+                if (m == null || !m.WantsWork) continue;
+                float d = Travel(from, f.Cells.center);
+                if (d < bestDistance) { bestDistance = d; best = f; }
+            }
+            return best;
+        }
+
         /// <summary>The anvils (workshop furniture) crafters work at.</summary>
         Furniture NearestAnvil(Vector2 from)
         {
@@ -1525,9 +1541,11 @@ namespace KingdomGame.Building
         /// <summary>Why crafters are standing about, for the villagers panel (null if they're fine).</summary>
         public string CraftProblem()
         {
-            if (NearestAnvil(Throne != null ? Throne.Center : Vector2.zero) == null) return "no anvil to work at: build one (Furniture tab)";
-            if (Armory == null || !Armory.HasWork) return "nothing ordered: order weapons at an anvil (walk up, E)";
-            return null;
+            var from = Throne != null ? Throne.Center : Vector2.zero;
+            if (Armory != null && Armory.HasWork && NearestAnvil(from) != null) return null;
+            if (NearestWorkbench(from) != null) return null;
+            if (Armory != null && Armory.HasWork) return "weapons are ordered but there's no anvil: build one (Furniture tab)";
+            return "nothing to make: order weapons at an anvil, or build a crafting table (Industry tab; it needs its ingredients in storage)";
         }
 
         /// <summary>Gives an idle villager something to do, if there is anything.</summary>
@@ -1542,11 +1560,14 @@ namespace KingdomGame.Building
             }
             if (v.Job == Job.Crafter && v.CarryAmount == 0)
             {
+                // Weapons on order first (at an anvil), then whichever crafting table is short of its part.
                 if (Armory != null && Armory.HasWork)
                 {
                     var anvil = NearestAnvil(v.Position);
-                    if (anvil != null) v.StartCraft(anvil);
+                    if (anvil != null && v.StartCraft(anvil)) return;
                 }
+                var table = NearestWorkbench(v.Position);
+                if (table != null) v.StartCraft(table);
                 return;
             }
             if (v.Job == Job.Miner && Dig(v)) return;
@@ -1636,7 +1657,7 @@ namespace KingdomGame.Building
                         var type = (ResourceType)t;
                         int missing = b.Need(type);
                         if (missing > 0 && NearestWith(type, b.Center) == null)
-                            b.Problem = $"Waiting for {missing} {(type == ResourceType.Food && b.Config.kind == BuildingKind.Furniture ? "cloth (food)" : type.ToString().ToLowerInvariant())} in storage";
+                            b.Problem = $"Waiting for {missing} {(type == ResourceType.Food && b.Config.kind == BuildingKind.Furniture ? "cloth (food)" : ResourceText.Name(type))} in storage";
                     }
                     if (b.Problem == null && b.UnreachableUntil > Time.time) b.Problem = "Builders can't find a way there";
                     continue;

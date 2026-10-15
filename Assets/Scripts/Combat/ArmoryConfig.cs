@@ -46,7 +46,7 @@ namespace KingdomGame.Combat
             for (int k = 0; k < Inventory.TypeCount; k++)
             {
                 int n = Cost((ResourceType)k);
-                if (n > 0) parts.Add($"{n} {((ResourceType)k).ToString().ToLowerInvariant()}");
+                if (n > 0) parts.Add($"{n} {ResourceText.Name((ResourceType)k)}");
             }
             return parts.Count > 0 ? string.Join(", ", parts) : "free";
         }

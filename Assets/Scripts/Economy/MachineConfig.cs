@@ -18,6 +18,10 @@ namespace KingdomGame.Economy
         Lamp,
         /// <summary>Keeps young trees planted round it, up to <see cref="MachineConfig.output"/> trees within its reach.</summary>
         TreeFarm,
+        /// <summary>A crafting table: a Crafter villager works at it, turning <see cref="MachineConfig.inputs"/> into the age's part.</summary>
+        Workbench,
+        /// <summary>Makes <see cref="MachineConfig.makes"/> by itself (from <see cref="MachineConfig.inputs"/> if any): farms, kilns, drills, auto-crafters.</summary>
+        Producer,
     }
 
     /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
@@ -45,6 +49,15 @@ namespace KingdomGame.Economy
         public ResourceNodeConfig plant;
         [Tooltip("Tree farm: seconds until a young tree it plants is grown.")]
         [Min(0)] public float growSeconds = 180f;
+        [Header("Crafting tables and producers")]
+        [Tooltip("What it makes.")]
+        public ResourceType makes = ResourceType.Wood;
+        [Tooltip("What each batch uses up, from storage.")]
+        public ResourceAmount[] inputs = new ResourceAmount[0];
+        [Tooltip("Crafting tables and auto-crafters stop when storage has this many of what they make.")]
+        [Min(0)] public int keep = 40;
+        [Tooltip("Producers: send what's made out on conveyor belts (like a quarry) instead of straight into storage.")]
+        public bool toBelts;
         [Tooltip("How fast things ride the conveyor belts, in tiles a second.")]
         [Min(0.2f)] public float beltSpeed = 2f;
     }

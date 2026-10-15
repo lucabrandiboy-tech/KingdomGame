@@ -820,7 +820,7 @@ namespace KingdomGame.Character
 
         void Gather(ResourceNode node, float now)
         {
-            Hint = $"Hold E to gather {node.Config.resource.ToString().ToLowerInvariant()}";
+            Hint = $"Hold E to gather {ResourceText.Name(node.Config.resource)}";
             if (!GameInput.Held(KeyCode.E) || now < gatherReady) return;
             if (Backpack.SpaceLeft <= 0)
             {

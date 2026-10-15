@@ -22,7 +22,7 @@ namespace KingdomGame.UI
         NetClient client;
         GUIStyle title, text, button;
         string saveMessage;
-        bool confirmLoad;
+        bool confirmLoad, settings;
 
         public bool IsOpen { get; private set; }
 
@@ -56,7 +56,7 @@ namespace KingdomGame.UI
             IsOpen = true;
             if (!Online) Time.timeScale = 0f;
             saveMessage = null;
-            confirmLoad = false;
+            confirmLoad = settings = false;
         }
 
         void Close()
@@ -128,7 +128,7 @@ namespace KingdomGame.UI
 
             float width = font * 22f, row = font * 2.6f;
             float x = (Screen.width - width) / 2f;
-            float y = Screen.height * 0.28f;
+            float y = Screen.height * 0.2f;
             if (over)
             {
                 GUI.Label(new Rect(x - width, y, width * 3f, font * 3f), "<b><color=#e05040>You have fallen</color></b>", title);
@@ -149,9 +149,16 @@ namespace KingdomGame.UI
                 return;
             }
 
+            if (settings)
+            {
+                if (SettingsPanel.Draw(x, Screen.height * 0.18f, width, font, title, text, button)) settings = false;
+                return;
+            }
             GUI.Label(new Rect(x - width, y, width * 3f, font * 3f), Online ? "<b>Menu</b>" : "<b>Paused</b>", title);
             y += font * 3.6f;
             if (GUI.Button(new Rect(x, y, width, row), "<b>Resume</b>   (Esc)", button)) Close();
+            y += row + font * 0.6f;
+            if (GUI.Button(new Rect(x, y, width, row), "Settings (graphics, sound)", button)) settings = true;
             y += row + font * 0.6f;
             if (client != null)
             {

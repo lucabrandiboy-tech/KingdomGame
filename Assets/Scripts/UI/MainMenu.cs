@@ -13,7 +13,7 @@ namespace KingdomGame.UI
     {
         GUIStyle title, subtitle, text, button, field;
         string survivalSave, freeBuildSave, hostedSurvival, hostedFreeBuild;
-        bool online;
+        bool online, settings;
         string playerName, address, problem;
 
         void Start()
@@ -57,7 +57,11 @@ namespace KingdomGame.UI
             y += font * 4f;
             GUI.Label(new Rect(0, y, Screen.width, font * 1.6f), "<color=#b8ad98>Build your castle. Hold the line.</color>", subtitle);
             y += font * 2.6f;
-            if (online) Online(x, y, width, row, font);
+            if (settings)
+            {
+                if (SettingsPanel.Draw(x, y, width, font, subtitle, text, button)) settings = false;
+            }
+            else if (online) Online(x, y, width, row, font);
             else Offline(x, y, width, row, font);
         }
 
@@ -90,7 +94,9 @@ namespace KingdomGame.UI
                 problem = null;
             }
             y += row + font * 0.7f;
-            if (GUI.Button(new Rect(x, y, width, font * 2.2f), "Quit", button)) PauseMenu.Quit();
+            float half = (width - font * 0.6f) / 2f;
+            if (GUI.Button(new Rect(x, y, half, font * 2.2f), "Settings", button)) settings = true;
+            if (GUI.Button(new Rect(x + half + font * 0.6f, y, half, font * 2.2f), "Quit", button)) PauseMenu.Quit();
         }
 
         void Online(float x, float y, float width, float row, int font)

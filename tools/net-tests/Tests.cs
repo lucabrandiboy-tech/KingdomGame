@@ -7,7 +7,7 @@ using LiteNetLib.Utils;
 
 // Runs a real server and real players on this computer (UDP on 127.0.0.1) and checks
 // what they hear from each other. Plain asserts, like tools/tests.
-static class Tests
+static partial class Tests
 {
     static int failed;
     static readonly Stopwatch clock = Stopwatch.StartNew();
@@ -37,6 +37,14 @@ static class Tests
         Run(nameof(NobodyThereFailsWithAReason), NobodyThereFailsWithAReason);
         Run(nameof(ManySnapshotEntriesArriveInPieces), ManySnapshotEntriesArriveInPieces);
         Run(nameof(HostIsSeenAndHeard), HostIsSeenAndHeard);
+        Run(nameof(BuiltChangesAreFoundAndSent), BuiltChangesAreFoundAndSent);
+        Run(nameof(BuildingsReachEveryoneAndLateJoiners), BuildingsReachEveryoneAndLateJoiners);
+        Run(nameof(NobodyBuildsInAnotherKingdom), NobodyBuildsInAnotherKingdom);
+        Run(nameof(SavedKingdomComesBackOnRejoin), SavedKingdomComesBackOnRejoin);
+        Run(nameof(KingdomsAreKeptByANewServer), KingdomsAreKeptByANewServer);
+        Run(nameof(VillagersAreSentOnlyToThoseNear), VillagersAreSentOnlyToThoseNear);
+        Run(nameof(HostAndPlayersSeeEachOthersKingdoms), HostAndPlayersSeeEachOthersKingdoms);
+        Run(nameof(BigKingdomArrivesInPieces), BigKingdomArrivesInPieces);
         Console.WriteLine(failed == 0 ? "All network tests passed." : $"{failed} network test(s) FAILED.");
         return failed == 0 ? 0 : 1;
     }
@@ -74,6 +82,12 @@ static class Tests
         public readonly List<(string From, string Text)> Chat = new List<(string, string)>();
         public Motion? Corrected;
         public int SnapshotPackets;
+        /// <summary>What each kingdom has built, as this player has heard it.</summary>
+        public readonly Dictionary<int, HashSet<BuiltPiece>> Built = new Dictionary<int, HashSet<BuiltPiece>>();
+        public int BuiltMessages;
+        /// <summary>Where each kingdom's villagers are, as heard.</summary>
+        public readonly Dictionary<int, Dictionary<int, Motion>> Folk = new Dictionary<int, Dictionary<int, Motion>>();
+        public byte[] YourSave;
 
         public Player(int port, string key, string name)
         {
@@ -86,6 +100,20 @@ static class Tests
             Core.Snapshot += (t, list) => { SnapshotPackets++; foreach (var e in list) Seen[e.Id] = e.Motion; };
             Core.Chat += (from, text) => Chat.Add((from, text));
             Core.Corrected += m => Corrected = m;
+            Core.Built += (k, all, removed, added) =>
+            {
+                BuiltMessages++;
+                if (!Built.TryGetValue(k, out var set)) Built[k] = set = new HashSet<BuiltPiece>();
+                if (all) set.Clear();
+                foreach (var piece in removed) set.Remove(piece);
+                foreach (var piece in added) set.Add(piece);
+            };
+            Core.Folk += (k, t, list) =>
+            {
+                if (!Folk.TryGetValue(k, out var d)) Folk[k] = d = new Dictionary<int, Motion>();
+                foreach (var e in list) d[e.Index] = e.Motion;
+            };
+            Core.YourSave += bytes => YourSave = bytes;
             if (port > 0) Core.Connect("127.0.0.1", port, key, name);
         }
     }

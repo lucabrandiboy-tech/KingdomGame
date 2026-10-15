@@ -28,6 +28,8 @@ namespace KingdomGame.Networking
         public float ClockSeconds = 10f;
         /// <summary>Seconds a player must wait between chat messages.</summary>
         public float ChatSeconds = 0.5f;
+        /// <summary>Players are told where a kingdom's villagers are when they're within this many tiles of its throne.</summary>
+        public float FolkRadius = 400f;
     }
 
     /// <summary>
@@ -85,6 +87,11 @@ namespace KingdomGame.Networking
         readonly List<KingdomInfo> kingdoms = new List<KingdomInfo>();
         readonly KingdomPlanner planner;
         readonly List<(PlayerSession P, float D)> near = new List<(PlayerSession, float)>();
+        // What each kingdom has built (for players joining later), and each player's saved kingdom.
+        readonly Dictionary<int, HashSet<BuiltPiece>> built = new Dictionary<int, HashSet<BuiltPiece>>();
+        readonly Dictionary<int, byte[]> saves = new Dictionary<int, byte[]>();
+        readonly List<BuiltPiece> removedIn = new List<BuiltPiece>(), addedIn = new List<BuiltPiece>();
+        readonly List<(int Index, Motion Motion)> folkIn = new List<(int, Motion)>();
         int nextId = 1, nextKingdomId = 1;
         double now, nextSnapshot, nextClock;
 
@@ -108,6 +115,23 @@ namespace KingdomGame.Networking
         public event Action<PlayerSession, double> PositionTaken;
         /// <summary>Things worth a line in the server's log.</summary>
         public event Action<string> Log;
+        /// <summary>
+        /// A player who joined built or took away something in their kingdom (kingdom, replace all, what went, what's new),
+        /// for the host's game to show. The lists are reused: copy what you keep.
+        /// </summary>
+        public event Action<int, bool, List<BuiltPiece>, List<BuiltPiece>> KingdomBuilt;
+        /// <summary>Where a joined player's villagers are (kingdom, server time, villagers). The list is reused.</summary>
+        public event Action<int, double, List<(int Index, Motion Motion)>> FolkMoved;
+
+        /// <summary>The host's game: survival or free build (told to players joining).</summary>
+        public bool Survival { get; set; }
+
+        /// <summary>What a kingdom has built, as the server knows it.</summary>
+        public IReadOnlyCollection<BuiltPiece> BuiltIn(int kingdom) =>
+            built.TryGetValue(kingdom, out var set) ? (IReadOnlyCollection<BuiltPiece>)set : Array.Empty<BuiltPiece>();
+
+        /// <summary>A kingdom's save, as its player last sent it (null if none).</summary>
+        public byte[] SaveOf(int kingdom) => saves.TryGetValue(kingdom, out var bytes) ? bytes : null;
 
         public ServerCore(ServerSettings serverSettings)
         {
@@ -210,6 +234,52 @@ namespace KingdomGame.Networking
             return (keptKingdoms, keptPlayers);
         }
 
+        /// <summary>
+        /// What to save of the joined players' kingdoms (not the host's, which the game saves itself): what each has built
+        /// and each one's saved kingdom.
+        /// </summary>
+        public List<KingdomMemory> Memories()
+        {
+            var local = new HashSet<int>();
+            foreach (var p in players)
+                if (p.IsLocal) local.Add(p.KingdomId);
+            var list = new List<KingdomMemory>();
+            foreach (var k in kingdoms)
+            {
+                if (local.Contains(k.Id)) continue;
+                var memory = new KingdomMemory { KingdomId = k.Id, Save = SaveOf(k.Id) };
+                memory.Pieces.AddRange(BuiltIn(k.Id));
+                if (memory.Pieces.Count > 0 || memory.Save != null) list.Add(memory);
+            }
+            return list;
+        }
+
+        /// <summary>Puts back what was saved of the kingdoms (after <see cref="Remember"/>, before anyone joins).</summary>
+        public void RememberBuilt(IEnumerable<KingdomMemory> memories)
+        {
+            if (memories == null) return;
+            foreach (var m in memories)
+            {
+                if (m == null || Find(m.KingdomId) == null) continue;
+                var set = Set(m.KingdomId);
+                foreach (var piece in m.Pieces)
+                    if (set.Count < Protocol.MaxPiecesPerKingdom) set.Add(piece);
+                if (m.Save != null && m.Save.Length > 0) saves[m.KingdomId] = m.Save;
+            }
+        }
+
+        /// <summary>Every kingdom's built pieces (the host's game shows the others' when it starts).</summary>
+        public IEnumerable<(int Kingdom, IReadOnlyCollection<BuiltPiece> Pieces)> AllBuilt()
+        {
+            foreach (var kv in built) yield return (kv.Key, kv.Value);
+        }
+
+        HashSet<BuiltPiece> Set(int kingdom)
+        {
+            if (!built.TryGetValue(kingdom, out var set)) built[kingdom] = set = new HashSet<BuiltPiece>();
+            return set;
+        }
+
         // Writes down where a player is (to put them back there next time), unless they're dead or inside somewhere.
         void Note(PlayerSession p)
         {
@@ -251,6 +321,69 @@ namespace KingdomGame.Networking
         public void ChatLocal(PlayerSession host, string text)
         {
             if (host != null) Chat(host, text);
+        }
+
+        /// <summary>The host built or took away something in their kingdom: everyone else hears.</summary>
+        public void LocalBuilt(PlayerSession host, bool replaceAll, IReadOnlyList<BuiltPiece> removed, IReadOnlyList<BuiltPiece> added)
+        {
+            if (host == null || host.KingdomId <= 0) return;
+            Apply(host.KingdomId, replaceAll, removed, added);
+            Forward(host, host.KingdomId, replaceAll, removed, added);
+        }
+
+        /// <summary>Where the host's villagers are: players near the host's kingdom hear.</summary>
+        public void LocalFolk(PlayerSession host, IReadOnlyList<(int Index, Motion Motion)> folk)
+        {
+            if (host == null || host.KingdomId <= 0) return;
+            SendFolk(host, host.KingdomId, folk);
+        }
+
+        // Changes what the server knows a kingdom has built.
+        void Apply(int kingdom, bool replaceAll, IReadOnlyList<BuiltPiece> removed, IReadOnlyList<BuiltPiece> added)
+        {
+            var set = Set(kingdom);
+            if (replaceAll) set.Clear();
+            foreach (var p in removed) set.Remove(p);
+            foreach (var p in added)
+                if (set.Count < Protocol.MaxPiecesPerKingdom) set.Add(p);
+        }
+
+        // Passes a kingdom's changes on to every player but the one they came from.
+        void Forward(PlayerSession from, int kingdom, bool replaceAll, IReadOnlyList<BuiltPiece> removed, IReadOnlyList<BuiltPiece> added)
+        {
+            BuiltChanges.Write(writer, kingdom, replaceAll, removed, added, w =>
+            {
+                foreach (var p in players)
+                    if (p != from) p.Peer?.Send(w, DeliveryMethod.ReliableOrdered);
+            });
+        }
+
+        // Villagers' positions, to the players near their kingdom (as of now, server time).
+        void SendFolk(PlayerSession from, int kingdom, IReadOnlyList<(int Index, Motion Motion)> folk)
+        {
+            var k = Find(kingdom);
+            if (k == null) return;
+            float r2 = settings.FolkRadius * settings.FolkRadius;
+            for (int start = 0; start < folk.Count; start += Protocol.FolkPerMessage)
+            {
+                int n = Math.Min(Protocol.FolkPerMessage, folk.Count - start);
+                writer.Reset();
+                writer.Put((byte)Msg.Folk);
+                writer.Put(kingdom);
+                writer.Put(now);
+                writer.Put((byte)n);
+                for (int i = 0; i < n; i++)
+                {
+                    writer.Put((ushort)folk[start + i].Index);
+                    folk[start + i].Motion.Write(writer);
+                }
+                foreach (var p in players)
+                {
+                    if (p == from || p.Peer == null || !p.HasMotion) continue;
+                    float dx = p.Motion.X - k.X, dy = p.Motion.Y - k.Y;
+                    if (dx * dx + dy * dy <= r2) p.Peer.Send(writer, DeliveryMethod.Sequenced);
+                }
+            }
         }
 
         /// <summary>The key of whoever owns a kingdom (for saving), or null.</summary>
@@ -374,13 +507,27 @@ namespace KingdomGame.Networking
             var welcome = new WelcomeInfo
             {
                 YourId = session.Id, YourKingdom = kingdomId, ServerName = settings.Name, Seed = settings.Seed,
-                Day = day, Hour = hour, HasSpawn = record.HasPosition, SpawnX = record.X, SpawnY = record.Y,
+                Day = day, Hour = hour, Survival = Survival, HasSpawn = record.HasPosition, SpawnX = record.X, SpawnY = record.Y,
             };
             foreach (var p in players) welcome.Players.Add(new PlayerInfo { Id = p.Id, Name = p.Name, KingdomId = p.KingdomId });
             welcome.Kingdoms.AddRange(kingdoms);
             writer.Reset();
             welcome.Write(writer);
             peer.Send(writer, DeliveryMethod.ReliableOrdered);
+            // Their kingdom as they left it here (empty the first time)...
+            var save = SaveOf(kingdomId) ?? Array.Empty<byte>();
+            writer.Reset();
+            writer.Put((byte)Msg.YourSave);
+            writer.Put(save.Length);
+            writer.Put(save);
+            peer.Send(writer, DeliveryMethod.ReliableOrdered);
+            // ...and what everyone else has built.
+            var none = Array.Empty<BuiltPiece>();
+            foreach (var kv in built)
+            {
+                if (kv.Key == kingdomId || kv.Value.Count == 0) continue;
+                BuiltChanges.Write(writer, kv.Key, true, none, new List<BuiltPiece>(kv.Value), w => peer.Send(w, DeliveryMethod.ReliableOrdered));
+            }
             Log?.Invoke($"{session.Name} joined from {peer} ({players.Count} on)");
             Joined?.Invoke(session);
         }
@@ -422,6 +569,42 @@ namespace KingdomGame.Networking
                     case Msg.Chat:
                         Chat(session, reader.GetString(Protocol.MaxChatLength * 2));
                         break;
+                    case Msg.Built:
+                    {
+                        // (Whatever kingdom it says, it's theirs that changes: nobody builds in someone else's.)
+                        var (_, replaceAll) = BuiltChanges.Read(reader, removedIn, addedIn);
+                        if (session.KingdomId <= 0) break;
+                        Apply(session.KingdomId, replaceAll, removedIn, addedIn);
+                        Forward(session, session.KingdomId, replaceAll, removedIn, addedIn);
+                        KingdomBuilt?.Invoke(session.KingdomId, replaceAll, removedIn, addedIn);
+                        break;
+                    }
+                    case Msg.Folk:
+                    {
+                        reader.GetInt();      // (the kingdom: theirs)
+                        reader.GetDouble();   // (their time: the server stamps its own)
+                        int n = reader.GetByte();
+                        folkIn.Clear();
+                        for (int i = 0; i < n; i++) folkIn.Add((reader.GetUShort(), Motion.Read(reader)));
+                        for (int i = folkIn.Count - 1; i >= 0; i--) if (!folkIn[i].Motion.IsFinite) folkIn.RemoveAt(i);
+                        if (session.KingdomId <= 0) break;
+                        SendFolk(session, session.KingdomId, folkIn);
+                        FolkMoved?.Invoke(session.KingdomId, now, folkIn);
+                        break;
+                    }
+                    case Msg.KingdomSave:
+                    {
+                        int length = reader.GetInt();
+                        if (length < 0 || length > Protocol.MaxSaveBytes || length > reader.AvailableBytes)
+                        {
+                            Log?.Invoke($"{session.Name}'s saved kingdom is too big or broken ({length} bytes): not kept");
+                            break;
+                        }
+                        var bytes = new byte[length];
+                        reader.GetBytes(bytes, length);
+                        if (session.KingdomId > 0) saves[session.KingdomId] = bytes;
+                        break;
+                    }
                 }
             }
             catch (Exception e)

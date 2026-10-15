@@ -17,6 +17,8 @@ namespace KingdomGame.Networking
         readonly NetManager net;
         readonly NetDataWriter writer = new NetDataWriter();
         readonly List<(int Id, Motion Motion)> entries = new List<(int, Motion)>();
+        readonly List<BuiltPiece> removedIn = new List<BuiltPiece>(), addedIn = new List<BuiltPiece>();
+        readonly List<(int Index, Motion Motion)> folkIn = new List<(int, Motion)>();
         NetPeer server;
         bool leaving;
 
@@ -41,6 +43,12 @@ namespace KingdomGame.Networking
         public event Action<Motion> Corrected;
         public event Action<string, string> Chat;
         public event Action<int, float> Clock;
+        /// <summary>A kingdom built or took away something (kingdom, replace all, what went, what's new). The lists are reused.</summary>
+        public event Action<int, bool, List<BuiltPiece>, List<BuiltPiece>> Built;
+        /// <summary>Where a kingdom's villagers are (kingdom, server time, villagers). The list is reused.</summary>
+        public event Action<int, double, List<(int Index, Motion Motion)>> Folk;
+        /// <summary>Our kingdom as we last saved it on this server (empty the first time), straight after the welcome.</summary>
+        public event Action<byte[]> YourSave;
 
         public ClientCore()
         {
@@ -89,6 +97,45 @@ namespace KingdomGame.Networking
             writer.Put((byte)Msg.State);
             motion.Write(writer);
             server.Send(writer, DeliveryMethod.Sequenced);
+        }
+
+        /// <summary>What was built or taken away in our kingdom (or, with <paramref name="replaceAll"/>, all of it).</summary>
+        public void SendBuilt(bool replaceAll, IReadOnlyList<BuiltPiece> removed, IReadOnlyList<BuiltPiece> added)
+        {
+            if (!Connected) return;
+            BuiltChanges.Write(writer, Welcome.YourKingdom, replaceAll, removed, added, w => server.Send(w, DeliveryMethod.ReliableOrdered));
+        }
+
+        /// <summary>Where our villagers are (often: only the latest matters).</summary>
+        public void SendFolk(IReadOnlyList<(int Index, Motion Motion)> folk)
+        {
+            if (!Connected) return;
+            for (int start = 0; start < folk.Count; start += Protocol.FolkPerMessage)
+            {
+                int n = Math.Min(Protocol.FolkPerMessage, folk.Count - start);
+                writer.Reset();
+                writer.Put((byte)Msg.Folk);
+                writer.Put(Welcome.YourKingdom);
+                writer.Put(0.0);
+                writer.Put((byte)n);
+                for (int i = 0; i < n; i++)
+                {
+                    writer.Put((ushort)folk[start + i].Index);
+                    folk[start + i].Motion.Write(writer);
+                }
+                server.Send(writer, DeliveryMethod.Sequenced);
+            }
+        }
+
+        /// <summary>Our whole kingdom, saved (the server keeps it for next time).</summary>
+        public void SendKingdomSave(byte[] bytes)
+        {
+            if (!Connected || bytes == null || bytes.Length > Protocol.MaxSaveBytes) return;
+            writer.Reset();
+            writer.Put((byte)Msg.KingdomSave);
+            writer.Put(bytes.Length);
+            writer.Put(bytes);
+            server.Send(writer, DeliveryMethod.ReliableOrdered);
         }
 
         public void SendChat(string text)
@@ -144,6 +191,31 @@ namespace KingdomGame.Networking
                     case Msg.Clock:
                         Clock?.Invoke(reader.GetInt(), reader.GetFloat());
                         break;
+                    case Msg.Built:
+                    {
+                        var (kingdom, replaceAll) = BuiltChanges.Read(reader, removedIn, addedIn);
+                        Built?.Invoke(kingdom, replaceAll, removedIn, addedIn);
+                        break;
+                    }
+                    case Msg.Folk:
+                    {
+                        int kingdom = reader.GetInt();
+                        double time = reader.GetDouble();
+                        int n = reader.GetByte();
+                        folkIn.Clear();
+                        for (int i = 0; i < n; i++) folkIn.Add((reader.GetUShort(), Motion.Read(reader)));
+                        Folk?.Invoke(kingdom, time, folkIn);
+                        break;
+                    }
+                    case Msg.YourSave:
+                    {
+                        int length = reader.GetInt();
+                        if (length < 0 || length > reader.AvailableBytes) break;
+                        var bytes = new byte[length];
+                        reader.GetBytes(bytes, length);
+                        YourSave?.Invoke(bytes);
+                        break;
+                    }
                 }
             }
             finally

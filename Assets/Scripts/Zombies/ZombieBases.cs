@@ -50,6 +50,7 @@ namespace KingdomGame.Zombies
 
         SurvivalConfig config;
         ZombieDirector director;
+        SurvivalDirector waves;
         Kingdom kingdom;
         DayNightCycle dayNight;
         readonly List<ZombieBase> bases = new List<ZombieBase>();
@@ -59,10 +60,11 @@ namespace KingdomGame.Zombies
 
         public IReadOnlyList<ZombieBase> Bases => bases;
 
-        public void Setup(SurvivalConfig survival, ZombieDirector zombies, Kingdom owner, DayNightCycle cycle)
+        public void Setup(SurvivalConfig survival, ZombieDirector zombies, Kingdom owner, DayNightCycle cycle, SurvivalDirector survivalWaves)
         {
             config = survival;
             director = zombies;
+            waves = survivalWaves;
             kingdom = owner;
             dayNight = cycle;
             lastDay = dayNight != null ? dayNight.Day : 1;
@@ -149,18 +151,24 @@ namespace KingdomGame.Zombies
             director.Rewindow();
         }
 
+        // A kind of zombie for a camp or a siege: the kinds the waves have got up to by now.
+        ZombieConfig PickKind()
+        {
+            if (waves != null) return waves.PickKind(waves.Wave);
+            var kinds = config.zombies;
+            return kinds != null && kinds.Length > 0 ? kinds[0] : null;
+        }
+
         // Each base keeps its campers topped up, one at a time.
         void KeepCampers()
         {
-            var kinds = config.zombies;
-            if (kinds == null || kinds.Length == 0 || kinds[0] == null) return;
             foreach (var b in bases)
             {
                 if (b == null) continue;
                 b.Campers.RemoveAll(z => z == null || z.Health == null || z.Health.Dead);
                 if (b.Campers.Count >= config.baseCampers || Time.time < b.NextCamperAt) continue;
                 b.NextCamperAt = Time.time + config.baseCamperSeconds;
-                var z = director.Spawn(kinds[Random.Range(0, kinds.Length)], b.Center + Random.insideUnitCircle * 2.5f, 1f);
+                var z = director.Spawn(PickKind(), b.Center + Random.insideUnitCircle * 2.5f, 1f);
                 if (z == null) continue;
                 z.Camp(b.Center, 5f, 8f, true);
                 b.Campers.Add(z);
@@ -171,8 +179,7 @@ namespace KingdomGame.Zombies
 
         void StartSiege(ZombieBase from)
         {
-            var kinds = config.zombies;
-            if (kinds == null || kinds.Length == 0 || kinds[0] == null) return;
+            if (PickKind() == null) return;   // no zombies set up
             // Where they wait: just outside the kingdom, on the side facing their base.
             var throne = kingdom.Throne.Center;
             var dir = from.Center - throne;
@@ -181,7 +188,7 @@ namespace KingdomGame.Zombies
             var siege = new Siege { From = from, Until = Time.time + config.siegeSeconds };
             for (int i = 0; i < config.siegeZombies; i++)
             {
-                var z = director.Spawn(kinds[Random.Range(0, kinds.Length)], spot + Random.insideUnitCircle * 3f, 1f);
+                var z = director.Spawn(PickKind(), spot + Random.insideUnitCircle * 3f, 1f);
                 if (z == null) continue;
                 z.Camp(spot, 7f, 10f);
                 siege.Crowd.Add(z);

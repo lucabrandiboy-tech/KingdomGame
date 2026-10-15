@@ -49,6 +49,28 @@ namespace KingdomGame.Zombies
         int[] bucketHead;
         int[] bucketNext = new int[256];
 
+        // Acid a spitter spat, flying to where it lands.
+        sealed class Glob
+        {
+            public Vector2 From, To;
+            public float Clock, Seconds, Damage;
+            public SpriteRenderer Look;
+        }
+        readonly List<Glob> globs = new List<Glob>();
+        /// <summary>How fast spat acid flies, in tiles per second, and how far round where it lands it burns.</summary>
+        const float SpitSpeed = 7f, SplashRadius = 0.6f;
+        // A screamer's scream: a ring going out (just for looks).
+        sealed class ScreamRing
+        {
+            public SpriteRenderer Look;
+            public float Clock, Size;
+        }
+        readonly List<ScreamRing> screams = new List<ScreamRing>();
+        const float ScreamRingSeconds = 0.6f;
+        // Bloaters that died this frame: their blasts go off next frame (not in the middle of another blast).
+        readonly List<(Vector2 At, DamageType Blast)> bursts = new List<(Vector2, DamageType)>();
+        readonly List<Health> splashed = new List<Health>();
+
         // A bar over a wall or door that zombies are hitting, for a few seconds after each blow.
         sealed class Bar
         {
@@ -194,6 +216,9 @@ namespace KingdomGame.Zombies
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
             if (TestHordeKey && GameInput.Pressed(KeyCode.F9)) TestHorde();
+            BlowUpBursts();
+            UpdateGlobs(dt);
+            UpdateScreams(dt);
             Crowd();
             for (int i = zombies.Count - 1; i >= 0; i--)
             {
@@ -218,13 +243,18 @@ namespace KingdomGame.Zombies
             return z;
         }
 
-        // Eight zombies from a random side of the map (free build, F9).
+        int testKind;   // the next kind the test horde sends
+
+        // Eight zombies from a random side of the map (free build, F9): every kind in turn, to try them all out.
         void TestHorde()
         {
-            if (config == null || config.zombies == null || config.zombies.Length == 0 || config.zombies[0] == null) return;
+            if (config == null || config.zombies == null || config.zombies.Length == 0) return;
             if (!FindSpawnPoint(UnityEngine.Random.value, 14f, out var spot)) return;
             for (int i = 0; i < 8; i++)
-                Spawn(config.zombies[0], spot + UnityEngine.Random.insideUnitCircle * 0.8f, 1f);
+            {
+                var kind = config.zombies[testKind++ % config.zombies.Length];
+                if (kind != null) Spawn(kind, spot + UnityEngine.Random.insideUnitCircle * 0.8f, 1f);
+            }
         }
 
         ZombieSprites SpritesOf(ZombieConfig kind)
@@ -341,8 +371,19 @@ namespace KingdomGame.Zombies
         internal void Died(Zombie z, float facingDegrees, ZombieSprites pictures)
         {
             zombies.Remove(z);
-            Kills++;
             var at = z.Position;
+            var c = z.Config;
+            // A bloater bursts however it dies (shoot it far from your walls); one that burst by itself isn't a kill.
+            if (c.ability == ZombieAbility.Burst)
+            {
+                if (c.burstBlast != null) bursts.Add((at, c.burstBlast));
+                if (world != null) world.Burst(at, new Color32(150, 160, 70, 255), 30, 4f);   // a spray of bile
+                if (Remains.Current != null) Remains.Current.Blood(at, 1.6f);
+                if (!z.BurstItself) Kills++;
+                ZombieDied?.Invoke(z);
+                return;
+            }
+            Kills++;
             var remains = Remains.Current;
             if (remains != null)
             {
@@ -353,7 +394,6 @@ namespace KingdomGame.Zombies
                 remains.Blood(at, 1.1f);
             }
             if (world != null) world.Burst(at, new Color32(80, 10, 12, 255), 10, 2.5f);
-            var c = z.Config;
             if (c.lootAmount > 0 && UnityEngine.Random.value < c.lootChance)
             {
                 int wood = UnityEngine.Random.Range(0, c.lootAmount + 1);
@@ -593,6 +633,28 @@ namespace KingdomGame.Zombies
             return best;
         }
 
+        /// <summary>
+        /// Who a spitter at <paramref name="from"/> spits at: the closest person within <paramref name="range"/> tiles that it can
+        /// see, or anyone up on a wall or tower in range (they can be seen over the walls, and spat at).
+        /// </summary>
+        public Health FindSpitTarget(Vector2 from, float range)
+        {
+            Health best = null;
+            float bestDistance = range * range;
+            foreach (var h in Health.Creatures)
+            {
+                if (h == null || h.Dead || h.Team != Team.Friendly) continue;
+                var at = AimPoint(h, from);
+                float d = (at - from).sqrMagnitude;
+                if (d < bestDistance && (h.OutOfReach || ClearLine(from, at)))
+                {
+                    best = h;
+                    bestDistance = d;
+                }
+            }
+            return best;
+        }
+
         /// <summary>Whether any zombie is within <paramref name="range"/> tiles of <paramref name="at"/>.</summary>
         public bool AnyWithin(Vector2 at, float range)
         {
@@ -620,7 +682,6 @@ namespace KingdomGame.Zombies
             return best;
         }
 
-        /// <summary>A zombie's blow lands on what's in <paramref name="cell"/>: a wall wears down, a door or piece of furniture loses health.</summary>
         /// <summary>Whether a cell holds something built that zombies can break (furniture, a door, a chest...), not a wall.</summary>
         public bool BreakableThing(Vector2Int cell)
         {
@@ -634,7 +695,11 @@ namespace KingdomGame.Zombies
             }
         }
 
-        public void HitCell(Vector2Int cell, Zombie z)
+        /// <summary>
+        /// A zombie's blow lands on what's in <paramref name="cell"/>: a wall wears down, a door or piece of furniture loses health.
+        /// <paramref name="blow"/>, if not negative, is the damage instead of the zombie's own (a bloater bursting against it).
+        /// </summary>
+        public void HitCell(Vector2Int cell, Zombie z, float blow = -1f)
         {
             float damage = DamageFactor;
             var chunk = world != null ? world.ChunkAt(cell) : null;
@@ -647,7 +712,7 @@ namespace KingdomGame.Zombies
                     world.ApplyDamage(scratch);
                 // ...and the wall wears down until it caves in.
                 var wall = chunk.Owner;
-                wall.Batter(z.Config.wallDamage * damage);
+                wall.Batter((blow >= 0f ? blow : z.Config.wallDamage) * damage);
                 if (!wall.Collapsed) ShowBar(wall, wall, null);
                 return;
             }
@@ -656,11 +721,104 @@ namespace KingdomGame.Zombies
             var target = thing is Door door ? door.Health : thing is Furniture piece ? piece.Health : thing is House house ? house.Health
                 : thing is Storage store ? store.Health : thing is MineShaft shaft ? shaft.Health : null;
             if (target == null) return;
-            target.Damage(z.Config.structureDamage * damage, z.Position);
+            target.Damage((blow >= 0f ? blow : z.Config.structureDamage) * damage, z.Position);
             if (!target.Dead) ShowBar(target, null, target);
             // Thorns, stakes, spikes: the zombie gets hurt hitting it.
-            if (thing is Furniture barrier && barrier.Config.defense != null && barrier.Config.defense.thorns > 0f && z.Health != null)
+            if (blow < 0f && thing is Furniture barrier && barrier.Config.defense != null && barrier.Config.defense.thorns > 0f && z.Health != null)
                 z.Health.Damage(barrier.Config.defense.thorns, (Vector2)cell + new Vector2(0.5f, 0.5f));
+        }
+
+        // ------------------------------------------------- spit, screams, bursts --
+
+        /// <summary>A spitter spits acid from <paramref name="from"/>: it lands at <paramref name="to"/>, burning anyone there.</summary>
+        internal void Spit(Vector2 from, Vector2 to, float damage)
+        {
+            var go = new GameObject("Acid");
+            go.transform.SetParent(transform, false);
+            go.transform.position = from;
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sprite = ArtSprites.Get(ArtKeys.AcidGlob);
+            r.sortingOrder = SortOrder.Projectiles;
+            Look.MakeGlow(r);   // it glows a sickly green in the dark
+            globs.Add(new Glob { From = from, To = to, Seconds = Mathf.Max(0.25f, (to - from).magnitude / SpitSpeed), Damage = damage, Look = r });
+        }
+
+        void UpdateGlobs(float dt)
+        {
+            for (int i = globs.Count - 1; i >= 0; i--)
+            {
+                var g = globs[i];
+                g.Clock += dt;
+                float f = Mathf.Clamp01(g.Clock / g.Seconds);
+                if (g.Look != null)
+                {
+                    g.Look.transform.position = Vector2.Lerp(g.From, g.To, f);
+                    g.Look.transform.localScale = Vector3.one * (1f + Mathf.Sin(f * Mathf.PI) * 0.8f);   // bigger at the top of its arc
+                }
+                if (f < 1f) continue;
+                Splash(g.To, g.Damage);
+                if (g.Look != null) Destroy(g.Look.gameObject);
+                globs.RemoveAt(i);
+            }
+        }
+
+        // The acid lands: everyone within reach of it is burnt (copied first: dying takes them off the list).
+        void Splash(Vector2 at, float damage)
+        {
+            splashed.Clear();
+            foreach (var h in Health.Creatures)
+                if (h != null && !h.Dead && h.Team == Team.Friendly && Gap(h, at) <= SplashRadius) splashed.Add(h);
+            foreach (var h in splashed) h.Damage(damage, at);
+            splashed.Clear();
+            if (world != null) world.Burst(at, new Color32(140, 190, 60, 255), 12, 1.5f);
+        }
+
+        /// <summary>A screamer screams at <paramref name="at"/>: the zombies round it speed up for a while.</summary>
+        internal void Scream(Vector2 at, ZombieConfig kind)
+        {
+            float r2 = kind.screamRadius * kind.screamRadius;
+            foreach (var z in zombies)
+                if (z != null && (z.Position - at).sqrMagnitude <= r2) z.SpeedUp(kind.screamSpeed, kind.screamSeconds);
+            var go = new GameObject("Scream");
+            go.transform.SetParent(transform, false);
+            go.transform.position = at;
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sprite = ArtSprites.Get(ArtKeys.ScreamRing);
+            r.sortingOrder = SortOrder.Projectiles;
+            screams.Add(new ScreamRing { Look = r, Size = kind.screamRadius * 2f });
+            UpdateScreams(0f);
+        }
+
+        void UpdateScreams(float dt)
+        {
+            for (int i = screams.Count - 1; i >= 0; i--)
+            {
+                var ring = screams[i];
+                ring.Clock += dt;
+                float f = ring.Clock / ScreamRingSeconds;
+                if (f >= 1f || ring.Look == null)
+                {
+                    if (ring.Look != null) Destroy(ring.Look.gameObject);
+                    screams.RemoveAt(i);
+                    continue;
+                }
+                // The ring picture is a tile across: it grows out to the scream's reach and fades.
+                ring.Look.transform.localScale = Vector3.one * Mathf.Lerp(0.5f, ring.Size, Mathf.Sqrt(f));
+                ring.Look.color = new Color(1f, 1f, 1f, 1f - f);
+            }
+        }
+
+        // The blasts of the bloaters that died since last frame.
+        void BlowUpBursts()
+        {
+            if (bursts.Count == 0) return;
+            var now = bursts.ToArray();   // blasts can kill more bloaters, which add theirs for next frame
+            bursts.Clear();
+            foreach (var (at, blast) in now)
+            {
+                if (world != null && world.TryMakeEvent(blast, at, out var hit)) world.ApplyDamage(hit);
+                else Health.Blast(at, blast.blastRadius, blast.creatureDamage, blast.friendlyShare);
+            }
         }
 
         // ---------------------------------------------------------- bars --

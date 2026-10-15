@@ -183,6 +183,18 @@ namespace KingdomGame.Zombies
             Announce(news, 7f);
         }
 
+        /// <summary>
+        /// A kind of zombie for wave <paramref name="wave"/> (by each kind's first wave and weight; wave 1 before the first),
+        /// or null if none are set up. Zombie bases use it too, so their camps and sieges grow with the waves.
+        /// </summary>
+        public ZombieConfig PickKind(int wave)
+        {
+            var kinds = config != null ? config.zombies : null;
+            if (kinds == null || kinds.Length == 0) return null;
+            int pick = WaveMath.Pick(Mathf.Max(1, wave), firstWaves, weights, Random.value);
+            return pick >= 0 ? kinds[pick] : System.Array.Find(kinds, k => k != null);
+        }
+
         // Zombies come out of the dark a few a second, from the wave's sides in turn.
         void SpawnSome(float dt)
         {
@@ -197,8 +209,7 @@ namespace KingdomGame.Zombies
             while (spawnClock >= 1f && ToCome > 0 && zombies.Attacking < config.maxAlive)
             {
                 spawnClock -= 1f;
-                int pick = WaveMath.Pick(Wave, firstWaves, weights, Random.value);
-                var kind = pick >= 0 ? kinds[pick] : System.Array.Find(kinds, k => k != null);
+                var kind = PickKind(Wave);
                 if (kind == null)
                 {
                     ToCome = 0;   // no zombies set up at all

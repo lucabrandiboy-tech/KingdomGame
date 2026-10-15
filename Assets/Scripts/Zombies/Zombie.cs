@@ -45,8 +45,12 @@ namespace KingdomGame.Zombies
         float lostFor;                     // seconds without a way to anyone
         float stuckFor, chaseBlockedUntil; // going straight for someone isn't getting anywhere: follow the field
         bool struck;
-        Health prey, victim;               // who it's after; who it's hitting
-        bool hittingPerson;                // hitting victim (true) or the cell smashing (false)
+        Health prey, victim;               // who it's after; who it's hitting (or spitting or screaming at)
+        enum Blow { Person, Cell, Spit, Scream, Burst }
+        Blow blow;                         // what the current blow is
+        Vector2 spitTo;                    // where its acid will land
+        float abilityAt;                   // when it can next spit or scream (or look for someone to)
+        float boostUntil, boostSpeed = 1f; // sped up by a screamer's scream
         float heldUntil;                   // caught in a trap until then
         float slowKeep = 1f;               // share of its speed it keeps (stakes, wire), this frame
         int slowFrame = -10;
@@ -86,6 +90,15 @@ namespace KingdomGame.Zombies
         public float Radius => Config.radius;
         /// <summary>Caught in a trap: it can't move or hit anything.</summary>
         public bool Held => Time.time < heldUntil;
+        /// <summary>It blew itself up (a bloater reaching a wall or someone): not a kill, and no loot.</summary>
+        public bool BurstItself { get; private set; }
+
+        /// <summary>A screamer's scream: <paramref name="factor"/> times as fast for <paramref name="seconds"/>.</summary>
+        public void SpeedUp(float factor, float seconds)
+        {
+            boostSpeed = Mathf.Max(1f, factor);
+            boostUntil = Mathf.Max(boostUntil, Time.time + seconds);
+        }
 
         /// <summary>Caught in a trap for <paramref name="seconds"/>: no moving, no hitting (a blow it was winding up is lost).</summary>
         public void Hold(float seconds)
@@ -122,8 +135,10 @@ namespace KingdomGame.Zombies
 
             Health = gameObject.AddComponent<Health>();
             Health.Setup(Team.Zombie, config.health * Mathf.Max(0.1f, toughness), config.radius, true);
+            Health.Armor = config.armor;
             Health.Hurt += OnHurt;
             Health.Died += OnDied;
+            abilityAt = Time.time + Random.Range(0.5f, 2f);   // not all at once
 
             shadow = Look.AddShadow(transform, sprites.Shadow, 0.1f);
             body = new GameObject("Body").transform;
@@ -160,6 +175,13 @@ namespace KingdomGame.Zombies
             if (attackClock >= 0f)
             {
                 Attack(dt);
+                Show(Vector2.zero, dt);
+                return;
+            }
+
+            // Spitters and screamers: now and then, at someone they can see further off.
+            if ((Config.ability == ZombieAbility.Spit || Config.ability == ZombieAbility.Scream) && Time.time >= abilityAt && UseAbility())
+            {
                 Show(Vector2.zero, dt);
                 return;
             }
@@ -238,7 +260,7 @@ namespace KingdomGame.Zombies
 
             // Slowed by what it walked through last frame (the defences run after the zombies move).
             float slow = Time.frameCount - slowFrame <= 1 ? slowKeep : 1f;
-            float speed = Config.moveSpeed * director.SpeedFactor * slow;
+            float speed = Config.moveSpeed * director.SpeedFactor * slow * (Time.time < boostUntil ? boostSpeed : 1f);
             var move = (want.sqrMagnitude > 1e-6f ? want.normalized * speed : Vector2.zero) + Crowding;
             Move(move * dt);
             // Hardly moving while trying to walk (pressed into a corner, stuck in a crowd): follow the field for a while.
@@ -252,20 +274,41 @@ namespace KingdomGame.Zombies
             Show((position - before) / Mathf.Max(dt, 1e-5f), dt);
         }
 
+        // Goes for someone (target) or what's in a cell. A bloater doesn't claw: it bursts against it.
         void StartAttack(Health target, Vector2Int cell)
         {
-            victim = target;
-            hittingPerson = target != null;
             smashing = cell;
+            StartBlow(Config.ability == ZombieAbility.Burst ? Blow.Burst : target != null ? Blow.Person : Blow.Cell, target);
+        }
+
+        void StartBlow(Blow kind, Health target)
+        {
+            blow = kind;
+            victim = target;
             attackClock = 0f;
             struck = false;
         }
 
-        // A blow: winding up for the first half, the strike lands half way, then a moment to recover.
+        // Spits at or screams at someone it can see, if there's anyone: returns whether it started.
+        bool UseAbility()
+        {
+            abilityAt = Time.time + 0.4f;   // nobody about: look again in a moment
+            bool spit = Config.ability == ZombieAbility.Spit;
+            var target = spit ? director.FindSpitTarget(position, Config.abilityRange) : director.FindPrey(position, Config.abilityRange);
+            if (target == null) return false;
+            // Close enough to claw them: no need to spit.
+            if (spit && !target.OutOfReach && director.Gap(target, position) - Radius <= Config.reach) return false;
+            abilityAt = Time.time + Config.abilitySeconds;
+            spitTo = director.AimPoint(target, position);
+            StartBlow(spit ? Blow.Spit : Blow.Scream, target);
+            return true;
+        }
+
+        // A blow (or a spit, a scream, a burst): winding up for the first half, it lands half way, then a moment to recover.
         void Attack(float dt)
         {
             // Someone else got them first: look for the next one.
-            if (hittingPerson && !struck && (victim == null || victim.Dead))
+            if (blow == Blow.Person && !struck && (victim == null || victim.Dead))
             {
                 attackClock = -1f;
                 return;
@@ -276,15 +319,28 @@ namespace KingdomGame.Zombies
             {
                 struck = true;
                 float damage = director.DamageFactor;
-                if (hittingPerson)
+                switch (blow)
                 {
-                    // It only lands if they're still within reach (step back in time and it misses).
-                    if (director.Gap(victim, position) - Radius <= Config.reach + 0.15f)
-                        victim.Damage(Config.damage * damage, position);
-                }
-                else
-                {
-                    director.HitCell(smashing, this);
+                    case Blow.Person:
+                        // It only lands if they're still within reach (step back in time and it misses).
+                        if (director.Gap(victim, position) - Radius <= Config.reach + 0.15f)
+                            victim.Damage(Config.damage * damage, position);
+                        break;
+                    case Blow.Cell:
+                        director.HitCell(smashing, this);
+                        break;
+                    case Blow.Spit:
+                        director.Spit(position, spitTo, Config.spitDamage * damage);
+                        break;
+                    case Blow.Scream:
+                        director.Scream(position, Config);
+                        break;
+                    case Blow.Burst:
+                        // Into the wall or door it reached, then it bursts (the director sets off the blast when it dies).
+                        if (victim == null) director.HitCell(smashing, this, Config.burstWallDamage);
+                        BurstItself = true;
+                        Health.Damage(1e9f, position);
+                        return;
                 }
             }
             if (attackClock >= length) attackClock = -1f;
@@ -326,7 +382,7 @@ namespace KingdomGame.Zombies
             {
                 float t = attackClock / Config.attackSeconds;
                 frame = t < 0.5f ? 4 : t < 0.75f ? 5 : 0;
-                if (!hittingPerson) look = (Vector2)smashing + new Vector2(0.5f, 0.5f) - position;
+                if (blow == Blow.Cell || (blow == Blow.Burst && victim == null)) look = (Vector2)smashing + new Vector2(0.5f, 0.5f) - position;
                 else if (victim != null && !victim.Dead) look = director.AimPoint(victim, position) - position;
             }
             else if (velocity.sqrMagnitude > 0.0025f)
@@ -341,7 +397,10 @@ namespace KingdomGame.Zombies
             int direction = RulerLook.Direction(angle, sprites.Frames.GetLength(0));
             bodyRenderer.sprite = sprites.Frames[direction, frame];
             if (eyes != null) eyes.localPosition = sprites.EyesAt[frame] * sprites.Scale;
-            bodyRenderer.color = hurtFlash > 0f ? new Color(1f, 0.55f, 0.5f) : Color.white;
+            bodyRenderer.color = hurtFlash > 0f ? new Color(1f, 0.55f, 0.5f)
+                : attackClock >= 0f && blow == Blow.Burst ? Color.Lerp(Color.white, new Color(1f, 1f, 0.45f), Mathf.PingPong(attackClock * 6f, 1f))   // swelling up to burst
+                : Time.time < boostUntil ? new Color(1f, 0.8f, 0.72f)   // worked up by a scream
+                : Color.white;
             var turn = Quaternion.Euler(0f, 0f, angle);
             body.localRotation = turn;
             if (shadow != null) shadow.transform.localRotation = turn;

@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 20;
+        const int SettingsVersion = 21;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -101,6 +101,7 @@ namespace KingdomGame.EditorTools
             bool costlyAges = oldContent != null && oldContent.settingsVersion < 16;
             bool darkNights = oldContent != null && oldContent.settingsVersion < 16;
             bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 18;
+            bool zombieKinds = oldContent != null && oldContent.settingsVersion < 21;   // crawlers, screamers, spitters, bloaters, armored, giants
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -141,6 +142,15 @@ namespace KingdomGame.EditorTools
                 d.radiusPixels = 6; d.centerDamage = 120; d.edgeDamage = 30; d.jaggedness = 170; d.noiseBlock = 2;
                 d.debrisChance = 0.5f; d.debrisSpeed = new Vector2(0.8f, 2.5f); d.debrisLift = new Vector2(1f, 2.5f);
                 d.sparks = 3; d.sparkColor = new Color32(140, 128, 110, 255); d.screenShake = 0f;
+            });
+            // A bloater bursting: a dirty blast that cracks walls and hurts everyone round it (other zombies too).
+            var bloaterBurst = Asset<DamageType>("Destruction/BloaterBurst", d =>
+            {
+                d.category = DamageCategory.Explosive;
+                d.radiusPixels = 44; d.centerDamage = 520; d.edgeDamage = 130; d.jaggedness = 140; d.noiseBlock = 3;
+                d.debrisChance = 0.15f; d.debrisSpeed = new Vector2(2f, 7f); d.debrisLift = new Vector2(2f, 5f);
+                d.sparks = 40; d.sparkColor = new Color32(170, 190, 80, 255); d.screenShake = 0.2f;
+                d.creatureDamage = 55f; d.blastRadius = 2f; d.friendlyShare = 1f;
             });
 
             var stone = Asset<StructureMaterial>("Destruction/StoneWall", m =>
@@ -270,7 +280,7 @@ namespace KingdomGame.EditorTools
             // Each age's automation (machines), unlocked with the age; then each age's crafting table and the parts its things take.
             var machinesByAge = Machines(plantedTree);
             for (int i = 0; i < machinesByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(machinesByAge[i]);
-            // Each age's six pieces of furniture (beds give homes; each kind boosts something once).
+            // Each age's ten pieces of furniture (beds give homes; each kind boosts something once).
             var furnitureByAge = AgeFurniture();
             for (int i = 0; i < furnitureByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(furnitureByAge[i]);
             // Each age's better plant (Farming tab).
@@ -319,7 +329,49 @@ namespace KingdomGame.EditorTools
                 z.damage = 28f; z.attackSeconds = 1.8f; z.reach = 0.3f; z.structureDamage = 45f; z.wallDamage = 60f; z.wallScratch = smash;
                 z.firstWave = 5; z.weight = 0.25f; z.lootChance = 0.6f; z.lootAmount = 20;
             });
-            var survival = Asset<SurvivalConfig>("Zombies/SurvivalConfig", s => s.zombies = new[] { walker, runner, brute });
+            var crawler = Asset<ZombieConfig>("Zombies/Crawler", z =>
+            {
+                z.displayName = "Crawler"; z.art = "Crawler"; z.health = 45f; z.moveSpeed = 0.75f; z.radius = 0.2f;
+                z.damage = 8f; z.attackSeconds = 1.1f; z.reach = 0.25f; z.structureDamage = 8f; z.wallDamage = 8f; z.wallScratch = claw;
+                z.firstWave = 2; z.weight = 0.7f; z.lootChance = 0.15f; z.lootAmount = 5;
+            });
+            var screamer = Asset<ZombieConfig>("Zombies/Screamer", z =>
+            {
+                z.displayName = "Screamer"; z.art = "Screamer"; z.health = 40f; z.moveSpeed = 1.3f; z.radius = 0.2f;
+                z.damage = 6f; z.attackSeconds = 1f; z.reach = 0.25f; z.structureDamage = 5f; z.wallDamage = 4f; z.wallScratch = claw;
+                z.ability = ZombieAbility.Scream; z.abilityRange = 9f; z.abilitySeconds = 10f;
+                z.screamRadius = 9f; z.screamSpeed = 1.5f; z.screamSeconds = 5f;
+                z.firstWave = 4; z.weight = 0.25f; z.lootChance = 0.3f; z.lootAmount = 8;
+            });
+            var spitter = Asset<ZombieConfig>("Zombies/Spitter", z =>
+            {
+                z.displayName = "Spitter"; z.art = "Spitter"; z.health = 55f; z.moveSpeed = 0.95f; z.radius = 0.22f;
+                z.damage = 8f; z.attackSeconds = 1.2f; z.reach = 0.25f; z.structureDamage = 8f; z.wallDamage = 6f; z.wallScratch = claw;
+                z.ability = ZombieAbility.Spit; z.abilityRange = 6.5f; z.abilitySeconds = 4f; z.spitDamage = 12f;
+                z.firstWave = 6; z.weight = 0.35f; z.lootChance = 0.3f; z.lootAmount = 10;
+            });
+            var bloater = Asset<ZombieConfig>("Zombies/Bloater", z =>
+            {
+                z.displayName = "Bloater"; z.art = "Bloater"; z.health = 90f; z.moveSpeed = 0.7f; z.radius = 0.27f;
+                z.damage = 0f; z.attackSeconds = 1.6f; z.reach = 0.3f; z.structureDamage = 0f; z.wallDamage = 0f; z.wallScratch = claw;
+                z.ability = ZombieAbility.Burst; z.burstBlast = bloaterBurst; z.burstWallDamage = 220f;
+                z.firstWave = 7; z.weight = 0.3f; z.lootChance = 0f; z.lootAmount = 0;
+            });
+            var armored = Asset<ZombieConfig>("Zombies/Armored", z =>
+            {
+                z.displayName = "Armored"; z.art = "Armored"; z.health = 160f; z.moveSpeed = 0.95f; z.radius = 0.24f;
+                z.damage = 14f; z.attackSeconds = 1.3f; z.reach = 0.27f; z.structureDamage = 16f; z.wallDamage = 16f; z.wallScratch = claw;
+                z.armor = 6f;
+                z.firstWave = 9; z.weight = 0.4f; z.lootChance = 0.45f; z.lootAmount = 16;
+            });
+            var giant = Asset<ZombieConfig>("Zombies/Giant", z =>
+            {
+                z.displayName = "Giant"; z.art = "Giant"; z.health = 1100f; z.moveSpeed = 0.6f; z.radius = 0.48f;
+                z.damage = 50f; z.attackSeconds = 2.4f; z.reach = 0.4f; z.structureDamage = 120f; z.wallDamage = 160f; z.wallScratch = smash;
+                z.firstWave = 12; z.weight = 0.06f; z.lootChance = 1f; z.lootAmount = 60;
+            });
+            var allZombies = new[] { walker, runner, brute, crawler, screamer, spitter, bloater, armored, giant };
+            var survival = Asset<SurvivalConfig>("Zombies/SurvivalConfig", s => s.zombies = allZombies);
 
             var content = Asset<GameContent>("GameContent", c =>
             {
@@ -491,6 +543,16 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Added each age's new things: machines and crafting tables (Industry tab), furniture, plants (Farming tab), towers and electric lights. Your other settings were kept.");
             }
 
+            if (zombieKinds && content.survival != null)
+            {
+                // The newer kinds of zombie join the waves (after the ones you have).
+                var kinds = new List<ZombieConfig>(content.survival.zombies ?? new ZombieConfig[0]);
+                foreach (var z in allZombies) if (!kinds.Contains(z)) kinds.Add(z);
+                content.survival.zombies = kinds.ToArray();
+                EditorUtility.SetDirty(content.survival);
+                Debug.Log("Six more kinds of zombie come in the waves now: crawlers, screamers, spitters, bloaters, armored zombies and giants. Your other settings were kept.");
+            }
+
             if (endless && content.network != null && content.network.kingdomSpacing < 560)
             {
                 // Each kingdom has lands 512 tiles across in the endless world: kingdoms go further apart so they don't overlap.
@@ -513,7 +575,7 @@ namespace KingdomGame.EditorTools
             EditorUtility.SetDirty(content);
             AssetDatabase.SaveAssets();
 
-            var damageTypes = new List<DamageType> { bullet, rocketBlast, c4Blast, smash, claw };
+            var damageTypes = new List<DamageType> { bullet, rocketBlast, c4Blast, smash, claw, bloaterBurst };
             damageTypes.AddRange(blasts);
 
             // Scene 1: the main menu.
@@ -611,7 +673,7 @@ namespace KingdomGame.EditorTools
                 Furnish("Furniture/Table", "Table", FurnitureArt.Table, BuildCategory.Furniture, Vector2Int.one, 1, 10, 0, 0, 3f, RoomTag.Table, true, 80f, 0.3f),
                 Furnish("Furniture/LongTable", "Long table", FurnitureArt.LongTable, BuildCategory.Furniture, new Vector2Int(2, 1), 2, 20, 0, 0, 5f, RoomTag.Table, true, 150f, 0.3f),
                 Furnish("Furniture/Bench", "Bench", FurnitureArt.Bench, BuildCategory.Furniture, new Vector2Int(2, 1), 2, 8, 0, 0, 3f, RoomTag.Seat, false, 60f, 0.15f),
-                Furnish("Furniture/Bed", "Bed", FurnitureArt.Bed, BuildCategory.Furniture, new Vector2Int(1, 2), 4, 15, 0, 10, 6f, RoomTag.Bed, true, 100f, 0.25f, sleeps: 1),
+                Sleeps(Furnish("Furniture/Bed", "Bed", FurnitureArt.Bed, BuildCategory.Furniture, new Vector2Int(1, 2), 4, 15, 0, 10, 6f, RoomTag.Bed, true, 100f, 0.25f, sleeps: 2), 2),
                 Furnish("Furniture/Bookshelf", "Bookshelf", FurnitureArt.Bookshelf, BuildCategory.Furniture, new Vector2Int(2, 1), 4, 25, 0, 0, 6f, RoomTag.Books, true, 120f, 0.6f),
                 Furnish("Furniture/WeaponRack", "Weapon rack", FurnitureArt.WeaponRack, BuildCategory.Furniture, new Vector2Int(2, 1), 4, 15, 10, 0, 5f, RoomTag.Weapons, true, 120f, 0.45f),
                 Furnish("Furniture/ArmorStand", "Armor stand", FurnitureArt.ArmorStand, BuildCategory.Furniture, Vector2Int.one, 4, 5, 15, 0, 4f, RoomTag.Weapons, true, 100f, 0.7f),
@@ -774,6 +836,20 @@ namespace KingdomGame.EditorTools
 
         // What every age's things take on top of wood and stone: some of that age's part (from its crafting table) and of every
         // earlier age's part. Set every time (so older settings get them too); big things (2x2 and up) take twice as many.
+        /// <summary>Towers take this share of the wood, stone, food, building time and parts in the lists.</summary>
+        const float TowerShare = 0.5f;
+
+        // Towers are cheaper and quicker to build. Set every time from the numbers in the list (not from what the
+        // asset has, so it doesn't halve again on every run), so older settings get it too.
+        static void EasierTower(BuildingConfig b, int wood, int stone, int food, float seconds)
+        {
+            int w = Mathf.CeilToInt(wood * TowerShare), st = Mathf.CeilToInt(stone * TowerShare), f = Mathf.CeilToInt(food * TowerShare);
+            float time = Mathf.Max(2f, seconds * TowerShare);
+            if (b.woodCost == w && b.stoneCost == st && b.foodCost == f && Mathf.Approximately(b.buildSeconds, time)) return;
+            b.woodCost = w; b.stoneCost = st; b.foodCost = f; b.buildSeconds = time;
+            EditorUtility.SetDirty(b);
+        }
+
         static void PartCosts(List<BuildingConfig>[] byAge)
         {
             for (int age = 0; age < byAge.Length; age++)
@@ -782,8 +858,13 @@ namespace KingdomGame.EditorTools
                     if (b == null || b.kind == BuildingKind.Plant) continue;   // (planting a sapling takes no parts)
                     int scale = b.size.x * b.size.y >= 4 ? 2 : 1;
                     var parts = new List<ResourceAmount>();
+                    bool tower = b.category == BuildCategory.Towers;
                     for (int k = 0; k <= age && k < ResourceText.Parts; k++)
-                        parts.Add(new ResourceAmount(ResourceText.PartOf(k), (k == age ? 4 : 2) * scale));
+                    {
+                        int amount = (k == age ? 4 : 2) * scale;
+                        if (tower) amount = Mathf.Max(1, Mathf.RoundToInt(amount * TowerShare));
+                        parts.Add(new ResourceAmount(ResourceText.PartOf(k), amount));
+                    }
                     if (SameParts(b.extraCosts, parts)) continue;
                     b.extraCosts = parts.ToArray();
                     EditorUtility.SetDirty(b);
@@ -838,23 +919,41 @@ namespace KingdomGame.EditorTools
             return byAge;
         }
 
-        // Each age's six pieces of furniture: a bed (homes, and rested villagers walk faster), a table (crafting), shelves
-        // (gathering), a hearth or stove (building), a desk (research) and a decoration (walking speed). Later ages' boost more.
+        // Each age's ten pieces of furniture: a bed (homes, and rested villagers walk faster), a table (crafting), shelves
+        // (gathering), a hearth or stove (building), a desk (research), a decoration (walking speed), a seat (research),
+        // a chest (gathering), a rug (walking speed) and a lamp (crafting, and light). Later ages' boost more.
         static List<BuildingConfig>[] AgeFurniture()
         {
             string[,] names =
             {
-                { "Straw bed", "Stone slab table", "Antler rack", "Clay hearth", "Tally-stone desk", "Carved totem" },
-                { "Reed mat bed", "Bronze-trim table", "Bronze tool rack", "Bread oven", "Clay tablet desk", "Bronze idol" },
-                { "Plank bed", "Iron-bound table", "Weapon rack", "Iron stove", "Scroll desk", "War banner" },
-                { "Four-poster bed", "Feast table", "Pantry shelves", "Great hearth", "Scriptorium desk", "Tapestry" },
-                { "Canopy bed", "Drafting table", "Tool cabinet", "Tiled stove", "Globe lectern", "Marble bust" },
-                { "Iron bed", "Factory table", "Supply lockers", "Coal range", "Office desk", "Grandfather clock" },
-                { "Barracks bunk", "Map table", "Ammo shelves", "Field kitchen", "Telegraph desk", "Regimental flag" },
-                { "Steel bunk", "Planning table", "Storage racks", "Canteen kitchen", "Radio desk", "Victory poster" },
+                { "Straw bed", "Stone slab table", "Antler rack", "Clay hearth", "Tally-stone desk", "Carved totem",
+                  "Log stool", "Woven basket", "Hide rug", "Fire ring" },
+                { "Reed mat bed", "Bronze-trim table", "Bronze tool rack", "Bread oven", "Clay tablet desk", "Bronze idol",
+                  "Wicker stool", "Clay storage jars", "Reed floor mat", "Bronze brazier" },
+                { "Plank bed", "Iron-bound table", "Weapon rack", "Iron stove", "Scroll desk", "War banner",
+                  "Oak bench", "Iron-bound chest", "Wool rug", "Iron lantern post" },
+                { "Four-poster bed", "Feast table", "Pantry shelves", "Great hearth", "Scriptorium desk", "Tapestry",
+                  "High-backed chair", "Brass-cornered coffer", "Bearskin rug", "Candle stand" },
+                { "Canopy bed", "Drafting table", "Tool cabinet", "Tiled stove", "Globe lectern", "Marble bust",
+                  "Velvet armchair", "Painted wardrobe", "Persian carpet", "Silver candelabra" },
+                { "Iron bed", "Factory table", "Supply lockers", "Coal range", "Office desk", "Grandfather clock",
+                  "Leather armchair", "Steel safe", "Patterned carpet", "Gas lamp" },
+                { "Barracks bunk", "Map table", "Ammo shelves", "Field kitchen", "Telegraph desk", "Regimental flag",
+                  "Folding camp chair", "Ammunition crates", "Duckboards", "Oil lantern" },
+                { "Steel bunk", "Planning table", "Storage racks", "Canteen kitchen", "Radio desk", "Victory poster",
+                  "Swivel office chair", "Filing cabinet", "Linoleum mat", "Hurricane lamp" },
             };
-            var boosts = new[] { BoostKind.Speed, BoostKind.Crafting, BoostKind.Gathering, BoostKind.Building, BoostKind.Research, BoostKind.Speed };
-            var tags = new[] { RoomTag.Bed, RoomTag.Table, RoomTag.Storage, RoomTag.Cooking, RoomTag.Books, RoomTag.Decor };
+            var boosts = new[]
+            {
+                BoostKind.Speed, BoostKind.Crafting, BoostKind.Gathering, BoostKind.Building, BoostKind.Research, BoostKind.Speed,
+                BoostKind.Research, BoostKind.Gathering, BoostKind.Speed, BoostKind.Crafting,
+            };
+            var tags = new[]
+            {
+                RoomTag.Bed, RoomTag.Table, RoomTag.Storage, RoomTag.Cooking, RoomTag.Books, RoomTag.Decor,
+                RoomTag.Seat, RoomTag.Storage, RoomTag.Decor, RoomTag.Decor,
+            };
+            const int Seat = 6, Chest = 7, Rug = FurnitureArt.RugKind, Lamp = FurnitureArt.LampKind;
             string[] boostNames = { "", "speed", "gathering", "crafting", "building", "research" };
             var byAge = new List<BuildingConfig>[8];
             for (int age = 0; age < 8; age++)
@@ -864,19 +963,37 @@ namespace KingdomGame.EditorTools
                 {
                     int a = age, kind = k;
                     float percent = 1f + age * 0.5f;
-                    int sleeps = kind == 0 ? 2 + age / 2 : 0;
+                    int sleeps = kind == 0 ? 2 * (2 + age / 2) : 0;   // beds: homes for 4 (Stone Age) up to 10 (World War 2)
                     string label = $"{names[age, kind]} (+{percent:0.#}% {boostNames[(int)boosts[kind]]}{(sleeps > 0 ? $", homes for {sleeps}" : "")})";
                     var b = Asset<BuildingConfig>($"Building/Furniture/Age{age + 1}_{names[age, kind].Replace(" ", "").Replace("-", "")}", c =>
                     {
                         c.kind = BuildingKind.Furniture; c.category = BuildCategory.Furniture; c.art = FurnitureArt.AgeFurniture(a, kind);
                         var size = FurnitureArt.FurnitureSize(kind);
                         c.size = size; c.rotations = 1; c.buildSeconds = 6f + a * 2f; c.health = 150f + a * 40f;
-                        c.height = kind == 5 ? 1.4f : kind == 2 ? 0.9f : 0.45f; c.blocksMovement = true; c.flat = false; c.dragToPlaceLines = false;
+                        c.height = kind == 5 ? 1.4f : kind == 2 ? 0.9f : kind == Rug ? 0f : kind == Lamp ? 0.6f : kind == Chest ? 0.5f : 0.45f;
+                        // Seats, rugs and lamps can be walked through or over (like chairs and torches); a rug lies flat.
+                        c.blocksMovement = kind != Seat && kind != Rug && kind != Lamp;
+                        c.flat = kind == Rug; c.dragToPlaceLines = false;
                         c.roomTag = tags[kind];
-                        c.woodCost = kind == 3 ? 10 + a * 5 : 25 + a * 10;
-                        c.stoneCost = kind == 3 || kind == 5 ? 30 + a * 12 : a * 4;
-                        c.foodCost = kind == 0 ? 10 + a * 5 : 0;   // (cloth: bedding)
+                        switch (kind)
+                        {
+                            case Seat: c.woodCost = 15 + a * 8; c.stoneCost = a * 2; c.foodCost = a >= 4 ? 5 + a : 0; break;   // (cushions)
+                            case Chest: c.woodCost = 20 + a * 10; c.stoneCost = a * 5; break;
+                            case Rug: c.foodCost = 10 + a * 5; break;   // (wool and hides)
+                            case Lamp: c.woodCost = 5 + a * 3; c.stoneCost = 10 + a * 6; c.foodCost = 2 + a; break;   // (oil and wax)
+                            default:
+                                c.woodCost = kind == 3 ? 10 + a * 5 : 25 + a * 10;
+                                c.stoneCost = kind == 3 || kind == 5 ? 30 + a * 12 : a * 4;
+                                c.foodCost = kind == 0 ? 10 + a * 5 : 0;   // (cloth: bedding)
+                                break;
+                        }
                         if (kind == 3) { c.lightSize = 0.8f; c.flames = new[] { Vector2.zero }; c.flameSize = 1.2f; }
+                        if (kind == Lamp)
+                        {
+                            c.lightSize = 0.7f + a * 0.04f;
+                            c.flames = FurnitureArt.LampFlames(a);
+                            c.flameSize = c.flames.Length > 1 ? 0.55f : a == 0 ? 1.1f : 0.8f;
+                        }
                     });
                     // Set every time (older settings get them too): its name, boost and homes.
                     if (b.displayName != label || b.boost != boosts[kind] || Mathf.Abs(b.boostPercent - percent) > 0.001f || b.sleeps != sleeps)
@@ -1132,8 +1249,9 @@ namespace KingdomGame.EditorTools
                 });
 
             BuildingConfig Item(string file, string displayName, string art, BuildCategory category, int size, int wood, int stone, int food,
-                float seconds, float health, float height, bool blocks, bool drag, DefenseConfig defense, float light = 0f, float flameSize = 1f) =>
-                Asset<BuildingConfig>("Building/" + file, b =>
+                float seconds, float health, float height, bool blocks, bool drag, DefenseConfig defense, float light = 0f, float flameSize = 1f)
+            {
+                var made = Asset<BuildingConfig>("Building/" + file, b =>
                 {
                     b.displayName = displayName; b.kind = BuildingKind.Furniture; b.category = category; b.art = art;
                     b.size = new Vector2Int(size, size); b.rotations = 1; b.woodCost = wood; b.stoneCost = stone; b.foodCost = food;
@@ -1141,6 +1259,9 @@ namespace KingdomGame.EditorTools
                     b.dragToPlaceLines = drag; b.roomTag = RoomTag.None; b.defense = defense;
                     if (light > 0f) { b.lightSize = light; b.flames = new[] { Vector2.zero }; b.flameSize = flameSize; }
                 });
+                if (category == BuildCategory.Towers) EasierTower(made, wood, stone, food, seconds);
+                return made;
+            }
             const BuildCategory T = BuildCategory.Traps, W = BuildCategory.Towers;
             var gas = new Color(0.6f, 0.72f, 0.3f, 0.5f);
             var napalm = new Color(1f, 0.5f, 0.15f, 0.55f);
@@ -1370,6 +1491,17 @@ namespace KingdomGame.EditorTools
                 b.lightSize = light; b.flames = flames != null ? (Vector2[])flames.Clone() : new Vector2[0]; b.flameSize = flameSize;
                 b.dragToPlaceLines = false;
             });
+
+        // How many villagers a bed gives homes to: set every time, so older settings get it too.
+        static BuildingConfig Sleeps(BuildingConfig bed, int villagers)
+        {
+            if (bed.sleeps != villagers)
+            {
+                bed.sleeps = villagers;
+                EditorUtility.SetDirty(bed);
+            }
+            return bed;
+        }
 
         static BuildingConfig Store(string file, string displayName, string art, int rotations, int wood, float seconds, int capacity, float height, float health) =>
             Asset<BuildingConfig>("Building/Storage/" + file, b =>

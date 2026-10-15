@@ -94,7 +94,7 @@ namespace KingdomGame.Art
                 for (int k = 0; k < FurnitureKinds; k++)
                 {
                     int a = age, kind = k;
-                    yield return new DefensePiece { Art = AgeFurniture(a, kind), Draw = p => DrawAgeFurniture(p, a, kind) };
+                    yield return new DefensePiece { Art = AgeFurniture(a, kind), Draw = p => DrawAgeFurniture(p, a, kind), Flat = kind == RugKind };
                 }
             for (int age = 0; age < 8; age++)
                 for (int k = 0; k < 2; k++)
@@ -229,11 +229,16 @@ namespace KingdomGame.Art
 
         // ----------------------------------------------------------- furniture --
 
-        /// <summary>Each age's six pieces of furniture: bed, table, shelf, hearth, desk and decoration.</summary>
-        public const int FurnitureKinds = 6;
+        /// <summary>Each age's ten pieces of furniture: bed, table, shelf, hearth, desk, decoration, seat, chest, rug and lamp.</summary>
+        public const int FurnitureKinds = 10;
+        /// <summary>The rug: it lies flat on the floor (no shadow, walked over).</summary>
+        public const int RugKind = 8;
+        /// <summary>The lamp: its flame is drawn by the game, in its middle.</summary>
+        public const int LampKind = 9;
         public static string AgeFurniture(int age, int kind) => $"Age/F/{age}/{kind}";
-        /// <summary>Tiles each kind takes (bed 1x2, table and shelf 2x1, the rest 1x1).</summary>
-        public static Vector2Int FurnitureSize(int kind) => kind == 0 ? new Vector2Int(1, 2) : kind == 1 || kind == 2 ? new Vector2Int(2, 1) : Vector2Int.one;
+        /// <summary>Tiles each kind takes (bed 1x2, table and shelf 2x1, rug 2x2, the rest 1x1).</summary>
+        public static Vector2Int FurnitureSize(int kind) =>
+            kind == 0 ? new Vector2Int(1, 2) : kind == 1 || kind == 2 ? new Vector2Int(2, 1) : kind == RugKind ? new Vector2Int(2, 2) : Vector2Int.one;
 
         static PixelImage DrawAgeFurniture(int ppu, int age, int kind)
         {
@@ -321,6 +326,11 @@ namespace KingdomGame.Art
                     }
                     break;
 
+                case 6: DrawSeat(img, t, age, look, s); break;
+                case 7: DrawChest(img, t, age, look, s); break;
+                case RugKind: DrawRug(img, t, age, look, s); break;
+                case LampKind: DrawLamp(img, t, age, look, s); break;
+
                 default:  // a decoration: totem, idol, banner, tapestry, bust, clock, flag, poster
                     switch (age)
                     {
@@ -345,6 +355,238 @@ namespace KingdomGame.Art
                     break;
             }
             return Finish(img, t, 0);
+        }
+
+        // A seat: a log stool, a wicker stool, a bench, then chairs (a cushion and arms on the grand ones), a camp chair, an office chair.
+        static void DrawSeat(PixelImage img, float t, int age, AgeLook look, uint s)
+        {
+            switch (age)
+            {
+                case 0:   // a log stool: a cut log end, bark round it and year rings
+                    Round(img, t, 0.5f, 0.5f, 0.3f, PixelImage.Scale(look.Wood, 0.7f), 0.38f, 0f, Surface.Wood, s);
+                    Round(img, t, 0.5f, 0.5f, 0.25f, PixelImage.Rgb(176, 140, 96), 0.4f, 0f, Surface.Wood, s + 1);
+                    for (int i = 1; i <= 3; i++) Ring(img, t, 0.5f, 0.5f, i * 0.06f, i * 0.06f + 0.01f, PixelImage.Rgb(140, 106, 70), 0.3f, Surface.Plain, s + 2);
+                    break;
+                case 1:   // a wicker stool
+                    Round(img, t, 0.5f, 0.5f, 0.3f, PixelImage.Rgb(184, 150, 96), 0.4f, 0.02f, Surface.Cloth, s);
+                    for (int i = 1; i <= 4; i++) Ring(img, t, 0.5f, 0.5f, i * 0.06f, i * 0.06f + 0.012f, PixelImage.Rgb(140, 108, 66), 0.3f, Surface.Plain, s + 1);
+                    break;
+                case 2:   // a short oak bench
+                    Block(img, t, 0.08f, 0.3f, 0.92f, 0.7f, look.Wood, 0.4f, 0.03f, Surface.Wood, s, true, 0.13f);
+                    break;
+                case 6:   // a folding camp chair: crossed legs, a canvas seat and back
+                    Rod(img, t, 0.2f, 0.18f, 0.8f, 0.78f, 0.025f, look.Metal, 0.3f, 0.3f);
+                    Rod(img, t, 0.8f, 0.18f, 0.2f, 0.78f, 0.025f, look.Metal, 0.3f, 0.3f);
+                    Block(img, t, 0.22f, 0.25f, 0.78f, 0.68f, look.Cloth, 0.38f, 0.01f, Surface.Cloth, s + 1);
+                    Block(img, t, 0.2f, 0.7f, 0.8f, 0.82f, look.Cloth, 0.7f, 0.01f, Surface.Cloth, s + 2);
+                    break;
+                case 7:   // an office chair: five castor legs, a round seat, a curved back
+                    for (int i = 0; i < 5; i++)
+                    {
+                        float a = Mathf.PI * 0.5f + i * Mathf.PI * 2f / 5f;
+                        float x = 0.5f + Mathf.Cos(a) * 0.4f, y = 0.5f + Mathf.Sin(a) * 0.4f;
+                        Rod(img, t, 0.5f, 0.5f, x, y, 0.03f, look.Metal, 0.12f, 0.08f);
+                        Round(img, t, x, y, 0.045f, PixelImage.Rgb(40, 40, 40), 0.06f, 0.02f, Surface.Plain, s + 1);
+                    }
+                    Round(img, t, 0.5f, 0.48f, 0.26f, PixelImage.Rgb(50, 54, 60), 0.42f, 0.03f, Surface.Cloth, s + 2);
+                    Block(img, t, 0.24f, 0.72f, 0.76f, 0.86f, PixelImage.Rgb(46, 50, 56), 0.85f, 0.04f, Surface.Cloth, s + 3);
+                    break;
+                default:   // a chair (3: throne-backed with studs, 4: velvet armchair, 5: leather armchair)
+                {
+                    var frame = look.Wood;
+                    Block(img, t, 0.2f, 0.18f, 0.8f, 0.74f, frame, 0.36f, 0.03f, Surface.Wood, s);
+                    float back = age == 3 ? 1.2f : 0.85f;
+                    Block(img, t, 0.17f, 0.72f, 0.83f, 0.88f, frame, back, 0.03f, Surface.Wood, s + 1);
+                    if (age == 3) for (int i = 0; i < 3; i++) Stud(img, t, 0.3f + i * 0.2f, 0.8f, 0.025f, look.Trim, back + 0.01f);
+                    if (age >= 4)
+                    {
+                        bool leather = age == 5;
+                        Block(img, t, 0.25f, 0.22f, 0.75f, 0.7f, leather ? PixelImage.Rgb(96, 56, 36) : look.Cloth, 0.42f, 0.06f, leather ? Surface.Plain : Surface.Cloth, s + 2);   // the cushion
+                        Block(img, t, 0.12f, 0.2f, 0.22f, 0.76f, frame, 0.55f, 0.03f, Surface.Wood, s + 3, false);   // the arms
+                        Block(img, t, 0.78f, 0.2f, 0.88f, 0.76f, frame, 0.55f, 0.03f, Surface.Wood, s + 4, false);
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Somewhere to keep things: a basket, clay jars, a bound chest, a coffer, a wardrobe, a safe, ammunition crates, a filing cabinet.
+        static void DrawChest(PixelImage img, float t, int age, AgeLook look, uint s)
+        {
+            switch (age)
+            {
+                case 0:   // a woven basket of berries and roots
+                    Round(img, t, 0.5f, 0.5f, 0.33f, PixelImage.Rgb(90, 70, 44), 0.3f, 0f, Surface.Cloth, s);
+                    Ring(img, t, 0.5f, 0.5f, 0.29f, 0.37f, PixelImage.Rgb(170, 140, 90), 0.45f, Surface.Cloth, s + 1);
+                    for (int i = 0; i < 7; i++)
+                    {
+                        float a = i * 2.4f, r = 0.04f + (i % 3) * 0.07f;
+                        var food = i % 2 == 0 ? PixelImage.Rgb(130, 30, 50) : PixelImage.Rgb(150, 110, 60);
+                        Round(img, t, 0.5f + Mathf.Cos(a) * r, 0.5f + Mathf.Sin(a) * r, 0.05f, food, 0.36f, 0.03f, Surface.Plain, s + 2 + (uint)i);
+                    }
+                    break;
+                case 1:   // three clay storage jars
+                {
+                    var jars = new[] { (0.3f, 0.32f, 0.2f), (0.7f, 0.36f, 0.18f), (0.48f, 0.72f, 0.2f) };
+                    for (int i = 0; i < jars.Length; i++)
+                    {
+                        var (x, y, r) = jars[i];
+                        uint js = s + (uint)i * 3u;
+                        Round(img, t, x, y, r, PixelImage.Rgb(168, 98, 60), 0.4f, 0.18f, Surface.Stone, js);
+                        Ring(img, t, x, y, r * 0.35f, r * 0.55f, PixelImage.Rgb(186, 116, 74), 0.62f, Surface.Stone, js + 1);
+                        Round(img, t, x, y, r * 0.35f, PixelImage.Rgb(40, 26, 20), 0.5f, 0f, Surface.Plain, js + 2);
+                    }
+                    break;
+                }
+                case 2: case 3:   // an iron-bound chest; a coffer with brass corners
+                    Block(img, t, 0.1f, 0.22f, 0.9f, 0.78f, age == 3 ? PixelImage.Scale(look.Wood, 0.85f) : look.Wood, 0.48f, age == 3 ? 0.12f : 0.04f, Surface.Wood, s, true, 0.14f);
+                    foreach (float x in new[] { 0.26f, 0.74f }) Block(img, t, x - 0.035f, 0.2f, x + 0.035f, 0.8f, look.Metal, 0.5f, 0.01f, Surface.Metal, s + 1, false);
+                    if (age == 3)
+                        foreach (var (x, y) in new[] { (0.12f, 0.24f), (0.88f, 0.24f), (0.12f, 0.76f), (0.88f, 0.76f) })
+                            Stud(img, t, x, y, 0.04f, look.Trim, 0.52f);
+                    Stud(img, t, 0.5f, 0.24f, 0.035f, look.Trim, 0.5f);   // the lock
+                    break;
+                case 4:   // a painted wardrobe: a painted top in a carved frame, knobs at the front
+                    Block(img, t, 0.06f, 0.3f, 0.94f, 0.94f, look.Wood, 1.3f, 0.03f, Surface.Wood, s, false);
+                    Block(img, t, 0.14f, 0.38f, 0.86f, 0.86f, look.Cloth, 1.31f, 0.02f, Surface.Plain, s + 1);
+                    Stud(img, t, 0.45f, 0.33f, 0.025f, look.Trim, 1.32f);
+                    Stud(img, t, 0.55f, 0.33f, 0.025f, look.Trim, 1.32f);
+                    break;
+                case 5:   // a steel safe with a brass plate
+                    Block(img, t, 0.14f, 0.16f, 0.86f, 0.84f, PixelImage.Rgb(60, 66, 62), 0.85f, 0.05f, Surface.Metal, s);
+                    Block(img, t, 0.2f, 0.22f, 0.8f, 0.78f, PixelImage.Rgb(70, 76, 72), 0.86f, 0.02f, Surface.Metal, s + 1);
+                    Block(img, t, 0.38f, 0.44f, 0.62f, 0.56f, look.Trim, 0.87f, 0.01f, Surface.Metal, s + 2);
+                    break;
+                case 6:   // a stack of ammunition crates
+                    Block(img, t, 0.06f, 0.08f, 0.94f, 0.6f, PixelImage.Rgb(96, 100, 66), 0.4f, 0.03f, Surface.Wood, s, true, 0.17f);
+                    Block(img, t, 0.14f, 0.42f, 0.86f, 0.92f, PixelImage.Rgb(104, 108, 72), 0.8f, 0.03f, Surface.Wood, s + 1, true, 0.17f);
+                    Block(img, t, 0.3f, 0.62f, 0.7f, 0.72f, PixelImage.Rgb(220, 210, 160), 0.81f, 0.005f, Surface.Plain, s + 2);   // stencilled letters
+                    break;
+                default:   // a filing cabinet with papers on top
+                    Block(img, t, 0.16f, 0.2f, 0.84f, 0.86f, PixelImage.Rgb(110, 116, 110), 1.1f, 0.03f, Surface.Metal, s);
+                    Block(img, t, 0.3f, 0.42f, 0.7f, 0.74f, PixelImage.Rgb(230, 226, 210), 1.13f, 0.005f, Surface.Plain, s + 1);
+                    Rod(img, t, 0.4f, 0.24f, 0.6f, 0.24f, 0.012f, PixelImage.Rgb(170, 170, 160), 1.11f, 1.11f);   // the drawer handle
+                    break;
+            }
+        }
+
+        // A rug, flat on the floor: a hide, a reed mat, a wool rug, a bearskin, a Persian carpet, a patterned carpet, duckboards, linoleum.
+        static void DrawRug(PixelImage img, float t, int age, AgeLook look, uint s)
+        {
+            switch (age)
+            {
+                case 0: case 3:   // a hide (Stone Age) or a bearskin with its head (Medieval)
+                {
+                    var fur = age == 0 ? PixelImage.Rgb(150, 118, 80) : PixelImage.Rgb(70, 50, 36);
+                    foreach (var (x, y) in new[] { (0.45f, 0.4f), (1.55f, 0.4f), (0.45f, 1.6f), (1.55f, 1.6f) })
+                        Rod(img, t, 1f, 1f, x, y, 0.13f, fur, 0.02f, 0.02f);
+                    Round(img, t, 1f, 1f, 0.6f, fur, 0.025f, 0f, Surface.Cloth, s);
+                    if (age == 3)
+                    {
+                        Round(img, t, 1f, 1.72f, 0.2f, PixelImage.Scale(fur, 0.9f), 0.06f, 0.05f, Surface.Cloth, s + 1);   // the head
+                        Round(img, t, 1f, 1.86f, 0.06f, PixelImage.Rgb(30, 22, 18), 0.09f, 0.02f, Surface.Plain, s + 2);   // the nose
+                    }
+                    break;
+                }
+                case 1:   // a woven reed mat
+                    Block(img, t, 0.15f, 0.15f, 1.85f, 1.85f, PixelImage.Rgb(186, 160, 100), 0.02f, 0.02f, Surface.Wood, s, true, 0.09f);
+                    break;
+                case 6:   // duckboards: wooden slats on three runners
+                    foreach (float x in new[] { 0.3f, 1f, 1.7f })
+                        Block(img, t, x - 0.06f, 0.1f, x + 0.06f, 1.9f, PixelImage.Scale(look.Wood, 0.7f), 0.02f, 0.01f, Surface.Wood, s, false);
+                    for (int i = 0; i < 9; i++)
+                        Block(img, t, 0.12f, 0.14f + i * 0.2f, 1.88f, 0.26f + i * 0.2f, look.Wood, 0.04f, 0.01f, Surface.Wood, s + 1 + (uint)i);
+                    break;
+                case 7:   // a linoleum mat in squares
+                    for (int y = 0; y < 6; y++)
+                        for (int x = 0; x < 6; x++)
+                            Block(img, t, 0.1f + x * 0.3f, 0.1f + y * 0.3f, 0.4f + x * 0.3f, 0.4f + y * 0.3f,
+                                (x + y) % 2 == 0 ? PixelImage.Rgb(170, 160, 140) : PixelImage.Rgb(80, 90, 76), 0.012f, 0.004f, Surface.Plain, s);
+                    break;
+                default:   // 2, 4, 5: a wool rug, a Persian carpet (with a fringe), a patterned carpet: a border, a field and a pattern
+                {
+                    var field = age == 2 ? PixelImage.Rgb(130, 60, 44) : age == 4 ? PixelImage.Rgb(60, 70, 130) : PixelImage.Rgb(110, 40, 46);
+                    var border = age == 2 ? PixelImage.Rgb(180, 150, 100) : age == 4 ? PixelImage.Rgb(150, 40, 40) : PixelImage.Rgb(190, 160, 90);
+                    Block(img, t, 0.1f, 0.1f, 1.9f, 1.9f, border, 0.02f, 0.01f, Surface.Cloth, s);
+                    Block(img, t, 0.28f, 0.28f, 1.72f, 1.72f, field, 0.021f, 0.01f, Surface.Cloth, s + 1);
+                    if (age == 5)
+                        for (int y = 0; y < 4; y++)
+                            for (int x = 0; x < 4; x++)
+                                Round(img, t, 0.47f + x * 0.35f, 0.47f + y * 0.35f, 0.06f, border, 0.022f, 0f, Surface.Cloth, s + 2);
+                    else
+                    {
+                        Round(img, t, 1f, 1f, age == 4 ? 0.36f : 0.25f, border, 0.022f, 0f, Surface.Cloth, s + 2);
+                        Round(img, t, 1f, 1f, age == 4 ? 0.2f : 0.12f, field, 0.023f, 0f, Surface.Cloth, s + 3);
+                    }
+                    if (age == 4)
+                        for (int i = 0; i < 12; i++)
+                        {
+                            float x = 0.2f + i * 0.145f;
+                            var thread = PixelImage.Rgb(220, 210, 180);
+                            Rod(img, t, x, 0.02f, x, 0.1f, 0.012f, thread, 0.01f, 0.01f);
+                            Rod(img, t, x, 1.9f, x, 1.98f, 0.012f, thread, 0.01f, 0.01f);
+                        }
+                    break;
+                }
+            }
+        }
+
+        /// <summary>Where each age's lamp has its flames, in tiles from its middle (the silver candelabra has five candles).</summary>
+        public static Vector2[] LampFlames(int age) => age == 4
+            ? new[] { Vector2.zero, new Vector2(0.21f, 0.21f), new Vector2(-0.21f, 0.21f), new Vector2(0.21f, -0.21f), new Vector2(-0.21f, -0.21f) }
+            : new[] { Vector2.zero };
+
+        // A light (the game draws the flames, see LampFlames): a fire ring, a brazier, lanterns, candle stands, a gas lamp.
+        static void DrawLamp(PixelImage img, float t, int age, AgeLook look, uint s)
+        {
+            switch (age)
+            {
+                case 0:   // a ring of stones round the embers
+                    for (int i = 0; i < 9; i++)
+                    {
+                        float a = i * Mathf.PI * 2f / 9f;
+                        Round(img, t, 0.5f + Mathf.Cos(a) * 0.3f, 0.5f + Mathf.Sin(a) * 0.3f, 0.08f, PixelImage.Scale(look.Stone, 0.9f + (i % 3) * 0.06f), 0.15f, 0.06f, Surface.Stone, s + (uint)i);
+                    }
+                    Round(img, t, 0.5f, 0.5f, 0.22f, PixelImage.Rgb(46, 36, 30), 0.05f, 0f, Surface.Stone, s + 10);
+                    break;
+                case 1:   // a bronze brazier on three legs
+                    for (int i = 0; i < 3; i++)
+                    {
+                        float a = Mathf.PI * 0.5f + i * Mathf.PI * 2f / 3f;
+                        Rod(img, t, 0.5f, 0.5f, 0.5f + Mathf.Cos(a) * 0.38f, 0.5f + Mathf.Sin(a) * 0.38f, 0.03f, PixelImage.Scale(look.Metal, 0.8f), 0.5f, 0.05f);
+                    }
+                    Round(img, t, 0.5f, 0.5f, 0.26f, look.Metal, 0.55f, 0f, Surface.Metal, s);
+                    Round(img, t, 0.5f, 0.5f, 0.2f, PixelImage.Rgb(50, 34, 26), 0.5f, 0f, Surface.Stone, s + 1);
+                    break;
+                case 3: case 4:   // a wooden candle stand; a silver candelabra with four arms
+                {
+                    var metal = age == 4 ? PixelImage.Rgb(196, 196, 204) : look.Wood;
+                    var surface = age == 4 ? Surface.Metal : Surface.Wood;
+                    var wax = PixelImage.Rgb(236, 230, 214);
+                    Round(img, t, 0.5f, 0.5f, 0.2f, metal, 0.1f, 0.02f, surface, s);
+                    var flames = LampFlames(age);
+                    for (int i = 1; i < flames.Length; i++)
+                    {
+                        var at = new Vector2(0.5f, 0.5f) + flames[i];
+                        Rod(img, t, 0.5f, 0.5f, at.x, at.y, 0.02f, metal, 1.1f, 1.15f);
+                        Round(img, t, at.x, at.y, 0.05f, wax, 1.22f, 0.01f, Surface.Wax, s + 1 + (uint)i);
+                    }
+                    Round(img, t, 0.5f, 0.5f, 0.07f, wax, 1.25f, 0.02f, Surface.Wax, s + 6);   // the middle candle
+                    break;
+                }
+                default:   // 2, 5, 6, 7: a lantern on a post (iron, a gas lamp) or a camp lantern (oil, hurricane)
+                {
+                    bool post = age == 2 || age == 5;
+                    var body = age == 7 ? PixelImage.Rgb(150, 40, 36) : look.Metal;
+                    float top = post ? 1.6f : 0.4f;
+                    if (post) Round(img, t, 0.5f, 0.5f, 0.2f, PixelImage.Scale(look.Metal, 0.8f), 0.12f, 0.02f, Surface.Metal, s);   // the foot of the post
+                    Block(img, t, 0.32f, 0.32f, 0.68f, 0.68f, body, top, 0.03f, Surface.Metal, s + 1);
+                    Block(img, t, 0.37f, 0.37f, 0.63f, 0.63f, PixelImage.Rgb(236, 210, 140), top + 0.01f, 0.02f, Surface.Plain, s + 2);   // the glass, lit from inside
+                    if (post) Round(img, t, 0.5f, 0.5f, 0.1f, body, top + 0.1f, 0.05f, Surface.Metal, s + 3);   // the cap
+                    else Ring(img, t, 0.5f, 0.5f, 0.2f, 0.24f, body, top + 0.12f, Surface.Metal, s + 3);   // the handle
+                    break;
+                }
+            }
         }
 
         // ------------------------------------------------------------ machines --

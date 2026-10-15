@@ -116,7 +116,7 @@ Don't delete anything.
 - [ ] Beds, tables and shelves block the way; chairs, benches and rugs can be walked over
 - [ ] Torches, candelabras, braziers and fireplaces flicker and light the room (best seen at night)
 - [ ] The room's name changes with what's in it (try a bed, then three beds; a table and a chair)
-- [ ] The top right shows "Villagers: 3 (homes for 3)": each bed adds a home
+- [ ] The top right shows "Villagers: 3 (homes for 3)": each bed adds two homes
 - [ ] Right click on something built tears it down and gives half its cost back
 - [ ] A chest, barrel or crates hold resources; builders fetch from them
 

@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace KingdomGame.Zombies
 {
+    /// <summary>What a kind of zombie can do besides clawing (see <see cref="ZombieConfig.ability"/>).</summary>
+    public enum ZombieAbility { None, Spit, Burst, Scream }
+
     /// <summary>
     /// One kind of zombie: how it looks, how tough and fast it is, how hard it
     /// hits people, doors and walls, which wave it first comes in and what it drops.
@@ -11,7 +14,7 @@ namespace KingdomGame.Zombies
     public sealed class ZombieConfig : ScriptableObject
     {
         public string displayName = "Walker";
-        [Tooltip("Which pictures it uses: Walker, Runner or Brute (see CharacterArt.ZombieKinds).")]
+        [Tooltip("Which pictures it uses: Walker, Runner, Brute, Crawler, Spitter, Bloater, Screamer, Armored or Giant (see CharacterArt.ZombieKinds).")]
         public string art = "Walker";
 
         [Header("Body")]
@@ -34,6 +37,31 @@ namespace KingdomGame.Zombies
         [Min(0)] public float wallDamage = 10f;
         [Tooltip("The scratches its blows leave on walls (just for looks; the wall wears down by Wall Damage).")]
         public DamageType wallScratch;
+
+        [Tooltip("Armor: taken off every hit it takes (it always takes at least a fifth of a hit). Small quick shots do little; big shots and blasts go through.")]
+        [Min(0)] public float armor;
+
+        [Header("Special")]
+        [Tooltip("Spit: spits acid at people up to Ability Range away (it lands where they stood, so they can dodge), even at guards up on walls and towers. " +
+                 "Burst: blows up when it reaches a wall, door or person, or when it's killed. " +
+                 "Scream: when it sees someone, it screams and the zombies round it speed up.")]
+        public ZombieAbility ability;
+        [Tooltip("Spit: how far it spits. Scream: how far away it sees someone to scream at.")]
+        [Min(0)] public float abilityRange = 6f;
+        [Tooltip("Seconds between spits or screams.")]
+        [Min(0.5f)] public float abilitySeconds = 4f;
+        [Tooltip("Spit: damage to anyone where the acid lands.")]
+        [Min(0)] public float spitDamage = 12f;
+        [Tooltip("Burst: the blast (it breaks walls and hurts people and other zombies).")]
+        public DamageType burstBlast;
+        [Tooltip("Burst: wear on the wall or door it bursts against, like a blow's Wall Damage.")]
+        [Min(0)] public float burstWallDamage = 200f;
+        [Tooltip("Scream: zombies within this many tiles speed up...")]
+        [Min(0)] public float screamRadius = 9f;
+        [Tooltip("...to this many times their speed...")]
+        [Min(1)] public float screamSpeed = 1.5f;
+        [Tooltip("...for this many seconds.")]
+        [Min(0)] public float screamSeconds = 5f;
 
         [Header("Waves (survival)")]
         [Tooltip("The first wave it comes in.")]

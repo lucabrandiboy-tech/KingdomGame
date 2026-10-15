@@ -21,7 +21,9 @@ namespace KingdomGame.Art
         /// <summary>The fallen are drawn for this many directions (turned the rest of the way like the living).</summary>
         public const int DeadDirections = 4;
         /// <summary>The kinds of zombie (each has its own pictures; ArtKeys.Zombie).</summary>
-        public static readonly string[] ZombieKinds = { "Walker", "Runner", "Brute" };
+        public static readonly string[] ZombieKinds = { "Walker", "Runner", "Brute", "Crawler", "Spitter", "Bloater", "Screamer", "Armored", "Giant" };
+        /// <summary>Share of the art detail a kind's pictures are drawn at: the first three at half, the newer ones at a quarter (video memory).</summary>
+        public static float ZombieDetail(string kind) => kind == "Walker" || kind == "Runner" || kind == "Brute" ? 0.5f : 0.25f;
         /// <summary>Picture width of the ruler and a villager, in tiles.</summary>
         public const float RulerSize = 0.72f, VillagerSize = 0.58f;
 
@@ -48,7 +50,7 @@ namespace KingdomGame.Art
         static float Stride(int frame) => frame == 1 ? 1f : frame == 3 ? -1f : 0f;
 
         /// <summary>Picture width of each kind of zombie, in tiles.</summary>
-        public static float ZombieSize(string kind) => kind == "Brute" ? 0.9f : kind == "Runner" ? 0.62f : 0.64f;
+        public static float ZombieSize(string kind) => kind == "Brute" ? 0.9f : kind == "Runner" ? 0.62f : 0.64f * ZombieScale(kind);
 
         /// <summary>
         /// One picture of a zombie (<see cref="ZombieKinds"/>): walking frames 0-3, 4 winding
@@ -58,7 +60,7 @@ namespace KingdomGame.Art
             Zombie(ppu, ArtLight.For(facingDegrees), kind, frame);
 
         /// <summary>How big each kind of zombie is drawn, compared to a walker.</summary>
-        public static float ZombieScale(string kind) => ZombieLook(kind).size;
+        public static float ZombieScale(string kind) => Shape(kind).Size;
 
         /// <summary>
         /// Where a zombie's eyes are in frame <paramref name="frame"/>, in tiles from its middle,
@@ -66,9 +68,9 @@ namespace KingdomGame.Art
         /// </summary>
         public static Vector2 ZombieEyesAt(string kind, int frame)
         {
-            float hunch = (kind == "Runner" ? 0.08f : kind == "Brute" ? 0.03f : 0.05f) + (frame == 5 ? 0.05f : 0f);
-            float headR = kind == "Brute" ? 0.062f : 0.07f;
-            return new Vector2(hunch + 0.07f + headR * 0.62f, 0f);
+            var b = Shape(kind);
+            float hunch = b.Hunch + (frame == 5 ? 0.05f : 0f);
+            return new Vector2(hunch + b.HeadForward + b.HeadR * 0.62f, 0f);
         }
 
         /// <summary>
@@ -102,8 +104,50 @@ namespace KingdomGame.Art
         /// <summary>A dead zombie lying on its back, head to the right, lit as if turned to <paramref name="facingDegrees"/>.</summary>
         public static PixelImage ZombieDead(int ppu, string kind, float facingDegrees)
         {
-            var (skin, cloth, k) = ZombieLook(kind);
-            return Lying(ppu, ArtLight.For(facingDegrees), skin, cloth, PixelImage.Rgb(34, 28, 24), Mat.Rot, Mat.Rag, k, null, PixelImage.Rgb(58, 50, 42));
+            var b = Shape(kind);
+            return Lying(ppu, ArtLight.For(facingDegrees), b.Skin, b.Cloth, PixelImage.Rgb(34, 28, 24), Mat.Rot, Mat.Rag, b.Size, null, PixelImage.Rgb(58, 50, 42));
+        }
+
+        /// <summary>A glob of spat acid, about a fifth of a tile across: green and glossy, lit from the top-left (the middle is the pivot).</summary>
+        public static PixelImage AcidGlob(int ppu)
+        {
+            int size = Mathf.Max(6, Mathf.CeilToInt(0.22f * ppu));
+            var img = new PixelImage(size, size);
+            float c = size / 2f, r = size * 0.42f;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x + 0.5f - c, dy = y + 0.5f - c;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float cover = Mathf.Clamp01(r - d + 0.5f);
+                    if (cover <= 0f) continue;
+                    float hx = dx + r * 0.35f, hy = dy - r * 0.35f;
+                    float shine = Mathf.Clamp01(1f - Mathf.Sqrt(hx * hx + hy * hy) / (r * 0.45f));
+                    var col = PixelImage.Mix(PixelImage.Rgb(70, 120, 30), PixelImage.Rgb(170, 220, 80), Mathf.Clamp01(1f - d / r));
+                    col = PixelImage.Mix(col, PixelImage.Rgb(235, 255, 200), shine * 0.8f);
+                    col.a = (byte)Mathf.RoundToInt(cover * 255f);
+                    img.Blend(x, y, col);
+                }
+            return img;
+        }
+
+        /// <summary>A screamer's scream: a pale red ring a tile across (the game grows it out and fades it).</summary>
+        public static PixelImage ScreamRing(int ppu)
+        {
+            int size = Mathf.Max(16, ppu);
+            var img = new PixelImage(size, size);
+            float c = size / 2f, r = size * 0.44f, half = Mathf.Max(1.5f, size * 0.025f);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x + 0.5f - c) * (x + 0.5f - c) + (y + 0.5f - c) * (y + 0.5f - c));
+                    float a = Mathf.Clamp01(1f - Mathf.Abs(d - r) / half);
+                    if (a <= 0f) continue;
+                    var col = PixelImage.Rgb(255, 170, 150);
+                    col.a = (byte)Mathf.RoundToInt(a * a * 200f);
+                    img.Blend(x, y, col);
+                }
+            return img;
         }
 
         /// <summary>A villager who didn't make it, lying on their back.</summary>
@@ -114,41 +158,111 @@ namespace KingdomGame.Art
         public static PixelImage RulerDead(int ppu, float facingDegrees) =>
             Lying(ppu, ArtLight.For(facingDegrees), Skin, PixelImage.Rgb(34, 44, 92), PixelImage.Rgb(40, 28, 20), Mat.Skin, Mat.Tunic, 1f, PixelImage.Rgb(104, 18, 28), PixelImage.Rgb(62, 40, 24));
 
-        // Skin and clothes colours and body size of each kind of zombie.
-        static (Color32 skin, Color32 cloth, float size) ZombieLook(string kind)
+        // Each kind of zombie's colours and build (lengths in tiles at a walker's size; Size scales the lot).
+        struct ZombieShape
         {
+            public Color32 Skin, Cloth;
+            public float Size;          // times a walker
+            public float Hunch;         // how far forward the body leans
+            public float HeadForward;   // the head, in front of that
+            public float HeadR;
+            public float BodyX, BodyY;  // the body's half length and half width
+            public float Shoulder;      // the shoulders, out from the middle line
+            public float Arm, Hand;     // thickness of the arms, size of the hands
+            public float Reach;         // how far in front the hands hang while walking
+            public float Stride;
+        }
+
+        static ZombieShape Shape(string kind)
+        {
+            var b = new ZombieShape
+            {
+                Skin = PixelImage.Rgb(112, 124, 98), Cloth = PixelImage.Rgb(52, 58, 72), Size = 1f, Hunch = 0.05f, HeadForward = 0.07f, HeadR = 0.07f,
+                BodyX = 0.09f, BodyY = 0.15f, Shoulder = 0.14f, Arm = 0.04f, Hand = 0.03f, Reach = 0.31f, Stride = 0.075f,
+            };
             switch (kind)
             {
-                case "Brute": return (PixelImage.Rgb(104, 98, 112), PixelImage.Rgb(48, 40, 36), 1.32f);
-                case "Runner": return (PixelImage.Rgb(122, 128, 104), PixelImage.Rgb(74, 58, 44), 0.92f);
-                default: return (PixelImage.Rgb(112, 124, 98), PixelImage.Rgb(52, 58, 72), 1f);
+                case "Runner":
+                    b.Skin = PixelImage.Rgb(122, 128, 104); b.Cloth = PixelImage.Rgb(74, 58, 44); b.Size = 0.92f; b.Hunch = 0.08f; b.Stride = 0.1f;
+                    break;
+                case "Brute":
+                case "Giant":   // a brute twice over
+                    bool giant = kind == "Giant";
+                    b.Skin = giant ? PixelImage.Rgb(92, 84, 96) : PixelImage.Rgb(104, 98, 112);
+                    b.Cloth = giant ? PixelImage.Rgb(40, 34, 30) : PixelImage.Rgb(48, 40, 36);
+                    b.Size = giant ? 2.1f : 1.32f;
+                    b.Hunch = 0.03f; b.HeadR = 0.062f; b.BodyX = 0.12f; b.BodyY = 0.2f; b.Shoulder = 0.19f; b.Arm = 0.055f; b.Hand = 0.045f;
+                    break;
+                case "Crawler":   // low on the ground (drawn by Crawler)
+                    b.Skin = PixelImage.Rgb(118, 112, 96); b.Cloth = PixelImage.Rgb(60, 50, 44); b.Size = 0.9f; b.Hunch = 0.12f; b.HeadForward = 0.1f;
+                    break;
+                case "Spitter":   // greenish, with a swollen throat
+                    b.Skin = PixelImage.Rgb(104, 130, 84); b.Cloth = PixelImage.Rgb(70, 74, 50); b.Size = 0.96f;
+                    break;
+                case "Bloater":   // a swollen bare belly
+                    b.Skin = PixelImage.Rgb(150, 150, 110); b.Cloth = PixelImage.Rgb(70, 60, 50); b.Size = 1.12f;
+                    b.BodyX = 0.14f; b.BodyY = 0.22f; b.Shoulder = 0.19f; b.Arm = 0.045f; b.Hand = 0.035f; b.Stride = 0.06f;
+                    break;
+                case "Screamer":   // thin and pale, long arms, long hair
+                    b.Skin = PixelImage.Rgb(176, 172, 160); b.Cloth = PixelImage.Rgb(46, 40, 44); b.Size = 0.96f; b.Hunch = 0.07f;
+                    b.BodyX = 0.075f; b.BodyY = 0.12f; b.Shoulder = 0.12f; b.Arm = 0.032f; b.Hand = 0.027f; b.Reach = 0.38f; b.Stride = 0.09f;
+                    break;
+                case "Armored":   // a soldier's helmet and breastplate
+                    b.Skin = PixelImage.Rgb(108, 118, 96); b.Cloth = PixelImage.Rgb(60, 52, 44); b.Size = 1.06f;
+                    b.BodyX = 0.1f; b.BodyY = 0.16f; b.Shoulder = 0.15f; b.Arm = 0.045f;
+                    break;
             }
+            return b;
         }
 
         static PixelImage Zombie(int ppu, Vector3 light, string kind, int frame)
         {
-            var (skin, cloth, k) = ZombieLook(kind);
-            bool brute = kind == "Brute", runner = kind == "Runner";
+            var b = Shape(kind);
+            if (kind == "Crawler") return Crawler(ppu, light, b, frame);
+            var skin = b.Skin;
+            var cloth = b.Cloth;
+            float k = b.Size;
+            bool big = kind == "Brute" || kind == "Giant";
             float step = frame < WalkFrames ? Stride(frame) : 0f;
-            float hunch = (runner ? 0.08f : brute ? 0.03f : 0.05f) + (frame == 5 ? 0.05f : 0f);
-            float stride = runner ? 0.1f : 0.075f;
+            float hunch = b.Hunch + (frame == 5 ? 0.05f : 0f);
+            float stride = b.Stride;
             var boot = PixelImage.Rgb(36, 30, 26);
             var wound = PixelImage.Rgb(86, 20, 18);
             var parts = new System.Collections.Generic.List<Part>();
             // Shuffling feet.
             parts.Add(Limb((0.02f + step * stride) * k, 0.065f * k, 0.05f, (0.1f + step * stride) * k, 0.072f * k, 0.05f, 0.03f * k, Mat.Boot, boot));
             parts.Add(Limb((0.02f - step * stride) * k, -0.065f * k, 0.05f, (0.1f - step * stride) * k, -0.06f * k, 0.05f, 0.03f * k, Mat.Boot, boot));
-            // A hunched body in rags, with a wound or two.
-            parts.Add(Body(hunch * k, 0f, 1.17f, (brute ? 0.12f : 0.09f) * k, (brute ? 0.2f : 0.15f) * k, 0.19f, Mat.Rag, cloth));
+            // A hunched body in rags (a bloater's bare, swollen belly), with a wound or two.
+            if (kind == "Bloater")
+            {
+                const float Belly = 1.12f, Swell = 0.24f;
+                parts.Add(Body(hunch * k, 0f, Belly, b.BodyX * k, b.BodyY * k, Swell, Mat.Rot, PixelImage.Rgb(150, 156, 104)));
+                // Yellow boils on it, sitting on the skin.
+                foreach (var (x, y, r) in new[] { (0.02f, 0.1f, 0.035f), (-0.06f, -0.08f, 0.03f), (0.08f, -0.12f, 0.028f), (-0.09f, 0.12f, 0.025f), (0.1f, 0.05f, 0.03f) })
+                {
+                    float nx = x / b.BodyX, ny = y / b.BodyY;
+                    float on = Belly + Swell * Mathf.Sqrt(Mathf.Max(0f, 1f - nx * nx - ny * ny));
+                    parts.Add(Ball((hunch + x) * k, y * k, on - r * k * 0.4f, r * k, Mat.Wound, PixelImage.Rgb(196, 180, 90)));
+                }
+            }
+            else
+                parts.Add(Body(hunch * k, 0f, 1.17f, b.BodyX * k, b.BodyY * k, 0.19f, Mat.Rag, cloth));
             parts.Add(Ball((hunch - 0.02f) * k, 0.07f * k, 1.31f, 0.03f * k, Mat.Wound, wound));
-            if (brute) parts.Add(Ball((hunch + 0.03f) * k, -0.11f * k, 1.29f, 0.035f * k, Mat.Wound, wound));
+            if (big) parts.Add(Ball((hunch + 0.03f) * k, -0.11f * k, 1.29f, 0.035f * k, Mat.Wound, wound));
+            if (kind == "Armored")
+            {
+                // A dented breastplate over the rags, and steel on the shoulders.
+                parts.Add(Body(hunch * k, 0f, 1.2f, (b.BodyX + 0.012f) * k, (b.BodyY + 0.012f) * k, 0.19f, Mat.Steel, PixelImage.Rgb(90, 92, 98)));
+                for (int side = -1; side <= 1; side += 2)
+                    parts.Add(Ball(hunch * k, side * b.Shoulder * k, 1.36f, 0.05f * k, Mat.Steel, PixelImage.Rgb(84, 86, 92)));
+            }
 
             // Arms reaching out in front; swinging a little while walking; drawn back, then thrust out, to attack.
-            float arm = (brute ? 0.055f : 0.04f) * k, hand = (brute ? 0.045f : 0.03f) * k;
+            float arm = b.Arm * k, hand = b.Hand * k;
             for (int side = -1; side <= 1; side += 2)
             {
                 float sway = frame < WalkFrames ? side * step * 0.045f : 0f;
-                Vector3 shoulder = new Vector3(hunch * k, side * (brute ? 0.19f : 0.14f) * k, 1.29f);
+                Vector3 shoulder = new Vector3(hunch * k, side * b.Shoulder * k, 1.29f);
                 Vector3 elbow, wrist;
                 if (frame == 4)
                 {
@@ -163,18 +277,93 @@ namespace KingdomGame.Art
                 else
                 {
                     elbow = new Vector3((0.16f + sway) * k, side * 0.15f * k, 1.23f);
-                    wrist = new Vector3((0.31f + sway * 1.6f) * k, side * 0.1f * k, 1.2f);
+                    wrist = new Vector3((b.Reach + sway * 1.6f) * k, side * 0.1f * k, 1.2f);
                 }
                 parts.Add(Limb(shoulder.x, shoulder.y, shoulder.z, elbow.x, elbow.y, elbow.z, arm, Mat.Rag, cloth));
                 parts.Add(Limb(elbow.x, elbow.y, elbow.z, wrist.x, wrist.y, wrist.z, arm * 0.85f, Mat.Rot, skin));
                 parts.Add(Ball(wrist.x + 0.02f * k, wrist.y, wrist.z, hand, Mat.Rot, skin));
             }
-            // The head, pushed forward; patchy hair.
-            float headR = (brute ? 0.062f : 0.07f) * k;
-            parts.Add(Ball((hunch + 0.07f) * k, 0f, 1.47f, headR, Mat.Rot, skin));
-            parts.Add(Ball((hunch + 0.045f) * k, 0.015f * k, 1.49f, headR * 0.62f, Mat.Hair, PixelImage.Rgb(58, 50, 42)));
+            // The head, pushed forward; patchy hair (long and pale on a screamer, a helmet on an armored one).
+            float headR = b.HeadR * k;
+            float headX = (hunch + b.HeadForward) * k;
+            parts.Add(Ball(headX, 0f, 1.47f, headR, Mat.Rot, skin));
+            switch (kind)
+            {
+                case "Armored":
+                    parts.Add(Ball(headX - 0.01f * k, 0f, 1.5f, headR * 1.15f, Mat.Steel, PixelImage.Rgb(96, 98, 104)));
+                    break;
+                case "Screamer":
+                {
+                    var hair = PixelImage.Rgb(150, 146, 136);
+                    parts.Add(Ball(headX - 0.035f * k, 0f, 1.49f, headR * 0.85f, Mat.Hair, hair));
+                    for (int side = -1; side <= 1; side += 2)
+                        parts.Add(Limb(headX - 0.03f * k, side * 0.03f * k, 1.45f, headX - 0.13f * k, side * 0.05f * k, 1.38f, 0.026f * k, Mat.Hair, hair));
+                    parts.Add(Ball(headX + headR * 0.6f, 0f, 1.5f, headR * 0.45f, Mat.Wound, PixelImage.Rgb(40, 14, 14)));   // the mouth, wide open
+                    break;
+                }
+                default:
+                    parts.Add(Ball((hunch + b.HeadForward - 0.025f) * k, 0.015f * k, 1.49f, headR * 0.62f, Mat.Hair, PixelImage.Rgb(58, 50, 42)));
+                    break;
+            }
+            if (kind == "Spitter")
+            {
+                // A swollen green throat, and a glob of acid at its mouth as it spits.
+                var bile = PixelImage.Rgb(150, 176, 64);
+                parts.Add(Ball(headX - 0.05f * k, 0f, 1.38f, 0.055f * k, Mat.Wound, bile));
+                if (frame == 5) parts.Add(Ball(headX + 0.12f * k, 0f, 1.42f, 0.03f * k, Mat.Wound, bile));
+            }
             // The arms reach far out in front when it strikes, so the picture reaches further forward than back.
             return Figure(ppu, 0.17f * k, 0.62f * k, 0.3f * k, light, parts);
+        }
+
+        // A crawler: legs dragging behind (one gone at the knee), pulling itself along the ground on its arms.
+        static PixelImage Crawler(int ppu, Vector3 light, ZombieShape b, int frame)
+        {
+            float k = b.Size;
+            float step = frame < WalkFrames ? Stride(frame) : 0f;
+            float hunch = b.Hunch + (frame == 5 ? 0.05f : 0f);
+            var skin = b.Skin;
+            var legs = PixelImage.Scale(b.Cloth, 0.85f);
+            var wound = PixelImage.Rgb(86, 20, 18);
+            var parts = new System.Collections.Generic.List<Part>();
+            parts.Add(Limb(-0.08f * k, 0.06f * k, 0.12f, -0.3f * k, 0.09f * k, 0.07f, 0.05f * k, Mat.Rag, legs));
+            parts.Add(Limb(-0.3f * k, 0.09f * k, 0.07f, -0.42f * k, 0.1f * k, 0.05f, 0.04f * k, Mat.Rag, legs));
+            parts.Add(Ball(-0.44f * k, 0.1f * k, 0.05f, 0.032f * k, Mat.Boot, PixelImage.Rgb(36, 30, 26)));
+            parts.Add(Limb(-0.08f * k, -0.06f * k, 0.12f, -0.24f * k, -0.08f * k, 0.08f, 0.05f * k, Mat.Rag, legs));
+            parts.Add(Ball(-0.25f * k, -0.08f * k, 0.08f, 0.045f * k, Mat.Wound, wound));   // the stump
+            // The body, low along the ground.
+            parts.Add(Body(0.04f * k, 0f, 0.2f, 0.16f * k, 0.12f * k, 0.1f, Mat.Rag, b.Cloth));
+            parts.Add(Ball(0f, 0.05f * k, 0.28f, 0.03f * k, Mat.Wound, wound));
+            // Arms reaching forward, one then the other pulling it along; raised, then lunging, to attack.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float pull = frame < WalkFrames ? side * step * 0.07f : 0f;
+                var shoulder = new Vector3(0.13f * k, side * 0.11f * k, 0.25f);
+                Vector3 elbow, wrist;
+                if (frame == 4)
+                {
+                    elbow = new Vector3(0.2f * k, side * 0.2f * k, 0.4f);
+                    wrist = new Vector3(0.3f * k, side * 0.2f * k, 0.5f);
+                }
+                else if (frame == 5)
+                {
+                    elbow = new Vector3(0.32f * k, side * 0.12f * k, 0.2f);
+                    wrist = new Vector3(0.5f * k, side * 0.07f * k, 0.12f);
+                }
+                else
+                {
+                    elbow = new Vector3((0.26f + pull) * k, side * 0.19f * k, 0.18f);
+                    wrist = new Vector3((0.4f + pull * 1.6f) * k, side * 0.15f * k, 0.08f);
+                }
+                parts.Add(Limb(shoulder.x, shoulder.y, shoulder.z, elbow.x, elbow.y, elbow.z, 0.04f * k, Mat.Rag, b.Cloth));
+                parts.Add(Limb(elbow.x, elbow.y, elbow.z, wrist.x, wrist.y, wrist.z, 0.034f * k, Mat.Rot, skin));
+                parts.Add(Ball(wrist.x + 0.02f * k, wrist.y, wrist.z, 0.03f * k, Mat.Rot, skin));
+            }
+            // The head, low and craned up.
+            float headR = b.HeadR * k, headX = (hunch + b.HeadForward) * k;
+            parts.Add(Ball(headX, 0f, 0.34f, headR, Mat.Rot, skin));
+            parts.Add(Ball(headX - 0.025f * k, 0.015f * k, 0.36f, headR * 0.62f, Mat.Hair, PixelImage.Rgb(58, 50, 42)));
+            return Figure(ppu, 0.5f * k, 0.62f * k, 0.3f * k, light, parts);
         }
 
         // Someone lying on their back seen from above: head to the right, one arm flung out,

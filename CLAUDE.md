@@ -102,7 +102,8 @@ build), then ages with real-time research, roofs, and **houses** you go into
 in `Villager.Walk`). 2A, 2B and these updates are written and compile-checked but **not yet
 run in Unity**; the user tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
 and `docs/HOUSES-TEST.md` (plus `docs/PHASE-2B-TEST.md` for the details; later
-updates: `docs/SAVE-TEST.md`, `WEAPONS-TEST.md`, `ONLINE-TEST.md`, `ENDLESS-WORLD-TEST.md`). Don't start 2C before they
+updates: `docs/SAVE-TEST.md`, `WEAPONS-TEST.md`, `ONLINE-TEST.md`, `ENDLESS-WORLD-TEST.md`, `MACHINES-TEST.md`,
+`ZOMBIE-BASES-TEST.md`, `AGES-CONTENT-TEST.md`, `ZOMBIE-KINDS-TEST.md`). Don't start 2C before they
 confirm. See `docs/ROADMAP.md` and `docs/DECISIONS.md` sections 14-15.
 The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 

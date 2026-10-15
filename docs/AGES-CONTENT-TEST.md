@@ -49,23 +49,31 @@ a storehouse. Farms, pits and drills put what they make straight into storage (t
 Each belt is faster than the one before (0.6 tiles a second for the log chute up to 4 for the
 express belt). All of them cost their age's parts (see above).
 
-## Furniture with boosts: 6 per age (Furniture tab)
+## Furniture with boosts: 10 per age (Furniture tab)
 
-Every age has a bed, a table, shelves, a hearth or stove, a desk and a decoration. Each one makes
-the kingdom better at something; **each kind counts once** (ten feast tables boost as much as one).
-The bonus is in its name on the build bar, like "Feast table (+2.5% crafting)".
+Every age has a bed, a table, shelves, a hearth or stove, a desk, a decoration, a seat, a chest,
+a rug and a lamp. Each one makes the kingdom better at something; **each kind counts once** (ten
+feast tables boost as much as one). The bonus is in its name on the build bar, like
+"Feast table (+2.5% crafting)".
 
 | Piece | Boosts | Bonus |
 |---|---|---|
-| Bed | walking speed (rested villagers), and homes for 2 to 5 | +1% (Stone Age) up to +4.5% (World War 2) |
+| Bed | walking speed (rested villagers), and homes for 4 (Stone Age) up to 10 (World War 2) | +1% (Stone Age) up to +4.5% (World War 2) |
 | Table | crafting (weapons and parts) | same |
 | Shelves / rack / lockers | gathering and digging | same |
 | Hearth / oven / stove / kitchen | building (builders' work) | same |
 | Desk | research speed | same |
 | Decoration (totem, idol, banner, tapestry, bust, clock, flag, poster) | walking speed | same |
+| Seat (log stool, wicker stool, oak bench, high-backed chair, velvet and leather armchairs, camp chair, office chair) | research speed | same |
+| Chest (basket, clay jars, iron-bound chest, coffer, wardrobe, safe, ammunition crates, filing cabinet) | gathering and digging | same |
+| Rug, 2x2 (hide, reed mat, wool rug, bearskin, Persian carpet, patterned carpet, duckboards, linoleum) | walking speed | same |
+| Lamp (fire ring, brazier, iron lantern post, candle stand, silver candelabra, gas lamp, oil lantern, hurricane lamp) | crafting, and it lights the room at night | same |
 
-They add to the XP upgrades (V). With every age's furniture, walking speed is about +44% and
-the others about +22%.
+They add to the XP upgrades (V). With every age's furniture, walking speed is about +66%,
+crafting, gathering and research about +44% and building about +22%.
+
+What to check: seats, rugs and lamps can be walked through (rugs lie flat, under everything);
+lamps have flames and light up at night (the silver candelabra has five candles).
 
 ## Better farming each age (Farming tab)
 
@@ -107,6 +115,9 @@ They don't cost parts. Each age's farm machines are in the automation table abov
 
 Like every other thing in an age, they cost that age's part and the earlier ages' parts (made at
 the crafting tables). "Guard" towers need a villager on them, like the archer tower.
+
+**Every tower (the older ones too) is half price and builds twice as fast:** half the wood, stone and
+food, half the parts, half the building time.
 
 What to check: each age's two towers are on the Towers tab once you reach the age; a guard climbs
 the guard ones; the ones with a turning top (rock drop, bolt throwers, scorpion, mangonel, swivel

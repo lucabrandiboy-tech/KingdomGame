@@ -108,6 +108,7 @@ static class Program
         Render(castle, Path.Combine(dir, "castle_night.png"), 1920, 1080, new Vector2(0f, 2.6f), 7.5f, Time.Night);
         Render(castle, Path.Combine(dir, "castle_close.png"), 1920, 1080, new Vector2(-1.2f, 1.2f), 3f, Time.Day);
         Render(castle, Path.Combine(dir, "horde_night.png"), 1920, 1080, new Vector2(0.5f, -4.2f), 5f, Time.Night);
+        Render(castle, Path.Combine(dir, "zombie_kinds.png"), 1920, 1080, new Vector2(0f, -15.4f), 5f, Time.Day);
         Console.WriteLine($"done in {sw.Elapsed.TotalSeconds:0.0}s");
     }
 
@@ -410,6 +411,18 @@ static class Program
             Things.Add(new Inst { Key = ArtKeys.Shadow(ArtKeys.LootBag), X = 2.4f + 0.55f * 0.06f, Y = -6.9f - 0.65f * 0.06f, Order = -100, Shadow = true });
             Things.Add(new Inst { Key = ArtKeys.LootBag, X = 2.4f, Y = -6.9f, Order = 250 });
             for (int y = -12; y <= 12; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
+
+            // South of the horde, every kind of zombie in a line (zombie_kinds.png): walking, then striking,
+            // with a spitter's acid and a screamer's scream.
+            for (int i = 0; i < CharacterArt.ZombieKinds.Length; i++)
+            {
+                float x = -7.2f + i * 1.8f;
+                Zombie(CharacterArt.ZombieKinds[i], x, -14.3f, 90f, 1);
+                Zombie(CharacterArt.ZombieKinds[i], x, -16.6f, 90f, 5);
+            }
+            Things.Add(new Inst { Key = ArtKeys.AcidGlob, X = 0.4f, Y = -13.2f, Order = 2500, Glow = true, Scale = 1.5f });
+            Things.Add(new Inst { Key = ArtKeys.ScreamRing, X = 3.6f, Y = -16.6f, Order = 2500, Scale = 3f, Alpha = 0.7f });
+            for (int y = -19; y < -12; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
         }
 
         // A piece of furniture like Furniture.Setup: its picture for the way it faces, centered on

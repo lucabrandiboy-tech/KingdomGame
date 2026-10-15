@@ -148,7 +148,7 @@ namespace KingdomGame.World
             {
                 zombieBases = new GameObject("Zombie bases").AddComponent<ZombieBases>();
                 zombieBases.transform.SetParent(transform, false);
-                zombieBases.Setup(content.survival, zombies, kingdom, dayNight);
+                zombieBases.Setup(content.survival, zombies, kingdom, dayNight, waves);
             }
 
             var hud = gameObject.AddComponent<GameHud>();

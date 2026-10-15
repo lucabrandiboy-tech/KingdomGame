@@ -90,6 +90,8 @@ namespace KingdomGame.Art
         public static string ZombieShadow(string kind) => $"Zombie/{kind}/Shadow";
         /// <summary>Faintly glowing eyes, drawn over any zombie.</summary>
         public const string ZombieEyes = "Zombie/Eyes";
+        /// <summary>A spitter's glob of acid, and a screamer's scream (a ring a tile across).</summary>
+        public const string AcidGlob = "Zombie/Acid", ScreamRing = "Zombie/Scream";
     }
 
     /// <summary>
@@ -103,7 +105,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 15;
+        public const int Version = 16;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -244,16 +246,18 @@ namespace KingdomGame.Art
                     {
                         int frame = f;
                         float facing = d * 360f / CharacterArt.ZombieDirections;
-                        Add(items, ArtKeys.Zombie(kind, d, f), "Zombies", p => CharacterArt.ZombieFrame(p, kind, facing, frame), false, half);
+                        Add(items, ArtKeys.Zombie(kind, d, f), "Zombies", p => CharacterArt.ZombieFrame(p, kind, facing, frame), false, CharacterArt.ZombieDetail(kind));
                     }
                 Shadow(items, ArtKeys.Zombie(kind, 0, 0), "CharacterShadows", 0.02f, ArtKeys.ZombieShadow(kind));
             }
             Add(items, ArtKeys.ZombieEyes, "Effects", CharacterArt.ZombieEyes, false, half);
+            Add(items, ArtKeys.AcidGlob, "Effects", CharacterArt.AcidGlob, false, half);
+            Add(items, ArtKeys.ScreamRing, "Effects", CharacterArt.ScreamRing, false, 0.25f);
             for (int d = 0; d < CharacterArt.DeadDirections; d++)
             {
                 float facing = d * 360f / CharacterArt.DeadDirections;
                 foreach (string kind in CharacterArt.ZombieKinds)
-                    Add(items, ArtKeys.ZombieDead(kind, d), "Fallen", p => CharacterArt.ZombieDead(p, kind, facing), false, half);
+                    Add(items, ArtKeys.ZombieDead(kind, d), "Fallen", p => CharacterArt.ZombieDead(p, kind, facing), false, CharacterArt.ZombieDetail(kind));
                 Add(items, ArtKeys.VillagerDead(d), "Fallen", p => CharacterArt.VillagerDead(p, facing), false, half);
                 Add(items, ArtKeys.RulerDead(d), "Fallen", p => CharacterArt.RulerDead(p, facing), false, half);
             }

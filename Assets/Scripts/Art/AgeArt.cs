@@ -96,6 +96,135 @@ namespace KingdomGame.Art
                     int a = age, kind = k;
                     yield return new DefensePiece { Art = AgeFurniture(a, kind), Draw = p => DrawAgeFurniture(p, a, kind) };
                 }
+            for (int age = 0; age < 8; age++)
+                for (int k = 0; k < 2; k++)
+                {
+                    int a = age, kind = k;
+                    var style = TowerHeads[age, k];
+                    yield return new DefensePiece
+                    {
+                        Art = AgeTower(a, kind), Draw = p => DrawTowerBase(p, a, style),
+                        Head = style == HeadStyle.None ? (System.Func<int, float, PixelImage>)null : (p, deg) => DrawTowerHead(p, a, style, deg),
+                    };
+                }
+        }
+
+        // -------------------------------------------------------------- towers --
+
+        /// <summary>What turns on top of a tower (None: a platform a guard stands on to throw or shoot).</summary>
+        internal enum HeadStyle { None, Thrower, BoltThrower, Gun, Cannon, Rockets }
+
+        /// <summary>Each age's two newer towers' heads (see GameSetup's tower list: same order).</summary>
+        static readonly HeadStyle[,] TowerHeads =
+        {
+            { HeadStyle.None, HeadStyle.Thrower },          // spear post, rock-drop platform
+            { HeadStyle.None, HeadStyle.BoltThrower },      // javelin tower, bronze bolt thrower
+            { HeadStyle.BoltThrower, HeadStyle.None },      // scorpion, iron archer keep
+            { HeadStyle.None, HeadStyle.Thrower },          // longbow tower, mangonel
+            { HeadStyle.Gun, HeadStyle.Cannon },            // swivel gun tower, culverin
+            { HeadStyle.None, HeadStyle.Cannon },           // rifle tower, steam cannon
+            { HeadStyle.None, HeadStyle.Cannon },           // sniper nest, field gun
+            { HeadStyle.Gun, HeadStyle.Rockets },           // anti-tank gun, rocket battery
+        };
+
+        public static string AgeTower(int age, int kind) => $"Age/T/{age}/{kind}";
+        /// <summary>Stone Age towers are 1 tile (posts); the rest 2x2.</summary>
+        public static int TowerSize(int age) => age == 0 ? 1 : 2;
+
+        // A tower's top seen from above: a post platform, a timber or stone tower with battlements, sandbags or concrete.
+        static PixelImage DrawTowerBase(int ppu, int age, HeadStyle style)
+        {
+            float t = ppu, size = TowerSize(age), c = size / 2f;
+            var look = LookOf(age);
+            var img = Canvas(size, size, t);
+            uint s = 3500u + (uint)age * 17u + (uint)style;
+            if (age == 0)
+            {
+                Round(img, t, c, c, 0.44f, look.Wood, 0.5f, 0.03f, Surface.Wood, s);
+                Ring(img, t, c, c, 0.36f, 0.44f, PixelImage.Scale(look.Wood, 0.75f), 0.52f, Surface.Wood, s + 1);
+            }
+            else if (age >= 6)
+            {
+                // Sandbags round a pit (World War 1), or a concrete emplacement (World War 2).
+                if (age == 6)
+                {
+                    Block(img, t, 0.1f, 0.1f, 1.9f, 1.9f, PixelImage.Rgb(80, 70, 52), 0.1f, 0.02f, Surface.Stone, s);
+                    var dice = new Dice(s + 1);
+                    for (int i = 0; i < 20; i++)
+                    {
+                        float a = i * Mathf.PI * 2f / 20f;
+                        Round(img, t, c + Mathf.Cos(a) * 0.8f, c + Mathf.Sin(a) * 0.8f, 0.14f, PixelImage.Scale(PixelImage.Rgb(170, 150, 110), dice.Range(0.85f, 1f)), 0.4f, 0.08f, Surface.Cloth, s + 2 + (uint)i);
+                    }
+                }
+                else
+                {
+                    Block(img, t, 0.1f, 0.1f, 1.9f, 1.9f, look.Stone, 0.7f, 0.12f, Surface.Stone, s);
+                    Round(img, t, c, c, 0.62f, PixelImage.Scale(look.Stone, 0.85f), 0.5f, 0.02f, Surface.Stone, s + 1);
+                }
+            }
+            else
+            {
+                bool stone = age >= 2;
+                var wall = stone ? look.Stone : look.Wood;
+                Block(img, t, 0.06f, 0.06f, 1.94f, 1.94f, wall, 1.2f, 0.04f, stone ? Surface.Stone : Surface.Wood, s, true, 0.25f);
+                Block(img, t, 0.3f, 0.3f, 1.7f, 1.7f, stone ? PixelImage.Scale(look.Wood, 0.9f) : PixelImage.Scale(look.Wood, 0.8f), 1.0f, 0.02f, Surface.Wood, s + 1, true, 0.2f);
+                if (stone)   // battlements
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float x = 0.25f + i * 0.5f;
+                        Block(img, t, x - 0.12f, 0.06f, x + 0.12f, 0.3f, wall, 1.4f, 0.02f, Surface.Stone, s + 2);
+                        Block(img, t, x - 0.12f, 1.7f, x + 0.12f, 1.94f, wall, 1.4f, 0.02f, Surface.Stone, s + 3);
+                    }
+            }
+            if (style == HeadStyle.None)
+            {
+                // What its guard throws or shoots: a bundle of spears, javelins or rifles leaning ready.
+                var shaft = age >= 5 ? look.Metal : PaleWood;
+                for (int i = 0; i < 3; i++)
+                    Rod(img, t, c - 0.3f + i * 0.08f, c + 0.25f, c - 0.05f + i * 0.08f, c - 0.25f, 0.025f, shaft, 1.3f, 1.3f);
+                if (age == 3 || age == 2) Ring(img, t, c + 0.25f, c, 0.12f, 0.16f, look.Wood, 1.3f, Surface.Wood, s + 5);   // a longbow
+            }
+            return Finish(img, t, 0);
+        }
+
+        // A tower's turning head, facing `degrees`.
+        static PixelImage DrawTowerHead(int ppu, int age, HeadStyle style, float degrees)
+        {
+            float t = ppu;
+            var look = LookOf(age);
+            var img = Canvas(1.6f, 1.6f, t);
+            var h = new Head(0.8f, 0.8f, degrees);
+            var wood = look.Wood;
+            var metal = look.Metal;
+            switch (style)
+            {
+                case HeadStyle.Thrower:   // a throwing arm with a sling cup
+                    h.Block(img, t, -0.3f, -0.25f, 0.2f, 0.25f, wood, 1.5f);
+                    h.Rod(img, t, -0.25f, 0f, 0.55f, 0f, 0.05f, PixelImage.Scale(wood, 0.8f), 1.7f, 1.8f);
+                    h.Round(img, t, 0.6f, 0f, 0.1f, PixelImage.Scale(wood, 0.6f), 1.82f);
+                    break;
+                case HeadStyle.BoltThrower:   // bow arms and a bolt
+                    h.Block(img, t, -0.35f, -0.08f, 0.45f, 0.08f, wood, 1.6f);
+                    h.Rod(img, t, 0.25f, -0.45f, 0.35f, 0f, 0.035f, age >= 1 && age < 3 ? metal : wood, 1.65f, 1.65f);
+                    h.Rod(img, t, 0.25f, 0.45f, 0.35f, 0f, 0.035f, age >= 1 && age < 3 ? metal : wood, 1.65f, 1.65f);
+                    h.Rod(img, t, -0.1f, 0f, 0.6f, 0f, 0.015f, PaleWood, 1.7f, 1.7f);
+                    break;
+                case HeadStyle.Gun:   // a swivel gun or an anti-tank gun: body and a long barrel
+                    h.Block(img, t, -0.25f, -0.18f, 0.15f, 0.18f, metal, 1.5f);
+                    h.Rod(img, t, 0.1f, 0f, age == 7 ? 0.75f : 0.6f, 0f, age == 7 ? 0.06f : 0.04f, PixelImage.Scale(metal, 0.8f), 1.55f, 1.55f);
+                    if (age == 7) h.Block(img, t, -0.1f, -0.32f, 0.12f, 0.32f, PixelImage.Scale(metal, 1.1f), 1.45f);   // the gun shield
+                    break;
+                case HeadStyle.Cannon:   // a thick barrel on a carriage
+                    h.Block(img, t, -0.35f, -0.22f, 0.05f, 0.22f, age >= 5 ? metal : wood, 1.45f);
+                    h.Rod(img, t, -0.2f, 0f, 0.62f, 0f, 0.1f, age == 4 ? PixelImage.Rgb(150, 116, 60) : PixelImage.Rgb(46, 46, 50), 1.6f, 1.6f);
+                    h.Round(img, t, 0.64f, 0f, 0.06f, PixelImage.Rgb(20, 20, 20), 1.62f);
+                    break;
+                case HeadStyle.Rockets:   // a rack of rocket tubes
+                    h.Block(img, t, -0.3f, -0.3f, 0.3f, 0.3f, metal, 1.5f);
+                    for (int i = 0; i < 4; i++) h.Rod(img, t, -0.25f, -0.21f + i * 0.14f, 0.5f, -0.21f + i * 0.14f, 0.05f, PixelImage.Scale(metal, 0.7f), 1.6f, 1.6f);
+                    break;
+            }
+            return Finish(img, t, 0);
         }
 
         // ----------------------------------------------------------- furniture --

@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 19;
+        const int SettingsVersion = 20;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -272,25 +272,13 @@ namespace KingdomGame.EditorTools
             for (int i = 0; i < machinesByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(machinesByAge[i]);
             // Each age's six pieces of furniture (beds give homes; each kind boosts something once).
             var furnitureByAge = AgeFurniture();
-            for (int i = 0; i < furnitureByAge.Length && i < defensesByAge.Length; i++)
-            {
-                defensesByAge[i].AddRange(furnitureByAge[i]);
-                machinesByAge[i].AddRange(furnitureByAge[i]);
-            }
+            for (int i = 0; i < furnitureByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(furnitureByAge[i]);
             // Each age's better plant (Farming tab).
             var plantsByAge = AgePlants();
-            for (int i = 0; i < plantsByAge.Length && i < defensesByAge.Length; i++)
-            {
-                defensesByAge[i].AddRange(plantsByAge[i]);
-                machinesByAge[i].AddRange(plantsByAge[i]);
-            }
+            for (int i = 0; i < plantsByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(plantsByAge[i]);
             PartCosts(defensesByAge);
             var tables = Workbenches();
-            for (int i = 0; i < tables.Length && i < defensesByAge.Length; i++)
-            {
-                defensesByAge[i].Add(tables[i]);
-                machinesByAge[i].Add(tables[i]);
-            }
+            for (int i = 0; i < tables.Length && i < defensesByAge.Length; i++) defensesByAge[i].Add(tables[i]);
             var defenses = new List<BuildingConfig>();
             foreach (var age in defensesByAge) defenses.AddRange(age);
             var farming = new List<BuildingConfig>
@@ -484,8 +472,9 @@ namespace KingdomGame.EditorTools
             if (machinesUpdate)
             {
                 // The smelter (Medieval) and the machines (Industrial): on the build bar's Industry tab, unlocked with their age.
+                // (defensesByAge holds each age's everything by now: defences, towers, machines, crafting tables, furniture, plants.)
                 var all = new List<BuildingConfig>();
-                foreach (var age in machinesByAge) all.AddRange(age);
+                foreach (var age in defensesByAge) all.AddRange(age);
                 var list = new List<BuildingConfig>(content.buildMenu);
                 foreach (var m in all) if (!list.Contains(m)) list.Add(m);
                 content.buildMenu = list.ToArray();
@@ -498,8 +487,8 @@ namespace KingdomGame.EditorTools
                     ages[age].startUnlocks = u.ToArray();
                     EditorUtility.SetDirty(ages[age]);
                 }
-                for (int i = 0; i < machinesByAge.Length; i++) Unlock(i, machinesByAge[i]);
-                Debug.Log("Added each age's machines (Industry tab: tree farm, sawmills, quarries, belts, smelter, generator) and electric lights (Lights tab). Your other settings were kept.");
+                for (int i = 0; i < defensesByAge.Length; i++) Unlock(i, defensesByAge[i]);
+                Debug.Log("Added each age's new things: machines and crafting tables (Industry tab), furniture, plants (Farming tab), towers and electric lights. Your other settings were kept.");
             }
 
             if (endless && content.network != null && content.network.kingdomSpacing < 560)
@@ -1155,7 +1144,7 @@ namespace KingdomGame.EditorTools
             const BuildCategory T = BuildCategory.Traps, W = BuildCategory.Towers;
             var gas = new Color(0.6f, 0.72f, 0.3f, 0.5f);
             var napalm = new Color(1f, 0.5f, 0.15f, 0.55f);
-            return new[]
+            var byAge = new[]
             {
                 new List<BuildingConfig>   // Stone Age
                 {
@@ -1216,6 +1205,62 @@ namespace KingdomGame.EditorTools
                     Item("Towers/Howitzer", "Howitzer", FurnitureArt.Howitzer, W, 2, 40, 400, 0, 50f, 1800f, 0.8f, true, false, Tower("Howitzer", bigShell, 26f, 0.14f, false, 40f, lobbed: true, minRange: 6f)),
                 },
             };
+
+            // Two more towers in every age (their pictures: FurnitureArt.AgeTower). Early ones need a guard on them; from the
+            // Industrial age the guns turn and shoot by themselves.
+            var spear = Shot("Spear", 22f, 13f, 7f, 3f, 14, 2, new Color32(150, 120, 84, 255));
+            var javelin = Shot("Javelin", 30f, 16f, 8.5f, 2.5f, 16, 2, new Color32(170, 140, 96, 255));
+            var rifleRound = Shot("RifleRound", 50f, 36f, 11f, 1.5f, 8, 2, new Color32(255, 220, 140, 255));
+            var sniperRound = Shot("SniperRound", 140f, 44f, 16f, 0.5f, 10, 2, new Color32(255, 230, 160, 255));
+            var atShell = Shot("AntiTankShell", 150f, 40f, 14f, 0.8f, 10, 4, new Color32(80, 80, 70, 255));
+            var rocket = Shot("BatteryRocket", 70f, 14f, 20f, 3f, 14, 4, new Color32(90, 90, 80, 255), howitzerBlast, true);
+            string TA(int age, int k) => FurnitureArt.AgeTower(age, k);
+            int TS(int age) => FurnitureArt.TowerSize(age);
+            var towers = new[]
+            {
+                new[]
+                {
+                    Item("Towers/SpearPost", "Spear thrower's post", TA(0, 0), W, TS(0), 30, 10, 0, 8f, 280f, 0.5f, true, false, Tower("SpearPost", spear, 7f, 0.6f, true, 360f)),
+                    Item("Towers/RockDrop", "Rock-drop platform", TA(0, 1), W, TS(0), 35, 25, 0, 10f, 320f, 0.5f, true, false, Tower("RockDrop", catapultStone, 6f, 0.3f, true, 180f, lobbed: true, minRange: 1.5f)),
+                },
+                new[]
+                {
+                    Item("Towers/JavelinTower", "Javelin tower", TA(1, 0), W, TS(1), 90, 20, 0, 20f, 650f, 1.2f, true, false, Tower("JavelinTower", javelin, 8.5f, 0.7f, true, 360f)),
+                    Item("Towers/BronzeBoltThrower", "Bronze bolt thrower", TA(1, 1), W, TS(1), 110, 40, 0, 24f, 700f, 1.2f, true, false, Tower("BronzeBoltThrower", bolt, 9.5f, 0.45f, true, 140f, pierce: 2)),
+                },
+                new[]
+                {
+                    Item("Towers/Scorpion", "Scorpion", TA(2, 0), W, TS(2), 120, 90, 0, 30f, 950f, 1.2f, true, false, Tower("Scorpion", bolt, 10.5f, 0.55f, true, 160f, pierce: 3)),
+                    Item("Towers/IronArcherKeep", "Iron archer keep", TA(2, 1), W, TS(2), 100, 160, 0, 32f, 1300f, 1.3f, true, false, Tower("IronArcherKeep", arrow, 9f, 1.6f, true, 360f)),
+                },
+                new[]
+                {
+                    Item("Towers/LongbowTower", "Longbow tower", TA(3, 0), W, TS(3), 120, 150, 0, 32f, 1300f, 1.3f, true, false, Tower("LongbowTower", arrow, 11.5f, 1.3f, true, 360f)),
+                    Item("Towers/Mangonel", "Mangonel", TA(3, 1), W, TS(3), 160, 80, 0, 34f, 900f, 1.2f, true, false, Tower("Mangonel", catapultStone, 13f, 0.25f, true, 100f, lobbed: true, minRange: 3f)),
+                },
+                new[]
+                {
+                    Item("Towers/SwivelGunTower", "Swivel gun tower", TA(4, 0), W, TS(4), 80, 200, 0, 38f, 1500f, 1.3f, true, false, Tower("SwivelGunTower", musketBall, 9.5f, 0.9f, true, 300f)),
+                    Item("Towers/Culverin", "Culverin", TA(4, 1), W, TS(4), 60, 260, 0, 42f, 1500f, 1.3f, true, false, Tower("Culverin", cannonball, 15f, 0.22f, true, 80f)),
+                },
+                new[]
+                {
+                    Item("Towers/RifleTower", "Rifle tower", TA(5, 0), W, TS(5), 60, 220, 0, 38f, 1200f, 1.3f, true, false, Tower("RifleTower", rifleRound, 11f, 0.8f, true, 360f)),
+                    Item("Towers/SteamCannon", "Steam cannon", TA(5, 1), W, TS(5), 40, 260, 0, 44f, 1300f, 1.2f, true, false, Tower("SteamCannon", cannonball, 12f, 0.35f, false, 100f)),
+                },
+                new[]
+                {
+                    Item("Towers/SniperNest", "Sniper nest", TA(6, 0), W, TS(6), 30, 140, 20, 34f, 900f, 0.5f, true, false, Tower("SniperNest", sniperRound, 16f, 0.3f, true, 360f, pierce: 2)),
+                    Item("Towers/FieldGun", "Field gun", TA(6, 1), W, TS(6), 40, 240, 0, 44f, 1100f, 0.6f, true, false, Tower("FieldGun", cannonball, 16f, 0.3f, false, 90f)),
+                },
+                new[]
+                {
+                    Item("Towers/AntiTankGun", "Anti-tank gun", TA(7, 0), W, TS(7), 20, 320, 0, 48f, 1800f, 0.7f, true, false, Tower("AntiTankGun", atShell, 14f, 0.3f, false, 120f, pierce: 4)),
+                    Item("Towers/RocketBattery", "Rocket battery", TA(7, 1), W, TS(7), 20, 360, 0, 50f, 1700f, 0.7f, true, false, Tower("RocketBattery", rocket, 20f, 0.5f, false, 90f, lobbed: true, minRange: 4f)),
+                },
+            };
+            for (int age = 0; age < byAge.Length && age < towers.Length; age++) byAge[age].AddRange(towers[age]);
+            return byAge;
         }
 
         // Roofs, one kind per age: dragged over a room like a floor, drawn as one roof for its shape.

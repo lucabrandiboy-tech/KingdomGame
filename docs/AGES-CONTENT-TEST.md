@@ -83,3 +83,32 @@ the others about +22%.
 Plant them like saplings (drag a line). Trees grow back where they're cut; bushes refill. Each
 kind is tinted a little (fruit trees reddish, pines bluish green...) so you can tell them apart.
 They don't cost parts. Each age's farm machines are in the automation table above.
+
+## Two more towers each age (Towers tab)
+
+| Age | Tower | Size | Who shoots | What it does |
+|---|---|---|---|---|
+| Stone Age | Spear thrower's post | 1x1 | guard | throws spears, reach 7 |
+| Stone Age | Rock-drop platform | 1x1 | guard | lobs rocks over walls, reach 6 |
+| Bronze Age | Javelin tower | 2x2 | guard | javelins, reach 8.5 |
+| Bronze Age | Bronze bolt thrower | 2x2 | guard | bolts that go through 2 zombies, reach 9.5 |
+| Iron Age | Scorpion | 2x2 | guard | bolts through 3 zombies, reach 10.5 |
+| Iron Age | Iron archer keep | 2x2 | guard | fast arrows, reach 9, very tough |
+| Medieval | Longbow tower | 2x2 | guard | arrows, reach 11.5 |
+| Medieval | Mangonel | 2x2 | guard | lobs stones, reach 13 |
+| Renaissance | Swivel gun tower | 2x2 | guard | musket balls, reach 9.5 |
+| Renaissance | Culverin | 2x2 | guard | long-range cannonballs that burst, reach 15 |
+| Industrial | Rifle tower | 2x2 | guard | rifle shots, reach 11 |
+| Industrial | Steam cannon | 2x2 | by itself | cannonballs, reach 12 |
+| World War 1 | Sniper nest | 2x2 | guard | slow, very hard-hitting shots through 2 zombies, reach 16 |
+| World War 1 | Field gun | 2x2 | by itself | cannonballs, reach 16 |
+| World War 2 | Anti-tank gun | 2x2 | by itself | shells through 4 zombies, reach 14 |
+| World War 2 | Rocket battery | 2x2 | by itself | rockets that blow up where they land, reach 20 |
+
+Like every other thing in an age, they cost that age's part and the earlier ages' parts (made at
+the crafting tables). "Guard" towers need a villager on them, like the archer tower.
+
+What to check: each age's two towers are on the Towers tab once you reach the age; a guard climbs
+the guard ones; the ones with a turning top (rock drop, bolt throwers, scorpion, mangonel, swivel
+gun, cannons, anti-tank gun, rocket battery) turn to face the zombie they shoot; straight-fired
+cannonballs (culverin, steam cannon, field gun) burst on the first zombie they hit.

@@ -133,6 +133,14 @@ namespace KingdomGame.Zombies
             Announce($"Game loaded. The next wave comes in {Mathf.CeilToInt(TimeLeft)} seconds.", 6f);
         }
 
+        /// <summary>Testing (the cheat menu): wave <paramref name="wave"/> comes now.</summary>
+        public void CheatStartWave(int wave)
+        {
+            if (config == null || Now == Phase.Over) return;
+            WaitingForNight = false;
+            StartWave(Mathf.Max(1, wave));
+        }
+
         /// <summary>The ruler fell: the game is over.</summary>
         public void RulerFell()
         {

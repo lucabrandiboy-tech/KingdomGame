@@ -177,6 +177,10 @@ namespace KingdomGame.World
             }
             gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves, host, null);
             AddDebug();
+            // The cheat menu (F10), for testing: not in online games, and only while the Progression Config allows cheats.
+            if (!hosting && (content.progression == null || content.progression.allowCheats))
+                gameObject.AddComponent<CheatMenu>().Setup(kingdom, rulerController, research, dayNight, waves, zombies,
+                    content.survival != null ? content.survival.zombies : null);
         }
 
         // Playing in someone else's game: connect first; the world is made once the host says what it is.

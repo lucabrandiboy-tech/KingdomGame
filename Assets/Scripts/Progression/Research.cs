@@ -312,6 +312,29 @@ namespace KingdomGame.Progression
             return true;
         }
 
+        /// <summary>Testing (the cheat menu): straight to age <paramref name="age"/>, with every tech up to it researched.</summary>
+        public void CheatToAge(int age)
+        {
+            var first = Researching;
+            Age = Mathf.Clamp(age, 0, Mathf.Max(0, AgeCount - 1));
+            foreach (var kv in ageOfTech)
+                if (kv.Value <= Age) done.Add(kv.Key);
+            queue.RemoveAll(t => done.Contains(t));
+            if (Researching != first) StartedUtc = null;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Testing (the cheat menu): what's being researched finishes now, without paying.</summary>
+        public void CheatFinishResearch()
+        {
+            if (Researching == null) return;
+            var t = Researching;
+            queue.RemoveAt(0);
+            StartedUtc = null;
+            Complete(t);
+            if (Researching != null) TryStart(DateTime.UtcNow);
+        }
+
         // ------------------------------------------------------------ saving --
 
         /// <summary>What a save needs to restore research.</summary>

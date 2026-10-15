@@ -51,6 +51,7 @@ namespace UnityEngine.InputSystem
         public KeyControl nKey => null;
         public KeyControl f8Key => null;
         public KeyControl f9Key => null;
+        public KeyControl f10Key => null;
         public KeyControl leftBracketKey => null;
         public KeyControl rightBracketKey => null;
         public KeyControl leftShiftKey => null;

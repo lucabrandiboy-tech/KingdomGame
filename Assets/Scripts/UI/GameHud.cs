@@ -41,7 +41,8 @@ namespace KingdomGame.UI
             "On the walls: walk along them, shoot over them; E climbs down\n" +
             "Walk over loot bags to pick them up\n" +
             "V  villagers' jobs          T  research\n" +
-            "Esc  pause          F3  performance info          H  hide this";
+            "Esc  pause          F3  performance info          H  hide this\n" +
+            "F10  cheats, for testing (offline games)";
 
         const string SurvivalKeys = "\nN  call the next wave now";
         const string FreeBuildKeys = "\nF9  send 8 zombies (to try your traps and towers)";

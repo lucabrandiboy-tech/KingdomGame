@@ -43,7 +43,7 @@ namespace KingdomGame.Zombies
         /// <summary>Zombies of this wave still to come out of the dark.</summary>
         public int ToCome { get; private set; }
         /// <summary>Zombies of this wave still to come or still alive.</summary>
-        public int ZombiesLeft => ToCome + (zombies != null ? zombies.Alive : 0);
+        public int ZombiesLeft => ToCome + (zombies != null ? zombies.Attacking : 0);
         public int Kills => zombies != null ? zombies.Kills : 0;
         public float SecondsSurvived { get; private set; }
         /// <summary>A big message for the middle of the screen ("Wave 3 is coming from the north!"), or null.</summary>
@@ -106,7 +106,7 @@ namespace KingdomGame.Zombies
                 }
                 case Phase.Fighting:
                     SpawnSome(dt);
-                    if (ToCome <= 0 && zombies.Alive == 0) EndWave();
+                    if (ToCome <= 0 && zombies.Attacking == 0) EndWave();
                     break;
             }
         }
@@ -194,7 +194,7 @@ namespace KingdomGame.Zombies
                 return;
             }
             float toughness = WaveMath.Toughness(Wave, config.toughnessPerWave);
-            while (spawnClock >= 1f && ToCome > 0 && zombies.Alive < config.maxAlive)
+            while (spawnClock >= 1f && ToCome > 0 && zombies.Attacking < config.maxAlive)
             {
                 spawnClock -= 1f;
                 int pick = WaveMath.Pick(Wave, firstWaves, weights, Random.value);

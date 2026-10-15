@@ -52,6 +52,34 @@ namespace KingdomGame.Zombies
         int slowFrame = -10;
         Vector2Int smashing;
 
+        Vector2 campAt, wanderTo;          // camping (round a base, or besieging the kingdom): where, and where it's wandering to
+        float campRadius, sight, wanderAt;
+
+        /// <summary>Camping: it stays round a spot instead of making for the kingdom, going only for people it sees.</summary>
+        public bool Camping => campRadius > 0f;
+        /// <summary>Camping at its zombie base (far from the kingdom), not besieging it.</summary>
+        public bool AtBase { get; private set; }
+
+        /// <summary>
+        /// Stay round <paramref name="at"/> (within <paramref name="radius"/> tiles), going for anyone it can see within
+        /// <paramref name="seeing"/> tiles (and only if it can walk straight to them: it doesn't break in).
+        /// </summary>
+        public void Camp(Vector2 at, float radius, float seeing, bool atBase = false)
+        {
+            AtBase = atBase;
+            campAt = at;
+            campRadius = Mathf.Max(1f, radius);
+            sight = Mathf.Max(ChaseRange, seeing);
+            wanderAt = 0f;
+        }
+
+        /// <summary>Stops camping: it makes for the kingdom like the rest.</summary>
+        public void StopCamping()
+        {
+            campRadius = 0f;
+            AtBase = false;
+        }
+
         public ZombieConfig Config { get; private set; }
         public Health Health { get; private set; }
         public Vector2 Position => position;
@@ -140,7 +168,7 @@ namespace KingdomGame.Zombies
             if (Time.time >= thinkAt)
             {
                 thinkAt = Time.time + Random.Range(0.2f, 0.35f);
-                prey = director.FindPrey(position, ChaseRange);
+                prey = director.FindPrey(position, Camping ? sight : ChaseRange);
             }
             if (prey != null && prey.Dead) prey = null;
 
@@ -166,6 +194,17 @@ namespace KingdomGame.Zombies
                         return;
                     }
                 }
+            }
+            else if (Camping)
+            {
+                // Milling about its spot: a new place to shuffle to now and then.
+                if (Time.time >= wanderAt || (wanderTo - position).sqrMagnitude < 0.25f)
+                {
+                    wanderAt = Time.time + Random.Range(3f, 7f);
+                    wanderTo = campAt + Random.insideUnitCircle * campRadius;
+                }
+                want = (wanderTo - position) * 0.5f;
+                if (want.sqrMagnitude > 0.25f) want = want.normalized * 0.5f;
             }
             else if (director.NextStep(position, out var next, out bool blocked))
             {

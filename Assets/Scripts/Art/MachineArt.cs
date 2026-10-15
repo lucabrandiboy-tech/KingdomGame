@@ -6,7 +6,7 @@ namespace KingdomGame.Art
     public static partial class FurnitureArt
     {
         public const string Smelter = "Machine/Smelter", Generator = "Machine/Generator", Sawmill = "Machine/Sawmill",
-            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight", TreeFarm = "Machine/TreeFarm", Lever = "Machine/Lever", ShelterFlag = "Machine/ShelterFlag";
+            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight", TreeFarm = "Machine/TreeFarm", Lever = "Machine/Lever", ShelterFlag = "Machine/ShelterFlag", ZombieNest = "Zombie/Nest";
 
         static readonly Color32 Soot = PixelImage.Rgb(38, 34, 32);
         static readonly Color32 Rust = PixelImage.Rgb(120, 70, 44);
@@ -131,6 +131,32 @@ namespace KingdomGame.Art
             Block(img, t, 0.5f, 0.42f, 0.88f, 0.62f, PixelImage.Rgb(40, 80, 170), 0.9f, 0.01f, Surface.Cloth, 1502u);   // the banner
             Block(img, t, 0.52f, 0.5f, 0.86f, 0.54f, PixelImage.Rgb(230, 200, 90), 0.92f, 0f, Surface.Cloth, 1503u);     // a gold stripe
             Round(img, t, 0.5f, 0.52f, 0.05f, Oak, 1.1f, 0.03f, Surface.Wood, 1504u);                                  // the pole
+            return Finish(img, t, 0);
+        }
+
+        // A zombie base: a heap of rubble, broken planks and bones round a dark, wet pit.
+        static PixelImage DrawZombieNest(int ppu)
+        {
+            float t = ppu;
+            var img = Canvas(3f, 3f, t);
+            var dice = new Dice(1511u);
+            Round(img, t, 1.5f, 1.5f, 1.35f, PixelImage.Rgb(52, 44, 38), 0.25f, 0.2f, Surface.Stone, 1512u);   // the mound
+            for (int i = 0; i < 16; i++)
+            {
+                float a = dice.Range(0f, Mathf.PI * 2f), r = dice.Range(0.6f, 1.25f);
+                Round(img, t, 1.5f + Mathf.Cos(a) * r, 1.5f + Mathf.Sin(a) * r, dice.Range(0.07f, 0.16f),
+                    PixelImage.Scale(Granite, dice.Range(0.55f, 0.85f)), 0.35f, 0.05f, Surface.Stone, 1513u + (uint)i);
+            }
+            for (int i = 0; i < 7; i++)
+            {
+                float a = dice.Range(0f, Mathf.PI * 2f), r = dice.Range(0.5f, 1.1f), b = a + dice.Range(-1f, 1f);
+                float x = 1.5f + Mathf.Cos(a) * r, y = 1.5f + Mathf.Sin(a) * r;
+                bool bone = i % 2 == 0;
+                Rod(img, t, x, y, x + Mathf.Cos(b) * 0.35f, y + Mathf.Sin(b) * 0.35f, bone ? 0.025f : 0.04f,
+                    bone ? PixelImage.Rgb(196, 186, 160) : PixelImage.Scale(Oak, 0.7f), 0.4f, 0.38f);
+            }
+            Round(img, t, 1.5f, 1.5f, 0.55f, PixelImage.Rgb(30, 18, 16), 0.05f, 0f, Surface.Plain, 1531u);   // the pit
+            Round(img, t, 1.45f, 1.55f, 0.32f, PixelImage.Rgb(70, 16, 14), 0.06f, 0f, Surface.Plain, 1532u);  // dark ooze
             return Finish(img, t, 0);
         }
 

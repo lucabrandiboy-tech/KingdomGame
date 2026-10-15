@@ -47,6 +47,8 @@ namespace KingdomGame.World
         /// <summary>The game being hosted (its players are saved too), or null.</summary>
         public Networking.NetHost Host { get; set; }
         OthersSave loadedOthers;
+        /// <summary>The zombie bases (survival), saved with the game, or null.</summary>
+        public Zombies.ZombieBases Bases { get; set; }
 
         public void Setup(GameContent gameContent, GameMode gameMode, int mapSeed, Kingdom owner, RulerController rulerController,
             Research tech, DayNightCycle clock, SurvivalDirector survival, ZombieDirector zombieDirector, PixelWorld pixelWorld)
@@ -266,6 +268,11 @@ namespace KingdomGame.World
             // The players who joined (their kingdoms and where they are). If hosting didn't start this time,
             // the ones from the save are kept as they were.
             data.others = Host != null && Host.Core != null ? OthersSave.From(Host.Core) : loadedOthers ?? new OthersSave();
+            // Experience and the villagers' upgrades; the zombie bases.
+            data.xp = kingdom.Xp;
+            data.upgrades = kingdom.UpgradeLevels();
+            if (Bases != null)
+                foreach (var (at, health) in Bases.Saved()) data.zombieBases.Add(new ZombieBaseSave { position = at, health = health });
             if (waves != null)
             {
                 data.hasSurvival = true;
@@ -426,6 +433,9 @@ namespace KingdomGame.World
             var rulerAt = Reachable(data.ruler.position, true);
             ruler.Restore(rulerAt, kingdom.PlaceAt(rulerAt), data.ruler.onWalls, data.ruler.health, data.ruler.backpack);
 
+            kingdom.RestoreUpgrades(data.xp, data.upgrades);
+            if (Bases != null && data.zombieBases != null)
+                foreach (var b in data.zombieBases) Bases.Place(b.position, b.health);
             if (waves != null && data.hasSurvival)
             {
                 var s = data.survival;

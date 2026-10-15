@@ -73,7 +73,26 @@ namespace KingdomGame.Zombies
         public IReadOnlyList<Zombie> Zombies => zombies;
         /// <summary>Free build: F9 sends a small horde, to try traps and towers on.</summary>
         public bool TestHordeKey { get; set; }
+        /// <summary>Places zombies live away from the kingdom (bases): the paths window always covers them.</summary>
+        public readonly List<Vector2> KeepInView = new List<Vector2>();
+
+        /// <summary>Works out the window and paths again now (a zombie base appeared or went).</summary>
+        public void Rewindow()
+        {
+            fieldAt = 0f;
+            RefreshField();
+        }
         public int Alive => zombies.Count;
+        /// <summary>Zombies out to get the kingdom (waves, and sieges): not the ones camping at their bases.</summary>
+        public int Attacking
+        {
+            get
+            {
+                int n = 0;
+                foreach (var z in zombies) if (z != null && !z.Camping) n++;
+                return n;
+            }
+        }
         public int Kills { get; private set; }
         /// <summary>Puts back the kill count from a saved game.</summary>
         public void RestoreKills(int kills) => Kills = Mathf.Max(0, kills);
@@ -127,6 +146,8 @@ namespace KingdomGame.Zombies
             var center = kingdom != null && kingdom.Throne != null ? kingdom.Throne.Center : fullMap.center;
             float r = SpawnRadius(center, 14f) + 16f;
             var want = Snap(new Rect(center.x - r, center.y - r, r * 2f, r * 2f));
+            // Zombie bases and their camps (they live out there, so the ground there has to be known).
+            foreach (var p in KeepInView) want = Union(want, Snap(new Rect(p.x - 16f, p.y - 16f, 32f, 32f)));
             if (ruler != null && rulerHealth != null && !rulerHealth.Dead && (kingdom == null || kingdom.PlaceAt((Vector2)ruler.transform.position) == null))
             {
                 var at = CellOf(ruler.transform.position);
@@ -168,7 +189,7 @@ namespace KingdomGame.Zombies
             if (field == null) return;
             // The paths are only worked out while there are zombies to follow them (finding a
             // spawn point works them out first): on a big map it's a lot of work.
-            if (zombies.Count > 0 && (Time.time >= fieldAt || (fieldDirty && Time.time >= fieldAt - FieldSeconds + 0.1f)))
+            if ((zombies.Count > 0 || KeepInView.Count > 0) && (Time.time >= fieldAt || (fieldDirty && Time.time >= fieldAt - FieldSeconds + 0.1f)))
                 RefreshField();
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
@@ -572,16 +593,16 @@ namespace KingdomGame.Zombies
             return best;
         }
 
-        /// <summary>The closest zombie within <paramref name="range"/> tiles that can see <paramref name="from"/> (villagers run from it).</summary>
         /// <summary>Whether any zombie is within <paramref name="range"/> tiles of <paramref name="at"/>.</summary>
         public bool AnyWithin(Vector2 at, float range)
         {
             float r2 = range * range;
             foreach (var z in zombies)
-                if (z != null && (z.Position - at).sqrMagnitude <= r2) return true;
+                if (z != null && !z.AtBase && (z.Position - at).sqrMagnitude <= r2) return true;
             return false;
         }
 
+        /// <summary>The closest zombie within <paramref name="range"/> tiles that can see <paramref name="from"/> (villagers run from it).</summary>
         public Zombie NearestVisible(Vector2 from, float range)
         {
             Zombie best = null;

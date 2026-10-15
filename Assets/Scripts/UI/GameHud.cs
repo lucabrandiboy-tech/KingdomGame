@@ -78,7 +78,11 @@ namespace KingdomGame.UI
             builder = build;
             rig = cameraRig;
             waves = survival;
+            if (kingdom != null) kingdom.Notice += text => { notice = text; noticeUntil = Time.unscaledTime + 6f; };
         }
+
+        string notice;
+        float noticeUntil;
 
         void Update()
         {
@@ -256,6 +260,8 @@ namespace KingdomGame.UI
         void DrawAnnouncement(int font)
         {
             string message = waves != null ? waves.Announcement : null;
+            // The kingdom's own news (a zombie base, an upgrade) when there's no wave news.
+            if (string.IsNullOrEmpty(message) && notice != null && Time.unscaledTime < noticeUntil) message = notice;
             if (string.IsNullOrEmpty(message)) return;
             float width = Mathf.Min(Screen.width - font * 4f, font * 40f);
             var rect = new Rect((Screen.width - width) / 2f, Screen.height * 0.14f, width, font * 5f);

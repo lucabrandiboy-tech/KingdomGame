@@ -55,7 +55,7 @@ namespace KingdomGame.UI
 
             var jobs = Jobs.Listed;
             float row = font * 2.6f;
-            float w = Mathf.Min(Screen.width - 40f, font * 40f), h = font * 7f + row * (jobs.Length + 1);
+            float w = Mathf.Min(Screen.width - 40f, font * 40f), h = font * 7f + row * (jobs.Length + 1) + font * 2.6f * (Kingdom.UpgradeKinds + 1);
             var panel = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
             GUI.Box(panel, GUIContent.none);
             GUI.Box(panel, GUIContent.none);   // twice: darker
@@ -102,6 +102,22 @@ namespace KingdomGame.UI
             GUI.Label(new Rect(x, y, inner, font * 3f),
                 "Gatherers carry what they get to the nearest storehouse or chest. Plant trees and berry bushes on the " +
                 "Farming tab (throne view) so the wood and food keep coming: planted trees grow back after they're cut.", small);
+            y += font * 3.2f;
+
+            // Upgrades bought with experience (XP, from destroying zombie bases): 5% better each level, dearer each time.
+            GUI.Label(new Rect(x, y, inner, font * 1.8f), $"<b>Upgrades</b>   XP: <b>{kingdom.Xp}</b>   <size={Mathf.RoundToInt(font * 0.85f)}>(destroy zombie bases for XP)</size>", text);
+            y += font * 2f;
+            for (int i = 0; i < Kingdom.UpgradeKinds; i++)
+            {
+                var u = (Kingdom.Upgrade)i;
+                int level = kingdom.Level(u), cost = kingdom.UpgradeCost(u);
+                string what = u == Kingdom.Upgrade.Speed ? "Walking speed" : u == Kingdom.Upgrade.Gathering ? "Gathering and digging" : "Crafting";
+                GUI.Label(new Rect(x, y, inner * 0.55f, font * 1.8f), $"<b>{what}</b>: +{Mathf.RoundToInt(Kingdom.PerLevel * 100f * level)}% (level {level})", text);
+                GUI.enabled = kingdom.Xp >= cost;
+                if (GUI.Button(new Rect(x + inner * 0.58f, y, inner * 0.42f, font * 1.8f), $"+5% for {cost} XP", button)) kingdom.BuyUpgrade(u);
+                GUI.enabled = true;
+                y += font * 2.2f;
+            }
         }
     }
 }

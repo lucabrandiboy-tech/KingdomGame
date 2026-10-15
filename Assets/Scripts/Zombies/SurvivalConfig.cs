@@ -16,6 +16,26 @@ namespace KingdomGame.Zombies
         [Min(0)] public int startStone = 200;
         [Min(0)] public int startFood = 60;
 
+        [Header("Zombie bases")]
+        [Tooltip("A new zombie base appears every this many days (at dawn), up to Max Bases.")]
+        [Min(1)] public int baseEveryDays = 2;
+        [Min(0)] public int maxBases = 3;
+        [Tooltip("How far from the throne bases go (tiles): never near where you started.")]
+        [Min(20)] public float baseMinDistance = 70f;
+        [Min(20)] public float baseMaxDistance = 140f;
+        [Min(1)] public float baseHealth = 1500f;
+        [Tooltip("Zombies camping round each base (more come back when they're killed).")]
+        [Min(0)] public int baseCampers = 6;
+        [Tooltip("Seconds between new campers.")]
+        [Min(1)] public float baseCamperSeconds = 40f;
+        [Tooltip("Chance each night that a base besieges the kingdom: a crowd camps just outside, going for anyone who comes out.")]
+        [Range(0, 1)] public float siegeChance = 0.35f;
+        [Min(1)] public int siegeZombies = 14;
+        [Tooltip("Seconds a siege lasts before the crowd goes home.")]
+        [Min(10)] public float siegeSeconds = 240f;
+        [Tooltip("Experience for destroying a base (spent on villager upgrades: V).")]
+        [Min(0)] public int baseXp = 100;
+
         [Header("Waves")]
         [Tooltip("The kinds of zombie that come.")]
         public ZombieConfig[] zombies = new ZombieConfig[0];

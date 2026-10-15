@@ -424,7 +424,7 @@ namespace KingdomGame.Villagers
                 return;
             }
             Vector2 here = transform.position;
-            float step = config.moveSpeed * Time.deltaTime;
+            float step = config.moveSpeed * kingdom.Boost(Kingdom.Upgrade.Speed) * Time.deltaTime;
             var to = target - here;
             if (to.magnitude <= step)
             {
@@ -490,14 +490,14 @@ namespace KingdomGame.Villagers
                 {
                     var toBench = bench.Cells.center - Position;
                     if (toBench.sqrMagnitude > 0.0001f) facing = toBench.normalized;
-                    kingdom.Armory.Work(Time.deltaTime * config.workRate);
+                    kingdom.Armory.Work(Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Crafting));
                     return;
                 }
                 case Task.Dig:
                 {
                     var toRock = (Vector2)digCell + new Vector2(0.5f, 0.5f) - Position;
                     if (toRock.sqrMagnitude > 0.0001f) facing = toRock.normalized;
-                    digClock += Time.deltaTime * config.workRate;
+                    digClock += Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Gathering);
                     if (digClock < mine.Config.digSeconds) return;
                     if (mine.Dig(digCell, out var type, out int amount))
                     {
@@ -513,7 +513,7 @@ namespace KingdomGame.Villagers
                 {
                     var toNode = (Vector2)node.transform.position - Position;
                     if (toNode.sqrMagnitude > 0.0001f) facing = toNode.normalized;
-                    gatherClock += Time.deltaTime * config.workRate;
+                    gatherClock += Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Gathering);
                     if (gatherClock < node.Config.secondsPerHit) return;
                     gatherClock -= node.Config.secondsPerHit;
                     if (carryAmount > 0 && carryType != node.Config.resource) { Idle(); return; }

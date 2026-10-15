@@ -142,11 +142,20 @@ namespace KingdomGame.World
                 waves.Setup(content.survival, zombies, kingdom, dayNight);
                 rulerController.Health.Died += _ => waves.RulerFell();
             }
+            // Zombie bases out in the wild (survival): camps, sieges, and XP when they're destroyed.
+            ZombieBases zombieBases = null;
+            if (survival && zombies != null)
+            {
+                zombieBases = new GameObject("Zombie bases").AddComponent<ZombieBases>();
+                zombieBases.transform.SetParent(transform, false);
+                zombieBases.Setup(content.survival, zombies, kingdom, dayNight);
+            }
 
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
             var saves = gameObject.AddComponent<SaveSystem>();
             saves.Hosted = hosting;
+            saves.Bases = zombieBases;
             saves.Setup(content, Mode, seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
             if (saved != null) saves.Restore(saved);
             // Continuing failed: this new game mustn't save over the save on its own.

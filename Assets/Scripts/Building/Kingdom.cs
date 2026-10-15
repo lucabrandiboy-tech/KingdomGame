@@ -1397,6 +1397,54 @@ namespace KingdomGame.Building
             return far != null && !far.Empty ? far : best;
         }
 
+        // ------------------------------------------- experience and upgrades --
+
+        /// <summary>What villagers can be made better at with experience (from destroying zombie bases).</summary>
+        public enum Upgrade { Speed, Gathering, Crafting }
+        public const int UpgradeKinds = 3;
+        /// <summary>Each level makes villagers this much better (5%).</summary>
+        public const float PerLevel = 0.05f;
+
+        readonly int[] upgradeLevels = new int[UpgradeKinds];
+        public int Xp { get; private set; }
+        /// <summary>Something worth a message on screen (a base destroyed, an upgrade bought).</summary>
+        public event Action<string> Notice;
+
+        public int Level(Upgrade u) => upgradeLevels[(int)u];
+        /// <summary>Experience for the next level: more each time (100, 135, 182, 246...).</summary>
+        public int UpgradeCost(Upgrade u) => Mathf.RoundToInt(100f * Mathf.Pow(1.35f, Level(u)));
+        /// <summary>How much faster villagers are at it: 1 + 5% a level (and furniture that helps, later).</summary>
+        public float Boost(Upgrade u) => 1f + PerLevel * Level(u);
+
+        /// <summary>Puts a message on screen.</summary>
+        public void Report(string text) => Notice?.Invoke(text);
+
+        public void AddXp(int amount, string why)
+        {
+            if (amount <= 0) return;
+            Xp += amount;
+            Notice?.Invoke($"{why}: +{amount} XP (V to spend it on villager upgrades)");
+        }
+
+        public bool BuyUpgrade(Upgrade u)
+        {
+            int cost = UpgradeCost(u);
+            if (Xp < cost) return false;
+            Xp -= cost;
+            upgradeLevels[(int)u]++;
+            Notice?.Invoke($"Villager {u.ToString().ToLowerInvariant()} is now +{Mathf.RoundToInt(PerLevel * 100f * Level(u))}%");
+            return true;
+        }
+
+        /// <summary>Puts back saved experience and upgrade levels.</summary>
+        public void RestoreUpgrades(int xp, int[] levels)
+        {
+            Xp = Mathf.Max(0, xp);
+            for (int i = 0; i < UpgradeKinds; i++) upgradeLevels[i] = levels != null && i < levels.Length ? Mathf.Max(0, levels[i]) : 0;
+        }
+
+        public int[] UpgradeLevels() => (int[])upgradeLevels.Clone();
+
         // ------------------------------------------------------------ shelter --
 
         /// <summary>How near the throne zombies have to be before villagers go to shelter (tiles).</summary>

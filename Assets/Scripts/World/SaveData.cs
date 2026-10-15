@@ -46,6 +46,17 @@ namespace KingdomGame.World
         public SurvivalSave survival = new SurvivalSave();
         /// <summary>A hosted game: the players who joined it (their kingdoms, and where they were).</summary>
         public OthersSave others = new OthersSave();
+        /// <summary>Experience (from zombie bases) and the villagers' upgrade levels (speed, gathering, crafting).</summary>
+        public int xp;
+        public int[] upgrades = new int[0];
+        public List<ZombieBaseSave> zombieBases = new List<ZombieBaseSave>();
+    }
+
+    [Serializable]
+    public sealed class ZombieBaseSave
+    {
+        public Vector2 position;
+        public float health;
     }
 
     /// <summary>The players who joined a hosted world or a server: their kingdoms' spots, and each player.</summary>

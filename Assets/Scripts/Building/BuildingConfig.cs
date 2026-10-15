@@ -113,6 +113,8 @@ namespace KingdomGame.Building
         public bool leverGate;
         [Tooltip("A lever: E at it opens or shuts the lever gates near it.")]
         public bool lever;
+        [Tooltip("A shelter flag: when zombies come near, villagers (but guards) drop what they're doing and wait here till they've gone.")]
+        public bool shelter;
         [Tooltip("A ladder or stairs: it leans on the wall it faces, and the ruler climbs up there with E.")]
         public bool climb;
 

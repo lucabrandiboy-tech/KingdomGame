@@ -218,3 +218,14 @@ zombies have to break them down (1,200 and 3,000 hit points). Run Build Game Sce
 
 Test: build a ring of wall with a lever gate and a lever inside. Open the gate and call a horde
 (N): they should all head for the gate. Shut it: they should start hitting the walls or the gate.
+
+## Shelter flag: where villagers go when zombies come (added later)
+
+**Shelter flag** (Furniture tab). Put one where your villagers will be safe: inside a house, in a
+walled keep. When zombies come within 90 tiles of the throne (a horde at night, or the test horde
+F9), every villager except guards drops what they're doing and goes to the nearest shelter flag,
+then waits there. When the zombies are gone (or far off), they go back to work. With no flag they
+carry on as before (running from zombies they see).
+
+Test: build a house, put a shelter flag inside, call a horde (N or F9): villagers should walk into
+the house and stay till the zombies are dead.

@@ -6,7 +6,7 @@ namespace KingdomGame.Art
     public static partial class FurnitureArt
     {
         public const string Smelter = "Machine/Smelter", Generator = "Machine/Generator", Sawmill = "Machine/Sawmill",
-            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight", TreeFarm = "Machine/TreeFarm", Lever = "Machine/Lever";
+            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight", TreeFarm = "Machine/TreeFarm", Lever = "Machine/Lever", ShelterFlag = "Machine/ShelterFlag";
 
         static readonly Color32 Soot = PixelImage.Rgb(38, 34, 32);
         static readonly Color32 Rust = PixelImage.Rgb(120, 70, 44);
@@ -119,6 +119,18 @@ namespace KingdomGame.Art
             Rod(img, t, 0.5f, 0.5f, 0.78f, 0.78f, 0.035f, PixelImage.Rgb(80, 80, 84), 0.2f, 0.6f);
             Round(img, t, 0.79f, 0.79f, 0.07f, PixelImage.Rgb(170, 40, 34), 0.62f, 0.03f, Surface.Plain, 1492u);
             for (int i = 0; i < 5; i++) Stud(img, t, 0.32f - i * 0.06f, 0.5f, 0.018f, Iron, 0.1f);   // the chain
+            return Finish(img, t, 0);
+        }
+
+        // A shelter flag: a pole in a stone base with a blue banner (seen from above).
+        static PixelImage DrawShelterFlag(int ppu)
+        {
+            float t = ppu;
+            var img = Canvas(1f, 1f, t);
+            Round(img, t, 0.5f, 0.5f, 0.2f, Granite, 0.12f, 0.04f, Surface.Stone, 1501u);
+            Block(img, t, 0.5f, 0.42f, 0.88f, 0.62f, PixelImage.Rgb(40, 80, 170), 0.9f, 0.01f, Surface.Cloth, 1502u);   // the banner
+            Block(img, t, 0.52f, 0.5f, 0.86f, 0.54f, PixelImage.Rgb(230, 200, 90), 0.92f, 0f, Surface.Cloth, 1503u);     // a gold stripe
+            Round(img, t, 0.5f, 0.52f, 0.05f, Oak, 1.1f, 0.03f, Surface.Wood, 1504u);                                  // the pole
             return Finish(img, t, 0);
         }
 

@@ -31,7 +31,7 @@ namespace KingdomGame.Villagers
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -59,6 +59,7 @@ namespace KingdomGame.Villagers
         Defenses.Defense post;   // the tower it guards
         MineLevel mine;          // the mine it's digging in
         Furniture bench;         // the anvil it's making weapons at
+        Furniture shelter;       // the shelter flag it's going to or waiting at
         Vector2Int digCell;
         float digClock;
         bool onPost;             // up on it
@@ -107,6 +108,7 @@ namespace KingdomGame.Villagers
                     case Task.Flee: return "running from zombies";
                     case Task.Dig: return "digging";
                     case Task.Craft: return "making weapons";
+                    case Task.Shelter: return "sheltering from the zombies";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
                     case Task.Gather: return node != null ? $"gathering {node.Config.resource.ToString().ToLowerInvariant()}" : "gathering";
                     default: return Scared ? "hiding" : "idle";
@@ -174,6 +176,17 @@ namespace KingdomGame.Villagers
             level.Claim(cell, this);
             task = Task.Dig;
             if (Walk(new RectInt(cell, Vector2Int.one), true)) return true;
+            Idle();
+            return false;
+        }
+
+        /// <summary>Zombies are about: go to the shelter flag and wait there till they're gone.</summary>
+        public bool StartShelter(Furniture flag)
+        {
+            if (flag == null) return false;
+            shelter = flag;
+            task = Task.Shelter;
+            if (Walk(flag.Cells, true)) return true;
             Idle();
             return false;
         }
@@ -336,6 +349,12 @@ namespace KingdomGame.Villagers
                 var director = ZombieDirector.Current;
                 var zombie = director != null && job != Job.Guard ? director.NearestVisible(Position, config.fleeDistance) : null;
                 if (zombie != null) Flee(zombie.Position);
+                // Zombies about: drop the job and make for the shelter (the kingdom sends it there).
+                else if (job != Job.Guard && task != Task.Shelter && task != Task.Flee && kingdom.ShelterNow && kingdom.HasShelter)
+                {
+                    Abandon();
+                    thinkAt = Time.time;
+                }
             }
 
             if (task == Task.Idle)
@@ -362,6 +381,11 @@ namespace KingdomGame.Villagers
             else if (task == Task.Craft && (bench == null || kingdom.Armory == null || !kingdom.Armory.HasWork))
             {
                 Idle();   // the anvil went, or there's nothing left to make
+                thinkAt = Time.time;
+            }
+            else if (task == Task.Shelter && (shelter == null || !kingdom.ShelterNow))
+            {
+                Idle();   // the zombies have gone (or the flag has): back to work
                 thinkAt = Time.time;
             }
             else if (task == Task.Guard && post == null)
@@ -460,6 +484,8 @@ namespace KingdomGame.Villagers
                 case Task.Guard:
                     if (!onPost) Mount();
                     return;
+                case Task.Shelter:
+                    return;   // waits here
                 case Task.Craft:
                 {
                     var toBench = bench.Cells.center - Position;
@@ -542,6 +568,7 @@ namespace KingdomGame.Villagers
             if (mine != null) mine.Release(digCell, this);
             mine = null;
             bench = null;
+            shelter = null;
             CountAsBuilder(null);
             blueprint = null;
             storage = null;

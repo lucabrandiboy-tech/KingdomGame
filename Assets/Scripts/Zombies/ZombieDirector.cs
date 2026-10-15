@@ -573,6 +573,15 @@ namespace KingdomGame.Zombies
         }
 
         /// <summary>The closest zombie within <paramref name="range"/> tiles that can see <paramref name="from"/> (villagers run from it).</summary>
+        /// <summary>Whether any zombie is within <paramref name="range"/> tiles of <paramref name="at"/>.</summary>
+        public bool AnyWithin(Vector2 at, float range)
+        {
+            float r2 = range * range;
+            foreach (var z in zombies)
+                if (z != null && (z.Position - at).sqrMagnitude <= r2) return true;
+            return false;
+        }
+
         public Zombie NearestVisible(Vector2 from, float range)
         {
             Zombie best = null;

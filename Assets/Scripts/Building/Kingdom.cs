@@ -1397,6 +1397,51 @@ namespace KingdomGame.Building
             return far != null && !far.Empty ? far : best;
         }
 
+        // ------------------------------------------------------------ shelter --
+
+        /// <summary>How near the throne zombies have to be before villagers go to shelter (tiles).</summary>
+        const float ShelterAlarm = 90f;
+        float shelterCheckAt;
+        bool shelterNow;
+
+        /// <summary>Zombies are about near the kingdom: villagers (but guards) wait at a shelter flag.</summary>
+        public bool ShelterNow
+        {
+            get
+            {
+                if (Time.time >= shelterCheckAt)
+                {
+                    shelterCheckAt = Time.time + 0.5f;
+                    var director = Zombies.ZombieDirector.Current;
+                    shelterNow = director != null && Throne != null && director.AnyWithin(Throne.Center, ShelterAlarm);
+                }
+                return shelterNow;
+            }
+        }
+
+        /// <summary>Whether there's a shelter flag to go to.</summary>
+        public bool HasShelter
+        {
+            get
+            {
+                foreach (var f in furniture) if (f != null && f.Config.shelter) return true;
+                return false;
+            }
+        }
+
+        Furniture NearestShelter(Vector2 from)
+        {
+            Furniture best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var f in furniture)
+            {
+                if (f == null || !f.Config.shelter) continue;
+                float d = Travel(from, f.Cells.center);
+                if (d < bestDistance) { bestDistance = d; best = f; }
+            }
+            return best;
+        }
+
         /// <summary>A lever was pulled: every lever gate within its reach opens if it was shut, or shuts. Returns a message.</summary>
         public string PullLever(Furniture lever)
         {
@@ -1441,6 +1486,12 @@ namespace KingdomGame.Building
         public void AssignJob(Villager v)
         {
             float now = Time.time;
+            // Zombies about: everyone but the guards goes to the shelter flag and waits.
+            if (v.Job != Job.Guard && ShelterNow)
+            {
+                var flag = NearestShelter(v.Position);
+                if (flag != null && v.StartShelter(flag)) return;
+            }
             if (v.Job == Job.Crafter && v.CarryAmount == 0)
             {
                 if (Armory != null && Armory.HasWork)

@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 17;
+        const int SettingsVersion = 18;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -97,7 +97,7 @@ namespace KingdomGame.EditorTools
             bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 16;
             bool costlyAges = oldContent != null && oldContent.settingsVersion < 16;
             bool darkNights = oldContent != null && oldContent.settingsVersion < 16;
-            bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 17;
+            bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 18;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -453,9 +453,9 @@ namespace KingdomGame.EditorTools
                 var list = new List<BuildingConfig>(content.buildMenu);
                 int at = list.FindLastIndex(b => b != null && b.kind == BuildingKind.Door);
                 foreach (var g in castle)
-                    if (g != null && (g.kind == BuildingKind.Door || g.lever) && !list.Contains(g)) list.Insert(at >= 0 ? ++at : list.Count, g);
+                    if (g != null && (g.kind == BuildingKind.Door || g.lever || g.shelter) && !list.Contains(g)) list.Insert(at >= 0 ? ++at : list.Count, g);
                 content.buildMenu = list.ToArray();
-                Debug.Log("Added the big gates, the lever castle gate and its lever (Walls & doors tab). Your other settings were kept.");
+                Debug.Log("Added the big gates, the lever castle gate and its lever (Walls & doors tab), and the shelter flag (Furniture tab). Your other settings were kept.");
             }
             if (machinesUpdate)
             {
@@ -571,6 +571,12 @@ namespace KingdomGame.EditorTools
                     b.displayName = "Gate lever"; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Walls; b.art = FurnitureArt.Lever;
                     b.size = Vector2Int.one; b.rotations = 1; b.woodCost = 10; b.stoneCost = 20; b.buildSeconds = 5f; b.health = 200f;
                     b.height = 0.4f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None; b.lever = true;
+                }),
+                Asset<BuildingConfig>("Building/Furniture/ShelterFlag", b =>
+                {
+                    b.displayName = "Shelter flag"; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Furniture; b.art = FurnitureArt.ShelterFlag;
+                    b.size = Vector2Int.one; b.rotations = 1; b.woodCost = 6; b.foodCost = 4; b.buildSeconds = 3f; b.health = 100f;
+                    b.height = 1.1f; b.blocksMovement = false; b.dragToPlaceLines = false; b.roomTag = RoomTag.None; b.shelter = true;
                 }),
                 Climb("Ladder", "Ladder", FurnitureArt.Ladder, 6, 0, 2f, 60f),
                 Climb("StoneStairs", "Stone stairs", FurnitureArt.StoneStairs, 0, 20, 6f, 400f),

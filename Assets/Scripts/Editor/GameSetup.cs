@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 16;
+        const int SettingsVersion = 17;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -97,7 +97,7 @@ namespace KingdomGame.EditorTools
             bool machinesUpdate = oldContent != null && oldContent.settingsVersion < 16;
             bool costlyAges = oldContent != null && oldContent.settingsVersion < 16;
             bool darkNights = oldContent != null && oldContent.settingsVersion < 16;
-            bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 14;
+            bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 17;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -453,9 +453,9 @@ namespace KingdomGame.EditorTools
                 var list = new List<BuildingConfig>(content.buildMenu);
                 int at = list.FindLastIndex(b => b != null && b.kind == BuildingKind.Door);
                 foreach (var g in castle)
-                    if (g != null && g.kind == BuildingKind.Door && !list.Contains(g)) list.Insert(at >= 0 ? ++at : list.Count, g);
+                    if (g != null && (g.kind == BuildingKind.Door || g.lever) && !list.Contains(g)) list.Insert(at >= 0 ? ++at : list.Count, g);
                 content.buildMenu = list.ToArray();
-                Debug.Log("Added the wooden gate and castle gate (Walls & doors tab). Your other settings were kept.");
+                Debug.Log("Added the big gates, the lever castle gate and its lever (Walls & doors tab). Your other settings were kept.");
             }
             if (machinesUpdate)
             {
@@ -565,6 +565,13 @@ namespace KingdomGame.EditorTools
                 Door("HeavyDoor", "Heavy door", FurnitureArt.HeavyDoor, 30, 20, 8f, 700f),
                 Gate("WoodGate", "Wooden gate (3 wide)", FurnitureArt.WoodGate, 3, 90, 20, 25f, 1200f),
                 Gate("CastleGate", "Castle gate (4 wide)", FurnitureArt.CastleGate, 4, 160, 200, 60f, 3000f),
+                LeverGate(Gate("LeverGate", "Lever castle gate (3 wide)", FurnitureArt.LeverGate, 3, 140, 220, 60f, 3500f)),
+                Asset<BuildingConfig>("Building/Doors/Lever", b =>
+                {
+                    b.displayName = "Gate lever"; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Walls; b.art = FurnitureArt.Lever;
+                    b.size = Vector2Int.one; b.rotations = 1; b.woodCost = 10; b.stoneCost = 20; b.buildSeconds = 5f; b.health = 200f;
+                    b.height = 0.4f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None; b.lever = true;
+                }),
                 Climb("Ladder", "Ladder", FurnitureArt.Ladder, 6, 0, 2f, 60f),
                 Climb("StoneStairs", "Stone stairs", FurnitureArt.StoneStairs, 0, 20, 6f, 400f),
                 Asset<BuildingConfig>("Building/Floors/WoodFloor", b =>
@@ -762,7 +769,7 @@ namespace KingdomGame.EditorTools
                     b.displayName = displayName; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Industry; b.art = art;
                     b.size = new Vector2Int(size, size); b.rotations = 1; b.woodCost = wood; b.stoneCost = stone; b.steelCost = steel;
                     b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = !flat; b.flat = flat;
-                    b.dragToPlaceLines = flat; b.roomTag = RoomTag.Workshop; b.machine = machine;
+                    b.dragToPlaceLines = flat; b.roomTag = RoomTag.None; b.machine = machine;
                 });
             // Bronze Age: a tree farm that keeps trees planted round it (they grow back when cut, so a sawmill or woodcutters never run out).
             var bronze = new List<BuildingConfig>
@@ -1020,6 +1027,16 @@ namespace KingdomGame.EditorTools
                 b.size = new Vector2Int(width, 1); b.rotations = 2; b.woodCost = wood; b.stoneCost = stone; b.buildSeconds = seconds;
                 b.health = health; b.height = 0.25f; b.blocksMovement = true; b.dragToPlaceLines = false; b.roomTag = RoomTag.None;
             });
+
+        static BuildingConfig LeverGate(BuildingConfig b)
+        {
+            if (!b.leverGate)
+            {
+                b.leverGate = true;   // (set every time: an asset made before this field existed gets it too)
+                EditorUtility.SetDirty(b);
+            }
+            return b;
+        }
 
         // A ladder or stairs: leans on the wall it faces; the ruler climbs onto the wall there (E).
         static BuildingConfig Climb(string file, string displayName, string art, int wood, int stone, float seconds, float health) =>

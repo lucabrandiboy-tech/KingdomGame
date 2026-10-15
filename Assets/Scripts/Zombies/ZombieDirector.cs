@@ -23,6 +23,11 @@ namespace KingdomGame.Zombies
     {
         /// <summary>Breaking through this much door, wall or furniture health is worth about one tile of walking round.</summary>
         const float HealthPerTile = 8f;
+        /// <summary>
+        /// What breaking through anything (a wall, a closed door, furniture) costs on top of its strength, in tiles of
+        /// walking: more than any walk across a kingdom's lands, so zombies only break in where there's no open way.
+        /// </summary>
+        const float MustBreak = 10000f;
         const float FieldSeconds = 0.3f;
         /// <summary>Zombies would rather go for the ruler: a villager has to be this many tiles closer.</summary>
         const float VillagerHeadStart = 2f;
@@ -407,23 +412,23 @@ namespace KingdomGame.Zombies
                     if (!map.Contains(cell)) continue;
                     var wall = world.ChunkAt(cell)?.Owner;
                     float left = wall != null ? wall.SiegeHealthLeft / Mathf.Max(1, wall.Cells.width * wall.Cells.height) : 0f;
-                    Set(cell, 1.5f + left / HealthPerTile);
+                    Set(cell, MustBreak + left / HealthPerTile);
                 }
             if (kingdom == null) return;
             // The throne can't be broken; storehouses, chests, doors and furniture can.
             if (kingdom.Throne != null) SetArea(kingdom.Throne.Cells, 0f);
             foreach (var s in kingdom.Storages)
-                if (s != null) SetArea(s.Cells, s.Health != null ? 1.5f + s.Health.Current / HealthPerTile : 0f);
+                if (s != null) SetArea(s.Cells, s.Health != null ? MustBreak + s.Health.Current / HealthPerTile : 0f);
             foreach (var d in kingdom.Doors)
-                if (d != null) SetArea(d.Cells, d.IsOpen || d.Health == null ? 1f : 1.5f + d.Health.Current / HealthPerTile);
+                if (d != null) SetArea(d.Cells, d.IsOpen || d.Health == null ? 1f : MustBreak + d.Health.Current / HealthPerTile);
             foreach (var house in kingdom.Houses)
-                if (house != null && house.Health != null) SetArea(house.Cells, 1.5f + house.Health.Current / (HealthPerTile * house.Cells.width * house.Cells.height));
+                if (house != null && house.Health != null) SetArea(house.Cells, MustBreak + house.Health.Current / (HealthPerTile * house.Cells.width * house.Cells.height));
             foreach (var m in kingdom.Mines)
-                if (m != null && m.Health != null) SetArea(m.Cells, 1.5f + m.Health.Current / (HealthPerTile * m.Cells.width * m.Cells.height));
+                if (m != null && m.Health != null) SetArea(m.Cells, MustBreak + m.Health.Current / (HealthPerTile * m.Cells.width * m.Cells.height));
             foreach (var f in kingdom.AllFurniture)
             {
                 if (f == null || !f.Config.blocksMovement || f.Config.flat) continue;
-                SetArea(f.Cells, f.Health != null ? 1.5f + f.Health.Current / HealthPerTile : 0f);
+                SetArea(f.Cells, f.Health != null ? MustBreak + f.Health.Current / HealthPerTile : 0f);
             }
         }
 

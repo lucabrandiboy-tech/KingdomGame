@@ -40,6 +40,7 @@ static partial class Tests
         Run(nameof(FieldGoesRoundAShortWall), FieldGoesRoundAShortWall);
         Run(nameof(FieldPrefersTheDoor), FieldPrefersTheDoor);
         Run(nameof(FieldBreaksInWhenThereIsNoDoor), FieldBreaksInWhenThereIsNoDoor);
+        Run(nameof(FieldWalksTheLongWayRatherThanBreak), FieldWalksTheLongWayRatherThanBreak);
         Run(nameof(FieldCantCrossTheImpossible), FieldCantCrossTheImpossible);
         Run(nameof(FieldHeadStartMakesTargetsLessAttractive), FieldHeadStartMakesTargetsLessAttractive);
         Run(nameof(FieldMatchesDijkstraOnRandomGrids), FieldMatchesDijkstraOnRandomGrids);

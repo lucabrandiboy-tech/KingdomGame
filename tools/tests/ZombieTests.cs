@@ -127,6 +127,25 @@ static partial class Tests
         Check(walls == 1, $"breaks through exactly one wall, got {walls}");
     }
 
+    // With breaking costing more than any walk (ZombieDirector.MustBreak), zombies take the long open way in.
+    static void FieldWalksTheLongWayRatherThanBreak()
+    {
+        var field = Field(new[]
+        {
+            "..............................",
+            ".WWWWWWWWWWWWWWWWWWWWWWWWW..W.",   // the way in: the gap at the far top right
+            ".W..........................W.",
+            ".W.T........................W.",
+            ".W..........................W.",
+            ".WWWWWWWWWWWWWWWWWWWWWWWWWWWW.",
+            "..............................",
+        }, out var targets);
+        for (int i = 0; i < field.Cost.Length; i++) if (field.Cost[i] == 30f) field.Cost[i] = 10030f;
+        field.Compute(targets, null);
+        var walk = Follow(field, 2, 0);
+        foreach (var (x, y) in walk) Check(field.Cost[y * field.Width + x] < 10000f, $"broke through the wall at {x},{y} though the far end is open");
+    }
+
     static void FieldCantCrossTheImpossible()
     {
         var field = Field(new[]

@@ -6,7 +6,7 @@ namespace KingdomGame.Art
     public static partial class FurnitureArt
     {
         public const string Smelter = "Machine/Smelter", Generator = "Machine/Generator", Sawmill = "Machine/Sawmill",
-            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight", TreeFarm = "Machine/TreeFarm";
+            Quarry = "Machine/Quarry", Conveyor = "Machine/Conveyor", ElectricLamp = "Machine/ElectricLamp", Floodlight = "Machine/Floodlight", TreeFarm = "Machine/TreeFarm", Lever = "Machine/Lever";
 
         static readonly Color32 Soot = PixelImage.Rgb(38, 34, 32);
         static readonly Color32 Rust = PixelImage.Rgb(120, 70, 44);
@@ -107,6 +107,18 @@ namespace KingdomGame.Art
                 }
             Block(img, t, 1.3f, 0.22f, 1.8f, 0.4f, Oak, 0.2f, 0.01f, Surface.Wood, 1483u);
             Block(img, t, 1.34f, 0.26f, 1.76f, 0.36f, PixelImage.Rgb(60, 90, 120), 0.18f, 0f, Surface.Plain, 1484u);   // water
+            return Finish(img, t, 0);
+        }
+
+        // A gate lever: an iron base plate with a long handle and a red knob, chains running off to the gate.
+        static PixelImage DrawLever(int ppu)
+        {
+            float t = ppu;
+            var img = Canvas(1f, 1f, t);
+            Block(img, t, 0.3f, 0.3f, 0.7f, 0.7f, Steel, 0.12f, 0.02f, Surface.Metal, 1491u);
+            Rod(img, t, 0.5f, 0.5f, 0.78f, 0.78f, 0.035f, PixelImage.Rgb(80, 80, 84), 0.2f, 0.6f);
+            Round(img, t, 0.79f, 0.79f, 0.07f, PixelImage.Rgb(170, 40, 34), 0.62f, 0.03f, Surface.Plain, 1492u);
+            for (int i = 0; i < 5; i++) Stud(img, t, 0.32f - i * 0.06f, 0.5f, 0.018f, Iron, 0.1f);   // the chain
             return Finish(img, t, 0);
         }
 

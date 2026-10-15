@@ -109,6 +109,10 @@ namespace KingdomGame.Building
         public RoomTag roomTag = RoomTag.Decor;
         [Tooltip("Beds: how many villagers it gives a home (survival: more survivors can join).")]
         [Min(0)] public int sleeps;
+        [Tooltip("Doors: opened and shut only by a lever (E at it): open, zombies walk straight through; shut, it's a wall to them.")]
+        public bool leverGate;
+        [Tooltip("A lever: E at it opens or shuts the lever gates near it.")]
+        public bool lever;
         [Tooltip("A ladder or stairs: it leans on the wall it faces, and the ruler climbs up there with E.")]
         public bool climb;
 

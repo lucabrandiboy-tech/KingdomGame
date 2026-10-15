@@ -51,8 +51,25 @@ namespace KingdomGame.Building
             Health.Died += _ => kingdom?.Broke(this);
         }
 
+        /// <summary>A lever gate: opens it if it's shut, shuts it if it's open. Returns whether it's open now.</summary>
+        public bool Toggle()
+        {
+            SetOpen(!IsOpen);
+            return IsOpen;
+        }
+
+        void SetOpen(bool open)
+        {
+            if (open == IsOpen) return;
+            IsOpen = open;
+            look.sprite = open ? openLook : closedLook;
+            block.enabled = !open;
+            if (shadow != null) shadow.enabled = !open;
+        }
+
         void Update()
         {
+            if (Config.leverGate) return;   // (only its lever opens and shuts it)
             // Open while a friend is near; shut once they've gone and nothing stands in the doorway.
             bool friendNear = false, doorwayBusy = false;
             // (Measured from the door's edge, so a wide gate opens for someone at either end of it.)
@@ -63,12 +80,7 @@ namespace KingdomGame.Building
                 if (h.Team == Team.Friendly && d < OpenDistance - 0.5f) friendNear = true;
                 if (d < h.Radius) doorwayBusy = true;
             }
-            bool open = friendNear || (IsOpen && doorwayBusy);
-            if (open == IsOpen) return;
-            IsOpen = open;
-            look.sprite = open ? openLook : closedLook;
-            block.enabled = !open;
-            if (shadow != null) shadow.enabled = !open;
+            SetOpen(friendNear || (IsOpen && doorwayBusy));
         }
 
         public void Remove() => Destroy(gameObject);

@@ -532,7 +532,7 @@ namespace KingdomGame.Character
             Storage storage = null;
             Blueprint blueprint = null;
             ResourceNode node = null;
-            Furniture ladder = null, anvil = null;
+            Furniture ladder = null, anvil = null, lever = null;
             Place door = null;
             if (kingdom != null)
             {
@@ -560,8 +560,9 @@ namespace KingdomGame.Character
                 foreach (var f in kingdom.AllFurniture)
                 {
                     if (f == null) continue;
-                    if (f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; anvil = null; throne = null; }
-                    else if (f.Config.roomTag == RoomTag.Workshop && Armory != null && OpenArmory != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
+                    if (f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; anvil = null; throne = null; lever = null; }
+                    else if (f.Config.lever && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { lever = f; ladder = null; anvil = null; throne = null; }
+                    else if (f.Config.roomTag == RoomTag.Workshop && f.Config.machine == null && Armory != null && OpenArmory != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
                     { anvil = f; ladder = null; throne = null; }
                 }
                 foreach (var s in kingdom.Storages)
@@ -589,7 +590,12 @@ namespace KingdomGame.Character
                 storage = null;
                 anvil = null;
             }
-            if (ladder != null) UseLadder(kingdom, ladder);
+            if (lever != null && !Visiting)
+            {
+                Hint = "E: pull the lever (opens or shuts the gates near it)";
+                if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) kingdom.PullLever(lever);
+            }
+            else if (ladder != null) UseLadder(kingdom, ladder);
             else if (anvil != null)
             {
                 Hint = $"E: make weapons at the {anvil.Config.displayName.ToLowerInvariant()}";

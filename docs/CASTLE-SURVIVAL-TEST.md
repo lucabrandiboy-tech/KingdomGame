@@ -205,3 +205,16 @@ On the **Walls & doors** tab: **Wooden gate (3 wide)** and **Castle gate (4 wide
 into a wall like a door (leave a gap of 3 or 4 tiles in the wall, or place them over single wall
 tiles; R turns them). They open when you or a villager come near either end and shut behind you;
 zombies have to break them down (1,200 and 3,000 hit points). Run Build Game Scenes first.
+
+## Lever castle gate and zombies' way in (added later)
+
+- **Lever castle gate (3 wide)** and **Gate lever** (Walls & doors tab). The gate doesn't open by
+  itself: walk up to a lever and press **E** to open or shut every lever gate within 12 tiles of it.
+  Open, zombies treat it as open ground and walk straight through; shut, it's a wall to them (they
+  have to smash it: 3,500 hit points).
+- **Zombies only break in when there's no open way**: if any gap leads into your kingdom (an open
+  gate, a hole in the wall), they walk to it, however far round it is. Only when everything is
+  shut do they start smashing walls, doors or furniture.
+
+Test: build a ring of wall with a lever gate and a lever inside. Open the gate and call a horde
+(N): they should all head for the gate. Shut it: they should start hitting the walls or the gate.

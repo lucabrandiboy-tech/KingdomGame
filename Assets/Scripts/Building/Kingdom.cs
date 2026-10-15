@@ -1397,6 +1397,21 @@ namespace KingdomGame.Building
             return far != null && !far.Empty ? far : best;
         }
 
+        /// <summary>A lever was pulled: every lever gate within its reach opens if it was shut, or shuts. Returns a message.</summary>
+        public string PullLever(Furniture lever)
+        {
+            const float Reach = 12f;
+            int opened = 0, shut = 0;
+            foreach (var d in doors)
+            {
+                if (d == null || !d.Config.leverGate || (d.Center - (Vector2)lever.Cells.center).magnitude > Reach) continue;
+                if (d.Toggle()) opened++;
+                else shut++;
+            }
+            if (opened + shut == 0) return $"No lever gate within {Reach:0} tiles";
+            return opened > 0 && shut == 0 ? "The gate opens" : shut > 0 && opened == 0 ? "The gate shuts" : "Gates switched";
+        }
+
         /// <summary>The ruler's weapons and the order book crafters work on (null if there's no armory).</summary>
         public Combat.Armory Armory { get; set; }
 
@@ -1407,7 +1422,7 @@ namespace KingdomGame.Building
             float bestDistance = float.MaxValue;
             foreach (var f in furniture)
             {
-                if (f == null || f.Config.roomTag != RoomTag.Workshop) continue;
+                if (f == null || f.Config.roomTag != RoomTag.Workshop || f.Config.machine != null) continue;   // (anvils, not machines)
                 float d = Travel(from, f.Cells.center);
                 if (d < bestDistance) { bestDistance = d; best = f; }
             }

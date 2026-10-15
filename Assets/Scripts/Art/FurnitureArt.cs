@@ -29,7 +29,8 @@ namespace KingdomGame.Art
             Anvil = "Furniture/Anvil", Crates = "Furniture/Crates", Banner = "Furniture/Banner", Well = "Furniture/Well",
             Ladder = "Furniture/Ladder", StoneStairs = "Furniture/StoneStairs", MineHead = "Building/MineHead";
         public const string WoodFloor = "Floor/Wood", StoneFloor = "Floor/Stone";
-        public const string WoodDoor = "Door/Wood", HeavyDoor = "Door/Heavy", WoodGate = "Door/WoodGate", CastleGate = "Door/CastleGate";
+        public const string WoodDoor = "Door/Wood", HeavyDoor = "Door/Heavy", WoodGate = "Door/WoodGate", CastleGate = "Door/CastleGate",
+            LeverGate = "Door/LeverGate";
 
         /// <summary>Every piece of furniture (the game's building configs refer to these by their art name).</summary>
         public static readonly Piece[] Pieces =

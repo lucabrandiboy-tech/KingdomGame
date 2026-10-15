@@ -51,6 +51,7 @@ namespace KingdomGame.Zombies
         Vector2 spitTo;                    // where its acid will land
         float abilityAt;                   // when it can next spit or scream (or look for someone to)
         float boostUntil, boostSpeed = 1f; // sped up by a screamer's scream
+        float groanAt;                     // when it next groans
         float heldUntil;                   // caught in a trap until then
         float slowKeep = 1f;               // share of its speed it keeps (stakes, wire), this frame
         int slowFrame = -10;
@@ -139,6 +140,7 @@ namespace KingdomGame.Zombies
             Health.Hurt += OnHurt;
             Health.Died += OnDied;
             abilityAt = Time.time + Random.Range(0.5f, 2f);   // not all at once
+            groanAt = Time.time + Random.Range(1f, 10f);
 
             shadow = Look.AddShadow(transform, sprites.Shadow, 0.1f);
             body = new GameObject("Body").transform;
@@ -165,6 +167,11 @@ namespace KingdomGame.Zombies
         {
             if (Health == null || Health.Dead) return;
             hurtFlash = Mathf.Max(0f, hurtFlash - dt);
+            if (Time.time >= groanAt)
+            {
+                groanAt = Time.time + Random.Range(6f, 16f);
+                Audio.Sounds.Play(Audio.Sound.Groan, position, 0.8f);
+            }
             var before = position;
             if (Held)
             {
@@ -324,7 +331,10 @@ namespace KingdomGame.Zombies
                     case Blow.Person:
                         // It only lands if they're still within reach (step back in time and it misses).
                         if (director.Gap(victim, position) - Radius <= Config.reach + 0.15f)
+                        {
                             victim.Damage(Config.damage * damage, position);
+                            Audio.Sounds.Play(Audio.Sound.Claw, position);
+                        }
                         break;
                     case Blow.Cell:
                         director.HitCell(smashing, this);

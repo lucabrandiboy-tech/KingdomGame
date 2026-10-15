@@ -62,6 +62,7 @@ namespace KingdomGame.Building
         {
             if (open == IsOpen) return;
             IsOpen = open;
+            Audio.Sounds.Play(Audio.Sound.Door, Cells.center);
             look.sprite = open ? openLook : closedLook;
             block.enabled = !open;
             if (shadow != null) shadow.enabled = !open;

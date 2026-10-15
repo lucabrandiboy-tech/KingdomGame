@@ -299,6 +299,7 @@ namespace KingdomGame.Progression
         {
             done.Add(t);
             if (t.advancesAge && AgeOf(t) == Age && Age < AgeCount - 1) Age++;
+            Audio.Sounds.PlayHere(Audio.Sound.Chime);
             Finished?.Invoke(t);
             Changed?.Invoke();
         }
@@ -308,6 +309,7 @@ namespace KingdomGame.Progression
         {
             if (Age >= AgeCount - 1) return false;
             Age++;
+            Audio.Sounds.PlayHere(Audio.Sound.Chime);
             Changed?.Invoke();
             return true;
         }

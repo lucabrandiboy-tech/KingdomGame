@@ -171,6 +171,7 @@ namespace KingdomGame.Economy
             enabled = true;
             var world = PixelWorld.Current;
             if (world != null) world.Burst(restPosition, config.chipColor, 6, 2.5f);
+            Audio.Sounds.Play(config.resource == ResourceType.Wood ? Audio.Sound.Chop : config.resource == ResourceType.Food ? Audio.Sound.Rustle : Audio.Sound.Pick, restPosition);
 
             if (Empty) UseUp();
             WriteBack();

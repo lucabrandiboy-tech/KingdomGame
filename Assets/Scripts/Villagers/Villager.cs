@@ -65,6 +65,7 @@ namespace KingdomGame.Villagers
         float digClock;
         bool onPost;             // up on it
         float gatherClock;
+        float hammerAt;          // when building, the next hammer blow heard
         Job job = Job.Builder;
         ResourceType carryType;
         int carryAmount;         // in hand
@@ -479,6 +480,11 @@ namespace KingdomGame.Villagers
                         return;
                     }
                     blueprint.AddWork(config.workRate * kingdom.BuildBoost * Time.deltaTime);
+                    if (Time.time >= hammerAt)
+                    {
+                        hammerAt = Time.time + Random.Range(0.45f, 0.75f);
+                        Audio.Sounds.Play(Audio.Sound.Hammer, Position, 0.8f);
+                    }
                     var toSite = blueprint.Center - Position;
                     if (toSite.sqrMagnitude > 0.0001f) facing = toSite.normalized;
                     return;

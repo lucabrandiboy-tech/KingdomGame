@@ -62,6 +62,15 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   castle_night/close.png, horde_night.png are mock screenshots lit like URP:
   linear color, URP's falloff, bloom, contrast) and look at the PNGs before
   committing art changes. Keep its lights, colors and layouts in step with the game.
+- **Sound is made in code too** (no sound files): `Audio/SoundSynth.cs` (plain C#, no `UnityEngine`:
+  the unit tests check every sound) makes each sound and the background loops; `Audio/Sounds.Play(sound, at)`
+  plays one in the world (panned and quieter away from the middle of the screen, a loudness / most-at-once /
+  shortest-gap per sound in `Sounds.MixOf`), `PlayHere` one that isn't anywhere; `Audio/Ambience.cs` plays wind,
+  birds and crickets by the time of day. A weapon's shot sound is `WeaponConfig.sound`. Listen to them with
+  `dotnet run --project tools/sound-preview/SoundPreview.csproj -- <folder>` (writes .wav files).
+- Settings the player picks (graphics quality, volume) are in `Core/GameSettings.cs` (PlayerPrefs), shown by
+  `UI/SettingsPanel.cs` in the main and pause menus. `UI/CheatMenu.cs` (F10, offline, Progression Config's
+  Allow Cheats) is for testing.
 - **Worlds are endless** (up to `NatureMap.Limit` = 32,000 tiles from the middle; house
   insides and mines live beyond that, at `Kingdom.InsideOrigin`/`MineOrigin`). Trees, rocks
   and bushes are data in `Economy/NatureMap.cs`, worked out from the seed by

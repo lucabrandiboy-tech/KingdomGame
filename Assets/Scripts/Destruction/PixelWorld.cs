@@ -233,7 +233,10 @@ namespace KingdomGame.Destruction
             }
 
             if (type.category == DamageCategory.Explosive)
+            {
                 effects.Explode(center, type.ToShape(hit.RadiusPx).RadiusPx, settings.rubble ? rubble : null);
+                Audio.Sounds.Play(type.radiusPixels >= 30 ? Audio.Sound.ExplosionBig : Audio.Sound.ExplosionSmall, center);
+            }
             // Zombies, people, doors and furniture caught in the blast.
             if (type.creatureDamage > 0f && type.blastRadius > 0f)
                 Health.Blast(center, type.blastRadius, type.creatureDamage, type.friendlyShare);

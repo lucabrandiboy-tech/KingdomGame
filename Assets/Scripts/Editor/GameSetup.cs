@@ -179,6 +179,8 @@ namespace KingdomGame.EditorTools
                 w.projectileColor = new Color32(232, 96, 52, 255); w.recoilShake = 0.06f;
                 w.hitDamage = 80f; w.overWalls = 0f;
             });
+            SoundOf(rifle, ShotSound.Gun);
+            SoundOf(rockets, ShotSound.Rocket);
             var c4 = Asset<ExplosiveConfig>("Combat/C4", e =>
             {
                 e.damage = c4Blast; e.fuseSeconds = 4f; e.throwRange = 4f; e.throwSpeed = 9f; e.cooldown = 1.5f;
@@ -725,6 +727,13 @@ namespace KingdomGame.EditorTools
             var lever = Gun("LeverRifle", 40f, 1.8f, false, 34f, 13f, 1.5f, 8, 2, tracer, bullet, 0, 0.01f);
             var bolt = Gun("BoltRifle", 80f, 0.9f, false, 40f, 16f, 0.6f, 9, 2, tracer, bullet, 2, 0.015f);
             var smg = Gun("Smg", 20f, 11f, true, 32f, 11f, 5f, 7, 2, tracer, bullet, 0, 0.006f);
+            foreach (var (w, sound) in new[]
+            {
+                (club, ShotSound.Swing), (sling, ShotSound.Throw), (bow, ShotSound.Bow), (crossbow, ShotSound.Bow),
+                (handCannon, ShotSound.HeavyGun), (musket, ShotSound.HeavyGun), (lever, ShotSound.Gun), (bolt, ShotSound.HeavyGun),
+                (smg, ShotSound.Gun), (rockets, ShotSound.Rocket),
+            })
+                SoundOf(w, sound);
 
             Combat.ArmsItem Item(string name, string about, string art, int age, WeaponConfig weapon, float seconds,
                 int wood = 0, int food = 0, int copper = 0, int iron = 0, int gold = 0) => new Combat.ArmsItem
@@ -836,6 +845,14 @@ namespace KingdomGame.EditorTools
 
         // What every age's things take on top of wood and stone: some of that age's part (from its crafting table) and of every
         // earlier age's part. Set every time (so older settings get them too); big things (2x2 and up) take twice as many.
+        // The sound a weapon makes when it fires: set every time, so older settings get it too.
+        static void SoundOf(WeaponConfig w, ShotSound sound)
+        {
+            if (w == null || w.sound == sound) return;
+            w.sound = sound;
+            EditorUtility.SetDirty(w);
+        }
+
         /// <summary>Towers take this share of the wood, stone, food, building time and parts in the lists.</summary>
         const float TowerShare = 0.5f;
 
@@ -1237,6 +1254,14 @@ namespace KingdomGame.EditorTools
                 EditorUtility.SetDirty(flame);
             }
             var bigShell = Shot("HowitzerShell", 60f, 12f, 26f, 1.5f, 9, 5, new Color32(60, 64, 52, 255), howitzerBlast, true);
+            foreach (var (w, sound) in new[]
+            {
+                (slingStone, ShotSound.Throw), (arrow, ShotSound.Bow), (bolt, ShotSound.Bow), (catapultStone, ShotSound.Throw),
+                (oil, ShotSound.Throw), (quarrel, ShotSound.Bow), (trebuchetStone, ShotSound.Throw), (musketBall, ShotSound.HeavyGun),
+                (cannonball, ShotSound.Cannon), (gatlingBullet, ShotSound.Gun), (gunBullet, ShotSound.Gun), (shell, ShotSound.Cannon),
+                (flame, ShotSound.Flame), (bigShell, ShotSound.Cannon),
+            })
+                SoundOf(w, sound);
 
             DefenseConfig Defense(string file, Action<DefenseConfig> values) => Asset<DefenseConfig>("Defenses/" + file, values);
             DefenseConfig Trap(string file, float damage, float hold, bool one, float rearm) =>
@@ -1340,6 +1365,12 @@ namespace KingdomGame.EditorTools
             var sniperRound = Shot("SniperRound", 140f, 44f, 16f, 0.5f, 10, 2, new Color32(255, 230, 160, 255));
             var atShell = Shot("AntiTankShell", 150f, 40f, 14f, 0.8f, 10, 4, new Color32(80, 80, 70, 255));
             var rocket = Shot("BatteryRocket", 70f, 14f, 20f, 3f, 14, 4, new Color32(90, 90, 80, 255), howitzerBlast, true);
+            foreach (var (w, sound) in new[]
+            {
+                (spear, ShotSound.Throw), (javelin, ShotSound.Throw), (rifleRound, ShotSound.Gun), (sniperRound, ShotSound.HeavyGun),
+                (atShell, ShotSound.Cannon), (rocket, ShotSound.Rocket),
+            })
+                SoundOf(w, sound);
             string TA(int age, int k) => FurnitureArt.AgeTower(age, k);
             int TS(int age) => FurnitureArt.TowerSize(age);
             var towers = new[]

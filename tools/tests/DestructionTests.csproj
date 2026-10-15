@@ -3,7 +3,8 @@
   (Assets/Scripts/Destruction/DamageShape.cs and PixelAlgorithms.cs), the
   villagers' path search (Assets/Scripts/Villagers/GridPathfinder.cs), the
   zombies' flow field and survival waves (Assets/Scripts/Zombies/FlowField.cs,
-  WaveMath.cs) and room finding (Assets/Scripts/Building/RoomFinder.cs).
+  WaveMath.cs), room finding (Assets/Scripts/Building/RoomFinder.cs) and the
+  sounds made in code (Assets/Scripts/Audio/SoundSynth.cs).
   The Repo checks GitHub Action runs them on every push. To run them
   yourself, see "Checks to run before every commit" in CLAUDE.md.
 -->
@@ -27,5 +28,6 @@
     <Compile Include="../../Assets/Scripts/Zombies/FlowField.cs" />
     <Compile Include="../../Assets/Scripts/Zombies/WaveMath.cs" />
     <Compile Include="../../Assets/Scripts/Building/RoomFinder.cs" />
+    <Compile Include="../../Assets/Scripts/Audio/SoundSynth.cs" />
   </ItemGroup>
 </Project>

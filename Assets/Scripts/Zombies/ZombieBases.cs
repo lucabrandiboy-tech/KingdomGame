@@ -195,6 +195,7 @@ namespace KingdomGame.Zombies
             }
             sieges.Add(siege);
             kingdom.Report("A zombie siege! A crowd is waiting outside. Villagers stay at their shelter flag.");
+            Audio.Sounds.PlayHere(Audio.Sound.Horn);
         }
 
         void EndSieges()

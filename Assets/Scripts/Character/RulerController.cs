@@ -51,6 +51,7 @@ namespace KingdomGame.Character
         Vector2 wantedVelocity;
         float primaryReady, secondaryReady, explosiveReady, gatherReady, handOverReady;
         float noticeUntil;
+        float hammerAt;   // when building, the next hammer blow heard
         int stoodUpFrame = -1;
         float respawnAt;
 
@@ -226,6 +227,7 @@ namespace KingdomGame.Character
             {
                 Vector2 target = view.ScreenToWorldPoint(GameInput.PointerPosition);
                 explosives.Throw(thrown, Muzzle, target, OnWalls ? OverWallsFromTop * 0.6f : 0f);
+                Audio.Sounds.Play(Audio.Sound.Throw, Muzzle);
                 explosiveReady = now + thrown.cooldown;
             }
 
@@ -383,6 +385,7 @@ namespace KingdomGame.Character
 
         void OnHurt(Health h, float amount, Vector2 from)
         {
+            if (amount > 0f) Audio.Sounds.PlayHere(Audio.Sound.Hurt);
             // Attacked on the throne: stand up and fight.
             if (Seated && !h.Dead)
             {
@@ -443,7 +446,11 @@ namespace KingdomGame.Character
                     return;
                 }
                 string what = bag.Contents();
-                if (bag.TakeInto(Backpack) > 0) Say($"Picked up {what}");
+                if (bag.TakeInto(Backpack) > 0)
+                {
+                    Say($"Picked up {what}");
+                    Audio.Sounds.PlayHere(Audio.Sound.Loot);
+                }
                 return;   // one bag a frame (an emptied bag removes itself from the list)
             }
         }
@@ -470,6 +477,7 @@ namespace KingdomGame.Character
             for (int i = 0; i < Mathf.Max(1, weapon.pellets); i++)
                 fired |= projectiles.Fire(weapon, Muzzle, aim, OnWalls ? Mathf.Max(weapon.overWalls, OverWallsFromTop) : -1f, -1f, weapon.pierce);
             if (fired && rig != null) rig.AddShake(weapon.recoilShake);
+            if (fired) Audio.Sounds.Fired(weapon, Muzzle);
         }
 
         // A club: hits every zombie in front within reach.
@@ -477,6 +485,7 @@ namespace KingdomGame.Character
         {
             if (look != null) look.Swing();
             Vector2 here = transform.position;
+            Audio.Sounds.Fired(weapon, here);
             float halfArc = weapon.meleeArc * 0.5f;
             var hit = new System.Collections.Generic.List<Health>();
             foreach (var h in Health.Creatures)
@@ -815,6 +824,11 @@ namespace KingdomGame.Character
             else if (blueprint.HasAllResources)
             {
                 blueprint.AddWork(config.buildRate * Time.deltaTime);
+                if (Time.time >= hammerAt)
+                {
+                    hammerAt = Time.time + Random.Range(0.45f, 0.7f);
+                    Audio.Sounds.Play(Audio.Sound.Hammer, transform.position);
+                }
             }
         }
 

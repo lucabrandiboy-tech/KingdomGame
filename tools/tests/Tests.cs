@@ -51,6 +51,10 @@ static partial class Tests
         Run(nameof(CornersCloseARoom), CornersCloseARoom);
         Run(nameof(HugeEnclosuresAreNotRooms), HugeEnclosuresAreNotRooms);
 
+        Run(nameof(EverySoundIsMadeCleanly), EverySoundIsMadeCleanly);
+        Run(nameof(GroansAreAllDifferent), GroansAreAllDifferent);
+        Run(nameof(LoopsJoinUpSeamlessly), LoopsJoinUpSeamlessly);
+
         Console.WriteLine(failures == 0 ? "All tests passed." : $"{failures} test(s) FAILED.");
         return failures == 0 ? 0 : 1;
     }

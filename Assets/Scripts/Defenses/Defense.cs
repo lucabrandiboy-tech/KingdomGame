@@ -294,6 +294,7 @@ namespace KingdomGame.Defenses
                 shots.Fire(config.weapon, from, direction, overWalls: 999f, range: Mathf.Max(0.5f, to.magnitude - 0.45f), lobbed: true);
             else
                 shots.Fire(config.weapon, from, direction, overWalls: config.range + 1f, range: config.range, pierce: config.pierce);
+            Audio.Sounds.Fired(config.weapon, from, 0.8f);
         }
 
         void ShowHead()

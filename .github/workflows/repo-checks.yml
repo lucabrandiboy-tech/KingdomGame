@@ -37,7 +37,10 @@ jobs:
       - name: The art preview tool compiles
         run: dotnet build -c Release tools/art-preview/ArtPreview.csproj
 
-      - name: Destruction math unit tests
+      - name: The sound preview tool compiles
+        run: dotnet build tools/sound-preview/SoundPreview.csproj
+
+      - name: Unit tests (destruction math, paths, zombie fields and waves, rooms, sounds)
         run: dotnet run --project tools/tests/DestructionTests.csproj
 
       - name: Network tests (a real server and players over UDP on the runner)

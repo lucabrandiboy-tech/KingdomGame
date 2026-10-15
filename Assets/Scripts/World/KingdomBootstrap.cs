@@ -153,6 +153,7 @@ namespace KingdomGame.World
 
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
+            gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);   // wind, birds by day, crickets at night
             var saves = gameObject.AddComponent<SaveSystem>();
             saves.Hosted = hosting;
             saves.Bases = zombieBases;
@@ -220,6 +221,7 @@ namespace KingdomGame.World
 
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, null, rig, null);
+            gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);
             parts.Streamer.ShowNow();
             client.Enter(welcome, rulerController, remotes, chat, dayNight, parts.Nature);
             gameObject.AddComponent<PauseMenu>().Setup(null, null, null, null, client);

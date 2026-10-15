@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace KingdomGame.Combat
 {
+    /// <summary>The sound a weapon makes when it fires (Auto: guessed from the weapon).</summary>
+    public enum ShotSound { Auto, Gun, HeavyGun, Bow, Throw, Cannon, Rocket, Flame, Swing, None }
+
     /// <summary>
     /// A weapon: how fast it shoots, how its shots fly and what they do on impact. A melee
     /// weapon (the club) hits zombies in front of the ruler instead, out to its Range.
@@ -12,6 +15,8 @@ namespace KingdomGame.Combat
     {
         [Tooltip("What a shot does to walls when it hits.")]
         public DamageType damage;
+        [Tooltip("The sound it makes when it fires (Auto: a club swishes, explosive shots boom, bullets bang, the rest twang).")]
+        public ShotSound sound;
         [Tooltip("Damage to a zombie it hits (explosive shots also blow up there: see the damage type's Blast).")]
         [Min(0)] public float hitDamage = 25f;
         [Tooltip("Gets through armor (fire): armored zombies take its full damage.")]

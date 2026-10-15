@@ -377,6 +377,7 @@ namespace KingdomGame.Zombies
             if (c.ability == ZombieAbility.Burst)
             {
                 if (c.burstBlast != null) bursts.Add((at, c.burstBlast));
+                Audio.Sounds.Play(Audio.Sound.Splash, at);   // (the blast's boom comes with the blast)
                 if (world != null) world.Burst(at, new Color32(150, 160, 70, 255), 30, 4f);   // a spray of bile
                 if (Remains.Current != null) Remains.Current.Blood(at, 1.6f);
                 if (!z.BurstItself) Kills++;
@@ -384,6 +385,7 @@ namespace KingdomGame.Zombies
                 return;
             }
             Kills++;
+            Audio.Sounds.Play(Audio.Sound.ZombieDie, at);
             var remains = Remains.Current;
             if (remains != null)
             {
@@ -701,6 +703,7 @@ namespace KingdomGame.Zombies
         /// </summary>
         public void HitCell(Vector2Int cell, Zombie z, float blow = -1f)
         {
+            if (blow < 0f) Audio.Sounds.Play(Audio.Sound.ZombieHit, (Vector2)cell + new Vector2(0.5f, 0.5f));
             float damage = DamageFactor;
             var chunk = world != null ? world.ChunkAt(cell) : null;
             if (chunk != null && chunk.Owner != null)
@@ -740,6 +743,7 @@ namespace KingdomGame.Zombies
             r.sprite = ArtSprites.Get(ArtKeys.AcidGlob);
             r.sortingOrder = SortOrder.Projectiles;
             Look.MakeGlow(r);   // it glows a sickly green in the dark
+            Audio.Sounds.Play(Audio.Sound.Spit, from);
             globs.Add(new Glob { From = from, To = to, Seconds = Mathf.Max(0.25f, (to - from).magnitude / SpitSpeed), Damage = damage, Look = r });
         }
 
@@ -771,12 +775,14 @@ namespace KingdomGame.Zombies
             foreach (var h in splashed) h.Damage(damage, at);
             splashed.Clear();
             if (world != null) world.Burst(at, new Color32(140, 190, 60, 255), 12, 1.5f);
+            Audio.Sounds.Play(Audio.Sound.Splash, at, 0.7f);
         }
 
         /// <summary>A screamer screams at <paramref name="at"/>: the zombies round it speed up for a while.</summary>
         internal void Scream(Vector2 at, ZombieConfig kind)
         {
             float r2 = kind.screamRadius * kind.screamRadius;
+            Audio.Sounds.Play(Audio.Sound.Scream, at);
             foreach (var z in zombies)
                 if (z != null && (z.Position - at).sqrMagnitude <= r2) z.SpeedUp(kind.screamSpeed, kind.screamSeconds);
             var go = new GameObject("Scream");

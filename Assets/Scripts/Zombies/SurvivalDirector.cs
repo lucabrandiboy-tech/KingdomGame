@@ -163,6 +163,7 @@ namespace KingdomGame.Zombies
             float first = Random.value;
             for (int i = 0; i < sides; i++) entries.Add(Mathf.Repeat(first + i / (float)sides + Random.Range(-0.08f, 0.08f), 1f));
             Announce($"Wave {wave}: {ToCome} zombies are coming from the {Sides()}!", 5f);
+            Audio.Sounds.PlayHere(Audio.Sound.Horn);
         }
 
         void EndWave()

@@ -1231,6 +1231,11 @@ namespace KingdomGame.EditorTools
             var gunBullet = Shot("GunNestBullet", 14f, 34f, 9.5f, 4f, 8, 2, new Color32(255, 214, 102, 255));
             var shell = Shot("MortarShell", 40f, 9f, 16f, 2f, 7, 4, new Color32(70, 76, 62, 255), mortarBlast, true);
             var flame = Shot("Flame", 6f, 9f, 4.5f, 12f, 10, 6, new Color32(255, 140, 40, 255));
+            if (!flame.throughArmor)
+            {
+                flame.throughArmor = true;   // fire gets through armor (set every time, so older settings get it too)
+                EditorUtility.SetDirty(flame);
+            }
             var bigShell = Shot("HowitzerShell", 60f, 12f, 26f, 1.5f, 9, 5, new Color32(60, 64, 52, 255), howitzerBlast, true);
 
             DefenseConfig Defense(string file, Action<DefenseConfig> values) => Asset<DefenseConfig>("Defenses/" + file, values);

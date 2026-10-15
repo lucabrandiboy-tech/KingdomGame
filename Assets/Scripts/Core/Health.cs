@@ -37,7 +37,10 @@ namespace KingdomGame
         public bool IsCreature { get; private set; }
         /// <summary>Up on a wall (or somewhere else zombies can't climb): zombies don't go for it and doors don't open for it.</summary>
         public bool OutOfReach { get; set; }
-        /// <summary>Taken off every hit (armored zombies); a hit always does at least a fifth of its damage.</summary>
+        /// <summary>
+        /// Taken off every single hit (armored zombies); a hit always does at least a fifth of its damage.
+        /// Fire, gas and other harm over time get through it.
+        /// </summary>
         public float Armor { get; set; }
         public bool Dead => Current <= 0f;
         public float Fraction => Max > 0f ? Current / Max : 0f;
@@ -60,11 +63,11 @@ namespace KingdomGame
             Register();
         }
 
-        /// <summary>Takes damage. Returns true if this hit killed it.</summary>
-        public bool Damage(float amount, Vector2 from)
+        /// <summary>Takes damage (<paramref name="throughArmor"/>: fire, gas, harm over time). Returns true if this hit killed it.</summary>
+        public bool Damage(float amount, Vector2 from, bool throughArmor = false)
         {
             if (Dead || amount <= 0f || Max <= 0f) return false;
-            if (Armor > 0f) amount = Mathf.Max(amount * 0.2f, amount - Armor);
+            if (Armor > 0f && !throughArmor) amount = Mathf.Max(amount * 0.2f, amount - Armor);
             Current = Mathf.Max(0f, Current - amount);
             LastHurt = Time.time;
             Hurt?.Invoke(this, amount, from);

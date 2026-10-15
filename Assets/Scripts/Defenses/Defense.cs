@@ -139,7 +139,7 @@ namespace KingdomGame.Defenses
                 z.Slow(config.slowTo);
                 if (hurt) caught.Add(z);
             }
-            foreach (var z in caught) z.Health.Damage(config.damagePerSecond * DamageTick, z.Position);
+            foreach (var z in caught) z.Health.Damage(config.damagePerSecond * DamageTick, z.Position, throughArmor: true);
         }
 
         // A gas or napalm trap: the first zombie on it sets off a cloud that hurts everything in it for a while.
@@ -156,7 +156,7 @@ namespace KingdomGame.Defenses
                 if (hurt)
                     foreach (var z in director.Zombies)
                         if (z != null && z.Health != null && !z.Health.Dead && (z.Position - Center).sqrMagnitude <= r2) caught.Add(z);
-                foreach (var z in caught) z.Health.Damage(config.cloudDamagePerSecond * DamageTick, z.Position);
+                foreach (var z in caught) z.Health.Damage(config.cloudDamagePerSecond * DamageTick, z.Position, throughArmor: true);
                 ShowCloud(now);
                 return;
             }

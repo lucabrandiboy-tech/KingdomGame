@@ -161,7 +161,7 @@ namespace KingdomGame.Combat
         // A shot hits a zombie: it's hurt (a little blood flies), and explosive shots blow up right there.
         static void HitCreature(PixelWorld world, WeaponConfig weapon, Health target, Vector2 at, Vector2 direction)
         {
-            target.Damage(weapon.hitDamage, at - direction * 0.3f);
+            target.Damage(weapon.hitDamage, at - direction * 0.3f, weapon.throughArmor);
             if (world == null) return;
             if (weapon.damage != null && weapon.damage.category == DamageCategory.Explosive) Detonate(world, weapon, at);
             else world.Burst(at, new Color32(96, 12, 14, 255), 5, 2f);

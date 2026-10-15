@@ -1,7 +1,8 @@
 # Runs on GitHub's computers after every push. A red X next to a commit on
 # github.com means one of these checks failed; click it to see which file.
-# It can't open Unity, so it checks that files were committed correctly and
-# runs the unit tests for the destruction math (plain C#, no Unity needed).
+# It can't open Unity, so it checks that files were committed correctly, that
+# every script compiles (against Unity's reference assemblies) and runs the
+# tests for the code that doesn't need Unity.
 name: Repo checks
 
 on:
@@ -11,7 +12,7 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with:
@@ -26,6 +27,15 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
+
+      - name: Every game script compiles (new input system, like the game)
+        run: dotnet build tools/compile-check/CompileCheck.csproj
+
+      - name: Every game script compiles (old input path)
+        run: dotnet build tools/compile-check/CompileCheck.csproj --no-incremental "-p:DefineConstants=UNITY_EDITOR%3BENABLE_LEGACY_INPUT_MANAGER"
+
+      - name: The art preview tool compiles
+        run: dotnet build -c Release tools/art-preview/ArtPreview.csproj
 
       - name: Destruction math unit tests
         run: dotnet run --project tools/tests/DestructionTests.csproj

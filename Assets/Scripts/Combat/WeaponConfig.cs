@@ -14,6 +14,8 @@ namespace KingdomGame.Combat
         public DamageType damage;
         [Tooltip("Damage to a zombie it hits (explosive shots also blow up there: see the damage type's Blast).")]
         [Min(0)] public float hitDamage = 25f;
+        [Tooltip("Gets through armor (fire): armored zombies take its full damage.")]
+        public bool throughArmor;
         [Tooltip("Shots fly over walls for this many tiles after leaving the barrel, so you can shoot over a wall you stand right behind. 0 = they hit the first wall in the way.")]
         [Min(0)] public float overWalls;
         [Tooltip("Shots per second.")]

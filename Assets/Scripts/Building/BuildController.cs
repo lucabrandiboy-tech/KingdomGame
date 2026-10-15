@@ -481,6 +481,25 @@ namespace KingdomGame.Building
                 return;
             }
 
+            // A villager under the mouse: what they're doing, and how fed and rested they are.
+            Villagers.Villager person = null;
+            float nearest = 0.45f * 0.45f;
+            foreach (var v in kingdom.Villagers)
+            {
+                if (v == null || v.InBed) continue;
+                float d = (v.Position - mouse).sqrMagnitude;
+                if (d < nearest) { nearest = d; person = v; }
+            }
+            if (person != null)
+            {
+                string needs = kingdom.VillagerSettings != null && kingdom.VillagerSettings.needs
+                    ? $"\nFed {Mathf.RoundToInt(person.Fed * 100f)}%, rested {Mathf.RoundToInt(person.Rested * 100f)}%" +
+                      (person.Pace < 0.99f ? $": working at {Mathf.RoundToInt(person.Pace * 100f)}% speed" : person.Pace > 1.01f ? $": content, working at {Mathf.RoundToInt(person.Pace * 100f)}% speed" : "")
+                    : "";
+                Hover = $"{Villagers.Jobs.Name(person.Job)}: {person.Doing}  (health {Mathf.CeilToInt(person.Health.Current)}/{Mathf.CeilToInt(person.Health.Max)}){needs}";
+                return;
+            }
+
             var house = kingdom.HouseAt(cell);
             if (house != null)
             {

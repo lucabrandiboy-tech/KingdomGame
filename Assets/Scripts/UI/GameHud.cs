@@ -196,6 +196,13 @@ namespace KingdomGame.UI
                 int busy = 0;
                 foreach (var v in kingdom.Villagers) if (v != null && !v.IsIdle) busy++;
                 text.Append($"Villagers: {kingdom.Villagers.Count} (homes for {kingdom.VillagerCapacity}), {busy} busy   Blueprints: {kingdom.Blueprints.Count}");
+                // Going hungry with nothing to eat.
+                if (kingdom.Stock(ResourceType.Food) <= 0)
+                {
+                    int hungry = 0;
+                    foreach (var v in kingdom.Villagers) if (v != null && v.Fed < Villagers.NeedsMath.EatBelow) hungry++;
+                    if (hungry > 0) text.Append($"\n<color=#ff8a80>No food: {hungry} villager{(hungry == 1 ? " is" : "s are")} going hungry (foragers: V)</color>");
+                }
             }
             Draw(text.ToString(), box, Corner.TopRight);
         }

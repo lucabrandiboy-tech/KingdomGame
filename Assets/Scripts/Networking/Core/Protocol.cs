@@ -54,6 +54,8 @@ namespace KingdomGame.Networking
         Walking = 32,
         /// <summary>A villager carrying something.</summary>
         Carrying = 64,
+        /// <summary>A villager asleep (in a bed: not shown).</summary>
+        Sleeping = 128,
     }
 
     /// <summary>A character's place, the way it faces and what it's doing.</summary>

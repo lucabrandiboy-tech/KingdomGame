@@ -324,7 +324,8 @@ namespace KingdomGame.Networking
             foreach (var view in views.Values)
                 foreach (var person in view.Folk.Values)
                 {
-                    bool show = now - person.HeardAt < FolkTimeout && person.Buffer.Sample(RenderTime - MotionBuffer.Delay, out var m);
+                    bool show = now - person.HeardAt < FolkTimeout && person.Buffer.Sample(RenderTime - MotionBuffer.Delay, out var m)
+                                && (m.Flags & MotionFlags.Sleeping) == 0;   // (asleep: in bed or lying down, not drawn)
                     if (show != person.Shown) person.Root.SetActive(person.Shown = show);
                     if (!show) continue;
                     person.Buffer.Sample(RenderTime - MotionBuffer.Delay, out m);

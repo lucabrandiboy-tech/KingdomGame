@@ -15,7 +15,7 @@ namespace KingdomGame.Building
         [Range(128, 2048)] public int landsSize = 512;
         [Min(0)] public int startWood = 80;
         [Min(0)] public int startStone = 60;
-        [Min(0)] public int startFood = 20;
+        [Min(0)] public int startFood = 60;
         [Tooltip("Builder villagers at the start.")]
         [Min(0)] public int startVillagers = 3;
 

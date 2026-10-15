@@ -21,5 +21,33 @@ namespace KingdomGame.Villagers
         [Min(1)] public float maxHealth = 60f;
         [Tooltip("Villagers drop their work and run when they see a zombie this close (tiles).")]
         [Min(0)] public float fleeDistance = 6f;
+
+        [Header("Needs: food and sleep")]
+        [Tooltip("Off: villagers never get hungry or tired.")]
+        public bool needs = true;
+        [Tooltip("Game hours from well fed to starving (a day is 24).")]
+        [Min(1)] public float hungerHours = 24f;
+        [Tooltip("Food one meal takes from storage.")]
+        [Min(1)] public int mealFood = 3;
+        [Tooltip("Food a meal takes when the kingdom has a kitchen (a cauldron, hearth, oven or stove): cooked food goes further.")]
+        [Min(1)] public int cookedMealFood = 2;
+        [Tooltip("Seconds a meal takes to eat.")]
+        [Min(0)] public float eatSeconds = 2.5f;
+        [Tooltip("Game hours awake from rested to exhausted.")]
+        [Min(1)] public float awakeHours = 30f;
+        [Tooltip("Game hours of sleep in a bed from exhausted to rested.")]
+        [Min(0.5f)] public float bedSleepHours = 6f;
+        [Tooltip("Game hours of sleep on the ground from exhausted to rested (as far as Ground Rest Cap).")]
+        [Min(0.5f)] public float groundSleepHours = 12f;
+        [Tooltip("Sleeping on the ground rests them only this far (1 = fully): they wake up tired and are slow by the evening.")]
+        [Range(0.1f, 1f)] public float groundRestCap = 0.6f;
+        [Tooltip("How fast hungry or tired villagers work and walk (1 = normal).")]
+        [Range(0.1f, 1f)] public float tiredSpeed = 0.75f;
+        [Tooltip("How fast starving or exhausted villagers work and walk.")]
+        [Range(0.1f, 1f)] public float exhaustedSpeed = 0.5f;
+        [Tooltip("How much faster villagers work when they're fed and rested and the kingdom has a dining hall (0.1 = 10%).")]
+        [Range(0f, 1f)] public float contentBonus = 0.1f;
+        [Tooltip("Hit points a villager gets back each game hour asleep in a bed.")]
+        [Min(0)] public float healPerHourInBed = 20f;
     }
 }

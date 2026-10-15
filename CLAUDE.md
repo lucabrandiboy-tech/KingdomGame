@@ -117,7 +117,7 @@ run in Unity**; the user starts with `docs/START-HERE.md` (one session that touc
 update), then tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
 and `docs/HOUSES-TEST.md` (plus `docs/PHASE-2B-TEST.md` for the details; later
 updates: `docs/SAVE-TEST.md`, `WEAPONS-TEST.md`, `ONLINE-TEST.md`, `ENDLESS-WORLD-TEST.md`, `MACHINES-TEST.md`,
-`ZOMBIE-BASES-TEST.md`, `AGES-CONTENT-TEST.md`, `ZOMBIE-KINDS-TEST.md`). Don't start 2C before they
+`ZOMBIE-BASES-TEST.md`, `AGES-CONTENT-TEST.md`, `ZOMBIE-KINDS-TEST.md`, `GAMEPLAY-TEST.md`). Don't start 2C before they
 confirm. See `docs/ROADMAP.md` and `docs/DECISIONS.md` sections 14-15.
 The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 
@@ -126,8 +126,9 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
 - `dotnet run --project tools/tests/DestructionTests.csproj`: unit tests for
   the Unity-free code: destruction math (`DamageShape.cs`, `PixelAlgorithms.cs`),
   path finding (`Villagers/GridPathfinder.cs`), the zombies' flow field and
-  waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`) and room finding
-  (`Building/RoomFinder.cs`). Keep those files free of `UnityEngine` so the
+  waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`), room finding
+  (`Building/RoomFinder.cs`), sounds (`Audio/SoundSynth.cs`) and villagers' needs
+  (`Villagers/NeedsMath.cs`). Keep those files free of `UnityEngine` so the
   tests can compile them.
 - `dotnet run --project tools/world-tests/WorldTests.csproj`: the endless world outside
   Unity (`Economy/NatureMap.cs` with stand-ins in `tools/world-tests/Stubs.cs` and the art

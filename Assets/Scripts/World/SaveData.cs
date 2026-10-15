@@ -241,6 +241,9 @@ namespace KingdomGame.World
         public int carryType;
         public int carryAmount;
         public float health;
+        /// <summary>How fed and rested (1 = fully; older saves: fully).</summary>
+        public float fed = 1f;
+        public float rested = 1f;
     }
 
     [Serializable]

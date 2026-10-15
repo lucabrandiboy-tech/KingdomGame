@@ -78,6 +78,7 @@ namespace KingdomGame.Networking
                     var flags = MotionFlags.None;
                     if (v.Moving) flags |= MotionFlags.Walking;
                     if (v.CarryAmount > 0) flags |= MotionFlags.Carrying;
+                    if (v.Asleep) flags |= MotionFlags.Sleeping;
                     folk.Add((i, new Motion { X = at.x, Y = at.y, Aim = v.Facing, Flags = flags }));
                 }
                 if (folk.Count > 0) SendFolk(folk);

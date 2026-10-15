@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 21;
+        const int SettingsVersion = 22;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -102,6 +102,7 @@ namespace KingdomGame.EditorTools
             bool darkNights = oldContent != null && oldContent.settingsVersion < 16;
             bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 18;
             bool zombieKinds = oldContent != null && oldContent.settingsVersion < 21;   // crawlers, screamers, spitters, bloaters, armored, giants
+            bool villagerNeeds = oldContent != null && oldContent.settingsVersion < 22;   // villagers eat and sleep
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -553,6 +554,14 @@ namespace KingdomGame.EditorTools
                 content.survival.zombies = kinds.ToArray();
                 EditorUtility.SetDirty(content.survival);
                 Debug.Log("Six more kinds of zombie come in the waves now: crawlers, screamers, spitters, bloaters, armored zombies and giants. Your other settings were kept.");
+            }
+
+            if (villagerNeeds && content.kingdom != null && content.kingdom.startFood < 60)
+            {
+                // Villagers eat now: a free-build kingdom starts with more food (survival already had 60).
+                content.kingdom.startFood = 60;
+                EditorUtility.SetDirty(content.kingdom);
+                Debug.Log("Villagers eat and sleep now: a new kingdom starts with 60 food. Your other settings were kept.");
             }
 
             if (endless && content.network != null && content.network.kingdomSpacing < 560)

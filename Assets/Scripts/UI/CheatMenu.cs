@@ -112,6 +112,14 @@ namespace KingdomGame.UI
             GUI.enabled = true;
             GUILayout.EndHorizontal();
 
+            Heading("Villagers");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Feed and rest everyone", button))
+                foreach (var v in kingdom.Villagers) if (v != null) v.SetNeeds(1f, 1f);
+            if (GUILayout.Button("Make everyone hungry and tired", button))
+                foreach (var v in kingdom.Villagers) if (v != null) v.SetNeeds(0.1f, 0.1f);
+            GUILayout.EndHorizontal();
+
             Heading("You");
             GUILayout.BeginHorizontal();
             var health = ruler != null ? ruler.Health : null;

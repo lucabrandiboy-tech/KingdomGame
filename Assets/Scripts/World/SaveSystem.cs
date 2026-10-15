@@ -286,6 +286,8 @@ namespace KingdomGame.World
                     carryType = (int)v.CarryType,
                     carryAmount = v.CarryAmount,
                     health = v.Health.Current,
+                    fed = v.Fed,
+                    rested = v.Rested,
                 });
             }
 
@@ -468,6 +470,7 @@ namespace KingdomGame.World
                 var at = Reachable(v.position);
                 var villager = kingdom.AddVillager(at, (Villagers.Job)v.job);
                 villager.Restore(kingdom.PlaceAt(at), (ResourceType)Mathf.Clamp(v.carryType, 0, Inventory.TypeCount - 1), v.carryAmount, v.health);
+                villager.SetNeeds(v.fed, v.rested);
             }
 
             foreach (var bag in data.bags) LootBag.Drop(bag.position, bag.amounts);

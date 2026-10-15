@@ -350,6 +350,7 @@ namespace KingdomGame.World
             lands = Mathf.Clamp(lands, 128, 2048);
             var landsCells = new RectInt(at.x - lands / 2, at.y - lands / 2, lands, lands);
             kingdom.Setup(content.kingdom, content.villager, content.buildMenu, world, landsCells, Storehouse());
+            kingdom.Clock = dayNight;
             kingdom.PlaceThrone(at);
             if (fresh) StartKingdom(kingdom, survival, villagers);
             return kingdom;
@@ -392,8 +393,8 @@ namespace KingdomGame.World
                 float x = (i - (config.startVillagers - 1) * 0.5f) * 0.8f;
                 var spot = throne.Front + new Vector2(x, -1.1f);
                 if (!kingdom.Nav.Walkable(spot)) kingdom.Nav.NearestFreeSpot(spot, new RectInt(0, 0, 0, 0), out spot);
-                // Two builders to start with, the rest cutting wood (V changes it).
-                kingdom.AddVillager(spot, i < 2 ? Villagers.Job.Builder : Villagers.Job.Woodcutter);
+                // Two builders to start with, then one picking berries (they eat), the rest cutting wood (V changes it).
+                kingdom.AddVillager(spot, i < 2 ? Villagers.Job.Builder : i == 2 ? Villagers.Job.Forager : Villagers.Job.Woodcutter);
             }
         }
 

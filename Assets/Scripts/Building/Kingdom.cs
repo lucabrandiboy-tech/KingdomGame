@@ -117,6 +117,10 @@ namespace KingdomGame.Building
         public event Action Changed;
         /// <summary>Fades tree leaves near the ruler (planted trees join it).</summary>
         public World.CanopyFader Canopies { get; set; }
+        /// <summary>The time of day (villagers sleep at night; seasons). Null: always midday.</summary>
+        public World.DayNightCycle Clock { get; set; }
+        /// <summary>Game hours that go by each second of play (24 in a day).</summary>
+        public float GameHoursPerSecond => Clock != null && Clock.Config != null ? 24f / Mathf.Max(1f, Clock.Config.minutesPerDay * 60f) : 24f / 720f;
 
         /// <summary>The ruler is on the throne building (roofs turn see-through).</summary>
         public bool ThroneView { get; set; }
@@ -1234,6 +1238,7 @@ namespace KingdomGame.Building
                 furniture.Remove(f);
                 if (f.Config.blocksMovement && !f.Config.flat) NavFor(thing.Cells).Unblock(thing.Cells);
                 if (f.Config.sleeps > 0) Beds = Mathf.Max(0, Beds - f.Config.sleeps);
+                sleepers.Remove(f);
             }
             roomsDirty = true;
             Changed?.Invoke();
@@ -1439,23 +1444,31 @@ namespace KingdomGame.Building
         readonly float[] furnitureBoosts = new float[6];
         readonly HashSet<BuildingConfig> boostSeen = new HashSet<BuildingConfig>();
         float boostsAt = -1f;
+        bool kitchen;
 
         /// <summary>What the kingdom's furniture adds to <paramref name="kind"/> (0.05 = 5%): each kind of furniture counts once.</summary>
         public float FurnitureBoost(BoostKind kind)
         {
             if (kind == BoostKind.None) return 0f;
-            if (Time.time >= boostsAt)
-            {
-                boostsAt = Time.time + 2f;
-                for (int i = 0; i < furnitureBoosts.Length; i++) furnitureBoosts[i] = 0f;
-                boostSeen.Clear();
-                foreach (var f in furniture)
-                {
-                    if (f == null || f.Config == null || f.Config.boost == BoostKind.None || !boostSeen.Add(f.Config)) continue;
-                    furnitureBoosts[(int)f.Config.boost] += f.Config.boostPercent / 100f;
-                }
-            }
+            LookAtFurniture();
             return furnitureBoosts[(int)kind];
+        }
+
+        // Every couple of seconds: what the furniture adds up to (boosts, a kitchen).
+        void LookAtFurniture()
+        {
+            if (Time.time < boostsAt) return;
+            boostsAt = Time.time + 2f;
+            for (int i = 0; i < furnitureBoosts.Length; i++) furnitureBoosts[i] = 0f;
+            boostSeen.Clear();
+            kitchen = false;
+            foreach (var f in furniture)
+            {
+                if (f == null || f.Config == null) continue;
+                if (f.Config.roomTag == RoomTag.Cooking) kitchen = true;
+                if (f.Config.boost == BoostKind.None || !boostSeen.Add(f.Config)) continue;
+                furnitureBoosts[(int)f.Config.boost] += f.Config.boostPercent / 100f;
+            }
         }
 
         /// <summary>Puts a message on screen.</summary>
@@ -1486,6 +1499,93 @@ namespace KingdomGame.Building
         }
 
         public int[] UpgradeLevels() => (int[])upgradeLevels.Clone();
+
+        // -------------------------------------------------------------- needs --
+
+        // How many villagers are asleep in (or on their way to) each bed.
+        readonly Dictionary<Furniture, int> sleepers = new Dictionary<Furniture, int>();
+        bool diningHall;
+
+        /// <summary>A cauldron, hearth, oven or stove somewhere: cooked meals take less food.</summary>
+        public bool HasKitchen
+        {
+            get
+            {
+                LookAtFurniture();
+                return kitchen;
+            }
+        }
+
+        /// <summary>A room with a table and somewhere to sit: fed and rested villagers are content (a little faster).</summary>
+        public bool HasDiningHall => diningHall;
+
+        /// <summary>Food one meal takes now (less with a kitchen).</summary>
+        public int MealFood => NeedsMath.MealFood(villagerConfig.mealFood, villagerConfig.cookedMealFood, HasKitchen);
+
+        public VillagerConfig VillagerSettings => villagerConfig;
+
+        /// <summary>The nearest bed with room in it, or null.</summary>
+        public Furniture FreeBed(Vector2 from)
+        {
+            Furniture best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var f in furniture)
+            {
+                if (f == null || f.Config.sleeps <= 0) continue;
+                if (sleepers.TryGetValue(f, out int n) && n >= f.Config.sleeps) continue;
+                float d = Travel(from, f.Cells.center);
+                if (d < bestDistance) { bestDistance = d; best = f; }
+            }
+            return best;
+        }
+
+        public void ClaimBed(Furniture bed)
+        {
+            if (bed != null) sleepers[bed] = (sleepers.TryGetValue(bed, out int n) ? n : 0) + 1;
+        }
+
+        public void ReleaseBed(Furniture bed)
+        {
+            if ((object)bed == null || !sleepers.TryGetValue(bed, out int n)) return;
+            if (n <= 1) sleepers.Remove(bed);
+            else sleepers[bed] = n - 1;
+        }
+
+        /// <summary>Where villagers without a bed sleep: on the ground near the throne (its fire).</summary>
+        public Vector2 GroundSleepSpot(Vector2 from)
+        {
+            if (Throne == null) return from;
+            var spot = Throne.Front + new Vector2(UnityEngine.Random.Range(-3f, 3f), UnityEngine.Random.Range(-2.5f, -0.6f));
+            if (!Nav.Walkable(spot) && !Nav.NearestFreeSpot(spot, new RectInt(0, 0, 0, 0), out spot)) return from;
+            return spot;
+        }
+
+        // A villager that's hungry or tired goes to eat or sleep (instead of its job): a meal first if it's hungry,
+        // then to bed. True if it went.
+        bool CareFor(Villager v)
+        {
+            if (!villagerConfig.needs) return false;
+            if (v.Job == Job.Guard && ShelterNow) return false;   // keeps watch while zombies are about
+            bool hungry = v.Fed < NeedsMath.EatBelow;
+            if (hungry && Meal(v)) return true;
+            if (v.WantsSleep(out bool nap))
+            {
+                var bed = FreeBed(v.Position);
+                v.StartSleep(bed, bed == null ? GroundSleepSpot(v.Position) : v.Position, nap);
+                return true;
+            }
+            return false;
+        }
+
+        // Off to the nearest storehouse with food for a meal (it's kept for them there). False if there's no food.
+        bool Meal(Villager v)
+        {
+            var store = NearestWith(ResourceType.Food, v.Position);
+            if (store == null) return false;   // no food: back to work, hungry
+            int amount = store.Reserve(ResourceType.Food, MealFood);
+            if (amount <= 0) return false;
+            return v.StartEat(store, amount);   // (if it can't get there, it gives the meal back)
+        }
 
         // ------------------------------------------------------------ shelter --
 
@@ -1600,6 +1700,7 @@ namespace KingdomGame.Building
                 var flag = NearestShelter(v.Position);
                 if (flag != null && v.StartShelter(flag)) return;
             }
+            if (CareFor(v)) return;
             if (v.Job == Job.Crafter && v.CarryAmount == 0)
             {
                 // Weapons on order first (at an anvil), then whichever crafting table is short of its part.
@@ -2042,8 +2143,10 @@ namespace KingdomGame.Building
 
             rooms.Clear();
             roomAt.Clear();
+            diningHall = false;
             var seen = new HashSet<Component>();
             var tags = new Dictionary<RoomTag, int>();
+            bool Dining() => tags.TryGetValue(RoomTag.Table, out int tables) && tables > 0 && tags.TryGetValue(RoomTag.Seat, out int seats) && seats > 0;
             foreach (var cellsOfRoom in RoomFinder.Find(walls, w, h, MaxRoomSize))
             {
                 var room = new Room();
@@ -2066,6 +2169,7 @@ namespace KingdomGame.Building
                     }
                 }
                 room.Name = NameOf(room.Size, throne, tags);
+                if (Dining()) diningHall = true;
                 // Label it at the cell nearest the middle.
                 var middle = sum / room.Size;
                 float best = float.MaxValue;
@@ -2098,6 +2202,7 @@ namespace KingdomGame.Building
                     }
                 }
                 string what = NameOf(room.Size, false, tags);
+                if (Dining()) diningHall = true;
                 room.Name = what == "Empty room" || what == "Small room" ? house.Name : $"{house.Name}: {what.ToLowerInvariant()}";
                 room.LabelAt = inside.Inner.center;
                 rooms.Add(room);

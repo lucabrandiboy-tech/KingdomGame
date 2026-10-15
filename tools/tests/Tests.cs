@@ -51,6 +51,12 @@ static partial class Tests
         Run(nameof(CornersCloseARoom), CornersCloseARoom);
         Run(nameof(HugeEnclosuresAreNotRooms), HugeEnclosuresAreNotRooms);
 
+        Run(nameof(HungerEmptiesOverADay), HungerEmptiesOverADay);
+        Run(nameof(BedsRestFasterThanTheGround), BedsRestFasterThanTheGround);
+        Run(nameof(HungryAndTiredWorkSlower), HungryAndTiredWorkSlower);
+        Run(nameof(VillagersSleepAtNightGuardsByDay), VillagersSleepAtNightGuardsByDay);
+        Run(nameof(KitchenMealsTakeLessFood), KitchenMealsTakeLessFood);
+
         Run(nameof(EverySoundIsMadeCleanly), EverySoundIsMadeCleanly);
         Run(nameof(GroansAreAllDifferent), GroansAreAllDifferent);
         Run(nameof(LoopsJoinUpSeamlessly), LoopsJoinUpSeamlessly);

@@ -27,11 +27,15 @@ namespace KingdomGame.Villagers
     /// ruler can walk through them. To build inside a house they walk to its door
     /// and step in (and out again the same way). When they see a zombie close by they drop
     /// their work and run (to the throne if that's away from it), and wait until
-    /// it's safe. Zombies can kill them. (Needs like food and sleep come later.)
+    /// it's safe. Zombies can kill them.
+    ///
+    /// They get hungry and tired (<see cref="NeedsMath"/>): they eat at a storehouse (a meal of food) and sleep at
+    /// night, in a bed if there's one free (healing too), otherwise on the ground by the throne. Guards sleep by day.
+    /// Hungry or tired villagers work and walk slower; fed and rested ones with a dining hall a little faster.
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter, Eat, Sleep }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -74,6 +78,13 @@ namespace KingdomGame.Villagers
         float stepClock;
         float scaredUntil, lookAt;
         Vector2 facing = Vector2.down;
+        // Needs: 1 well fed / rested, 0 starving / exhausted.
+        float fed = 1f, rested = 1f;
+        float needsAt, eatClock, mealShare, sleepAngle, noMealUntil;
+        int meal;                // food reserved at the storehouse for its meal
+        Furniture bed;           // the bed it's going to or asleep in (null: the ground)
+        bool asleep, inBed, napping;
+        Vector2 bedside;         // where it got into bed (it gets out there)
 
         public bool IsIdle => task == Task.Idle;
         /// <summary>Its job (the villagers panel changes it; it drops what it's doing, but keeps what it carries).</summary>
@@ -111,6 +122,8 @@ namespace KingdomGame.Villagers
                     case Task.Dig: return "digging";
                     case Task.Craft: return benchMachine != null ? $"making {ResourceText.Name(benchMachine.Config.makes)}" : "making weapons";
                     case Task.Shelter: return "sheltering from the zombies";
+                    case Task.Eat: return "eating";
+                    case Task.Sleep: return asleep ? (inBed ? "asleep in bed" : napping ? "napping on the ground" : "asleep on the ground") : "going to bed";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
                     case Task.Gather: return node != null ? $"gathering {ResourceText.Name(node.Config.resource)}" : "gathering";
                     default: return Scared ? "hiding" : "idle";
@@ -191,6 +204,150 @@ namespace KingdomGame.Villagers
             if (Walk(flag.Cells, true)) return true;
             Idle();
             return false;
+        }
+
+        /// <summary>How fed it is: 1 well fed, 0 starving.</summary>
+        public float Fed => fed;
+        /// <summary>How rested it is: 1 rested, 0 exhausted.</summary>
+        public float Rested => rested;
+        /// <summary>Asleep (in a bed: out of sight in it; otherwise lying on the ground).</summary>
+        public bool Asleep => asleep;
+        public bool InBed => asleep && inBed;
+
+        /// <summary>How fast it works and walks now (hunger, tiredness, a dining hall).</summary>
+        public float Pace => config != null && config.needs
+            ? NeedsMath.WorkFactor(fed, rested, kingdom.HasDiningHall, config.tiredSpeed, config.exhaustedSpeed, config.contentBonus)
+            : 1f;
+
+        /// <summary>Puts back how fed and rested it was (a saved game).</summary>
+        public void SetNeeds(float fedLevel, float restedLevel)
+        {
+            fed = Mathf.Clamp01(fedLevel);
+            rested = Mathf.Clamp01(restedLevel);
+        }
+
+        /// <summary>Whether it should go to sleep now (<paramref name="nap"/>: outside its usual time, it's exhausted).</summary>
+        public bool WantsSleep(out bool nap)
+        {
+            nap = false;
+            if (config == null || !config.needs) return false;
+            var clock = kingdom.Clock;
+            float hour = clock != null ? clock.Hour : 12f;
+            bool night = clock != null && clock.IsNight;
+            bool guard = job == Job.Guard;
+            if (!NeedsMath.ShouldSleep(hour, night, rested, guard)) return false;
+            nap = !(guard ? NeedsMath.GuardSleepTime(hour) : night);
+            return true;
+        }
+
+        /// <summary>Go to a storehouse and eat a meal there (<paramref name="amount"/> food, already reserved there).</summary>
+        public bool StartEat(Storage from, int amount)
+        {
+            storage = from;
+            meal = amount;
+            eatClock = 0f;
+            task = Task.Eat;
+            if (Walk(from.Cells, true)) return true;
+            Idle();   // (gives the meal back to the storehouse)
+            noMealUntil = Time.time + 30f;   // no way to the food: don't keep dropping work for it
+            return false;
+        }
+
+        /// <summary>
+        /// Go to sleep: in <paramref name="toBed"/> if it's given (its place in it is taken now), otherwise on the ground at
+        /// <paramref name="ground"/>, or where it is if there's no way there. <paramref name="nap"/>: just until rested enough.
+        /// </summary>
+        public void StartSleep(Furniture toBed, Vector2 ground, bool nap)
+        {
+            Abandon();
+            task = Task.Sleep;
+            napping = nap;
+            if (toBed != null)
+            {
+                bed = toBed;
+                kingdom.ClaimBed(bed);
+                if (Walk(bed.Cells, true)) return;
+                kingdom.ReleaseBed(bed);
+                bed = null;
+            }
+            if (Walk(new RectInt(NavGrid.CellAt(ground), Vector2Int.one), false)) return;
+            // No way there: sleeps where it is.
+            path.Clear();
+            pathIndex = 0;
+            portal = null;
+        }
+
+        // At the bed (or the spot on the ground): into it, out of sight, or lying down.
+        void LieDown()
+        {
+            asleep = true;
+            sleepAngle = Random.Range(0f, 360f);
+            if (bed != null)
+            {
+                inBed = true;
+                bedside = Position;
+                transform.position = bed.Cells.center;
+            }
+            ShowAsleep();
+        }
+
+        // Out of bed (woken, or the bed went): back on its feet where it got in.
+        void WakeUp()
+        {
+            if (!asleep) return;
+            if (inBed) transform.position = bedside;
+            asleep = false;
+            inBed = false;
+            ShowAsleep();
+        }
+
+        void ShowAsleep()
+        {
+            if (bodyRenderer != null) bodyRenderer.enabled = !inBed;
+            if (shadow != null) shadow.enabled = !asleep && !onPost;
+            if (asleep && !inBed && sprites.Dead != null && sprites.Dead.Length > 0)
+            {
+                // Lying on its back on the ground.
+                bodyRenderer.sprite = sprites.Dead[Character.RulerLook.Direction(sleepAngle, sprites.Dead.Length)];
+                body.localRotation = Quaternion.Euler(0f, 0f, sleepAngle);
+            }
+        }
+
+        // Hunger and tiredness over time; once a second: whether it should drop what it's doing to eat or sleep,
+        // or (asleep) wake up.
+        void Needs()
+        {
+            float hours = Time.deltaTime * kingdom.GameHoursPerSecond;
+            fed = NeedsMath.Hunger(fed, hours, config.hungerHours);
+            rested = NeedsMath.Rest(rested, hours, asleep, inBed, config.awakeHours, config.bedSleepHours, config.groundSleepHours, config.groundRestCap);
+            if (asleep && inBed) Health.Heal(config.healPerHourInBed * hours);
+            if (Time.time < needsAt) return;
+            needsAt = Time.time + 1f;
+
+            var clock = kingdom.Clock;
+            float hour = clock != null ? clock.Hour : 12f;
+            bool night = clock != null && clock.IsNight;
+            bool guard = job == Job.Guard;
+            if (task == Task.Sleep)
+            {
+                if (!asleep) return;   // still on the way
+                // Zombies about: guards get up for their towers.
+                if ((guard && kingdom.ShelterNow) || !NeedsMath.StayAsleep(hour, night, rested, guard, napping))
+                {
+                    Idle();
+                    thinkAt = Time.time + Random.Range(0f, 2f);   // not everyone at once
+                }
+                return;
+            }
+            if (task == Task.Idle || task == Task.Eat || task == Task.Flee || task == Task.Shelter || task == Task.MakeRoom || Scared) return;
+            if (guard && kingdom.ShelterNow) return;   // keeps watch while zombies are about
+            bool sleepy = NeedsMath.ShouldSleep(hour, night, rested, guard);
+            bool starving = fed < NeedsMath.Urgent && Time.time >= noMealUntil && kingdom.Available(ResourceType.Food) > 0;
+            if (sleepy || starving)
+            {
+                Abandon();
+                thinkAt = Time.time;
+            }
         }
 
         /// <summary>Go to an anvil and make the weapons on order there (crafters).</summary>
@@ -349,6 +506,7 @@ namespace KingdomGame.Villagers
         {
             if (config == null || Health == null || Health.Dead) return;
             Vector2 before = transform.position;
+            if (config.needs) Needs();
 
             if (Time.time >= lookAt)
             {
@@ -356,8 +514,8 @@ namespace KingdomGame.Villagers
                 var director = ZombieDirector.Current;
                 var zombie = director != null && job != Job.Guard ? director.NearestVisible(Position, config.fleeDistance) : null;
                 if (zombie != null) Flee(zombie.Position);
-                // Zombies about: drop the job and make for the shelter (the kingdom sends it there).
-                else if (job != Job.Guard && task != Task.Shelter && task != Task.Flee && kingdom.ShelterNow && kingdom.HasShelter)
+                // Zombies about: drop the job and make for the shelter (the kingdom sends it there). Not out of bed, though.
+                else if (job != Job.Guard && task != Task.Shelter && task != Task.Flee && !InBed && kingdom.ShelterNow && kingdom.HasShelter)
                 {
                     Abandon();
                     thinkAt = Time.time;
@@ -376,9 +534,14 @@ namespace KingdomGame.Villagers
             {
                 Abandon();
             }
-            else if ((task == Task.Fetch || task == Task.Return) && storage == null)
+            else if ((task == Task.Fetch || task == Task.Return || task == Task.Eat) && storage == null)
             {
                 Abandon();
+            }
+            else if (task == Task.Sleep && (object)bed != null && bed == null)
+            {
+                Idle();   // its bed was broken or torn down
+                thinkAt = Time.time;
             }
             else if (task == Task.Dig && (mine == null || !mine.IsMarked(digCell)))
             {
@@ -431,7 +594,7 @@ namespace KingdomGame.Villagers
                 return;
             }
             Vector2 here = transform.position;
-            float step = config.moveSpeed * kingdom.Boost(Kingdom.Upgrade.Speed) * Time.deltaTime;
+            float step = config.moveSpeed * kingdom.Boost(Kingdom.Upgrade.Speed) * Pace * Time.deltaTime;
             var to = target - here;
             if (to.magnitude <= step)
             {
@@ -483,7 +646,7 @@ namespace KingdomGame.Villagers
                         Idle();
                         return;
                     }
-                    blueprint.AddWork(config.workRate * kingdom.BuildBoost * Time.deltaTime);
+                    blueprint.AddWork(config.workRate * kingdom.BuildBoost * Pace * Time.deltaTime);
                     if (Time.time >= hammerAt)
                     {
                         hammerAt = Time.time + Random.Range(0.45f, 0.75f);
@@ -498,11 +661,37 @@ namespace KingdomGame.Villagers
                     return;
                 case Task.Shelter:
                     return;   // waits here
+                case Task.Sleep:
+                    if (!asleep) LieDown();
+                    return;
+                case Task.Eat:
+                {
+                    var toStore = storage.Center - Position;
+                    if (toStore.sqrMagnitude > 0.0001f) facing = toStore.normalized;
+                    if (meal > 0)
+                    {
+                        // Puts down what it's carrying (if there's room), takes its meal and eats it there.
+                        if (carryAmount > 0) carryAmount -= storage.Deposit(carryType, carryAmount);
+                        int asked = meal;
+                        int got = storage.TakeReserved(ResourceType.Food, meal);
+                        meal = 0;
+                        if (got <= 0) { Idle(); thinkAt = Time.time; return; }
+                        mealShare = got / (float)asked;   // (someone took some first: part of a meal)
+                        eatClock = 0f;
+                    }
+                    eatClock += Time.deltaTime;
+                    if (eatClock < config.eatSeconds) return;
+                    fed = Mathf.Min(1f, fed + mealShare);
+                    mealShare = 0f;
+                    Idle();
+                    thinkAt = Time.time;
+                    return;
+                }
                 case Task.Craft:
                 {
                     var toBench = bench.Cells.center - Position;
                     if (toBench.sqrMagnitude > 0.0001f) facing = toBench.normalized;
-                    float work = Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Crafting);
+                    float work = Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Crafting) * Pace;
                     if (benchMachine != null) benchMachine.Work(work);   // a crafting table: the age's part
                     else kingdom.Armory.Work(work);                       // an anvil: weapons
                     return;
@@ -511,7 +700,7 @@ namespace KingdomGame.Villagers
                 {
                     var toRock = (Vector2)digCell + new Vector2(0.5f, 0.5f) - Position;
                     if (toRock.sqrMagnitude > 0.0001f) facing = toRock.normalized;
-                    digClock += Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Gathering);
+                    digClock += Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Gathering) * Pace;
                     if (digClock < mine.Config.digSeconds) return;
                     if (mine.Dig(digCell, out var type, out int amount))
                     {
@@ -527,7 +716,7 @@ namespace KingdomGame.Villagers
                 {
                     var toNode = (Vector2)node.transform.position - Position;
                     if (toNode.sqrMagnitude > 0.0001f) facing = toNode.normalized;
-                    gatherClock += Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Gathering);
+                    gatherClock += Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Gathering) * Pace;
                     if (gatherClock < node.Config.secondsPerHit) return;
                     gatherClock -= node.Config.secondsPerHit;
                     if (carryAmount > 0 && carryType != node.Config.resource) { Idle(); return; }
@@ -573,6 +762,12 @@ namespace KingdomGame.Villagers
 
         void Idle()
         {
+            WakeUp();
+            if ((object)bed != null) kingdom.ReleaseBed(bed);
+            bed = null;
+            napping = false;
+            if (meal > 0 && storage != null) storage.Unreserve(ResourceType.Food, meal);
+            meal = 0;
             task = Task.Idle;
             if (node != null && node.Gatherer == (Component)this) node.Gatherer = null;
             node = null;
@@ -659,14 +854,19 @@ namespace KingdomGame.Villagers
         /// <summary>Its house is gone (torn down, broken): it's put out by the door and drops what it was doing.</summary>
         public void PutOutside(Vector2 at)
         {
+            Abandon();   // (first: getting out of bed puts it back by the bed)
             space = null;
             portal = null;
             transform.position = at;
-            Abandon();
         }
 
         void Animate(Vector2 velocity)
         {
+            if (asleep)
+            {
+                Moving = false;
+                return;   // (in bed, or lying on the ground: see ShowAsleep)
+            }
             float speed = velocity.magnitude;
             Moving = speed > 0.1f;
             if (speed > 0.1f)

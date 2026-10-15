@@ -35,6 +35,8 @@ namespace KingdomGame.Economy
         [Min(1)] public int holds = 60;
         [Tooltip("Generator: wood burnt each round. Smelter: wood used for each batch.")]
         [Min(0)] public int woodIn = 1;
+        [Tooltip("Generator: coal burnt each round (it burns wood instead when there's no coal, and wood lasts a third as long).")]
+        [Min(0)] public int coalIn = 1;
         [Tooltip("Smelter: iron used for each batch.")]
         [Min(0)] public int ironIn = 2;
         [Tooltip("Sawmills and quarries: only works within a burning generator's reach (Iron Age water and treadwheel ones don't need it).")]

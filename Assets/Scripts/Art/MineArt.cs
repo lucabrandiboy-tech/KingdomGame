@@ -10,7 +10,7 @@ namespace KingdomGame.Art
     /// </summary>
     public static class MineArt
     {
-        public const int Copper = 1, Iron = 2, Gold = 3;
+        public const int Copper = 1, Iron = 2, Gold = 3, Coal = 4;
 
         /// <summary>
         /// Paints one tile into <paramref name="pixels"/> (<paramref name="width"/> pixels across, bottom row first)
@@ -55,7 +55,8 @@ namespace KingdomGame.Art
                         if (ore != 0)
                         {
                             // Nuggets of ore set in the rock: rounded, lit from the top-left, with a glint.
-                            var oreColor = ore == Copper ? PixelImage.Rgb(196, 112, 58) : ore == Iron ? PixelImage.Rgb(150, 96, 84) : PixelImage.Rgb(236, 190, 64);
+                            var oreColor = ore == Copper ? PixelImage.Rgb(196, 112, 58) : ore == Iron ? PixelImage.Rgb(150, 96, 84)
+                                : ore == Coal ? PixelImage.Rgb(34, 32, 32) : PixelImage.Rgb(236, 190, 64);
                             for (int k = 0; k < 7; k++)
                             {
                                 float nx = 0.12f + Noise.Hash01(seed + 20u + (uint)k, wx, wy) * 0.76f;

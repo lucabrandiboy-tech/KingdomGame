@@ -21,6 +21,8 @@ namespace KingdomGame.Building
         [Range(0, 0.5f)] public float copper = 0.08f;
         [Range(0, 0.5f)] public float iron = 0.06f;
         [Range(0, 0.5f)] public float gold = 0.025f;
+        [Tooltip("Coal (for generators): found anywhere, near the shaft too.")]
+        [Range(0, 0.5f)] public float coal = 0.07f;
         [Tooltip("Tiles from the shaft before iron starts showing up.")]
         [Min(0)] public float ironFrom = 8f;
         [Tooltip("Tiles from the shaft before gold starts showing up.")]

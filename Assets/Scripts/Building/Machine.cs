@@ -117,9 +117,20 @@ namespace KingdomGame.Building
             switch (config.kind)
             {
                 case MachineKind.Generator:
-                    if (config.woodIn > 0 && !kingdom.TrySpend(config.woodIn, 0, 0)) return false;
-                    poweredUntil = Time.time + config.workSeconds + 0.5f;
+                {
+                    // Coal first; wood also burns, but a load lasts only a third as long.
+                    var coal = new int[Inventory.TypeCount];
+                    coal[(int)ResourceType.Coal] = config.coalIn;
+                    float lasts = config.workSeconds;
+                    if (config.coalIn <= 0 || !kingdom.TrySpend(coal))
+                    {
+                        if (config.woodIn > 0 && !kingdom.TrySpend(config.woodIn, 0, 0)) return false;
+                        lasts = config.workSeconds / 3f;
+                        workAt = Time.time + lasts;
+                    }
+                    poweredUntil = Time.time + lasts + 0.5f;
                     return true;
+                }
 
                 case MachineKind.Smelter:
                 {

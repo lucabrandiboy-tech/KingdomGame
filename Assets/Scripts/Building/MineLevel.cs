@@ -13,6 +13,7 @@ namespace KingdomGame.Building
         Copper,
         Iron,
         Gold,
+        Coal,
     }
 
     /// <summary>
@@ -124,6 +125,8 @@ namespace KingdomGame.Building
             if (fromShaft >= config.goldFrom && gold > 1f - config.gold * 2.2f) return Ore.Gold;
             if (fromShaft >= config.ironFrom && iron > 1f - config.iron * 2.2f) return Ore.Iron;
             if (copper > 1f - config.copper * 2.2f) return Ore.Copper;
+            float coal = Noise.Value(x / 3.6f, y / 3.6f, seed + 34u);
+            if (coal > 1f - config.coal * 2.2f) return Ore.Coal;
             return Ore.None;
         }
 
@@ -256,6 +259,7 @@ namespace KingdomGame.Building
                 case Ore.Copper: type = ResourceType.Copper; amount = config.orePerTile; break;
                 case Ore.Iron: type = ResourceType.Iron; amount = config.orePerTile; break;
                 case Ore.Gold: type = ResourceType.Gold; amount = config.orePerTile; break;
+                case Ore.Coal: type = ResourceType.Coal; amount = config.orePerTile; break;
                 default: amount = config.stonePerTile; break;
             }
             ore[i] = Ore.None;

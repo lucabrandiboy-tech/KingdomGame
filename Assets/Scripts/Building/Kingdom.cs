@@ -1321,7 +1321,8 @@ namespace KingdomGame.Building
             if (best == null) return false;
             // Carrying something else (or a full load soon): take it to storage first.
             var ore = best.OreAt(bestCell);
-            var comes = ore == Ore.Copper ? ResourceType.Copper : ore == Ore.Iron ? ResourceType.Iron : ore == Ore.Gold ? ResourceType.Gold : ResourceType.Stone;
+            var comes = ore == Ore.Copper ? ResourceType.Copper : ore == Ore.Iron ? ResourceType.Iron : ore == Ore.Gold ? ResourceType.Gold
+                : ore == Ore.Coal ? ResourceType.Coal : ResourceType.Stone;
             int amount = ore == Ore.None ? best.Config.stonePerTile : best.Config.orePerTile;
             if (v.CarryAmount > 0 && (v.CarryType != comes || v.CarryAmount + amount > full))
             {

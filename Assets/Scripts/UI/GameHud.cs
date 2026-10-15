@@ -166,7 +166,7 @@ namespace KingdomGame.UI
             {
                 text.Append($"Storage: wood {kingdom.Stock(ResourceType.Wood)}, stone {kingdom.Stock(ResourceType.Stone)}, food {kingdom.Stock(ResourceType.Food)}");
                 // Ores once you've dug some up.
-                foreach (var ore in new[] { ResourceType.Copper, ResourceType.Iron, ResourceType.Gold, ResourceType.Steel })
+                foreach (var ore in new[] { ResourceType.Copper, ResourceType.Iron, ResourceType.Gold, ResourceType.Steel, ResourceType.Coal })
                 {
                     int n = kingdom.Stock(ore);
                     if (n > 0) text.Append($", {ore.ToString().ToLowerInvariant()} {n}");

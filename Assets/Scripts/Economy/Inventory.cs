@@ -13,6 +13,8 @@ namespace KingdomGame.Economy
         Gold,
         /// <summary>Smelted from iron at a smelter (Medieval); machines are built from it.</summary>
         Steel,
+        /// <summary>Dug in mines (near the shaft); burns in generators three times as long as wood.</summary>
+        Coal,
     }
 
     public static class ResourceText

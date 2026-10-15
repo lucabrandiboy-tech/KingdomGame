@@ -9,7 +9,9 @@ build bar's new **Industry** tab and unlocks it with its age.
 - **Steel**: a new resource, made at a smelter. The storage line on screen shows it once you have some.
 - **Smelter** (Medieval, 2x2): every 20 seconds takes **2 iron + 2 wood** from storage and puts
   **1 steel** back. No villager or power needed. Iron comes from mines.
-- **Generator** (Industrial, 2x2, costs steel): burns **2 wood every 30 seconds** from storage.
+- **Generator** (Industrial, 2x2, costs steel): burns **1 coal every 30 seconds** from storage. With no
+  coal it burns wood instead (2 wood), but that only lasts 10 seconds, so wood runs out 3 times faster.
+  **Coal** is dug in mines (black nuggets in the rock, found near the shaft too).
   Sawmills and quarries within **10 tiles** of a burning generator work.
 - **Sawmill** (Industrial, 2x2): cuts the nearest tree within 8 tiles, 5 wood every 8 seconds.
 - **Quarry** (Industrial, 2x2): digs 4 stone every 10 seconds out of the ground (it never runs out).

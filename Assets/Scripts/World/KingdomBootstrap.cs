@@ -340,6 +340,13 @@ namespace KingdomGame.World
             var fires = new GameObject("Fires").AddComponent<Fires>();
             fires.transform.SetParent(transform, false);
             fires.Setup(content.fire, Kingdom.Current, PixelWorld.Current);
+            // Deer and wolves round the ruler (each computer its own).
+            if (content.wildlife != null)
+            {
+                var wild = new GameObject("Wildlife").AddComponent<Wildlife>();
+                wild.transform.SetParent(transform, false);
+                wild.Setup(content.wildlife, Kingdom.Current, dayNight);
+            }
         }
 
         void AddDebug()

@@ -37,6 +37,8 @@ namespace KingdomGame.World
         public DayNightConfig dayNight;
         [Tooltip("The seasons and the weather.")]
         public SeasonConfig seasons;
+        [Tooltip("Deer to hunt, and wolves at night.")]
+        public WildlifeConfig wildlife;
 
         [Header("Camera and look")]
         public ViewConfig view;

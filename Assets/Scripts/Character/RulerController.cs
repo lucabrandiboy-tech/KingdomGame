@@ -471,7 +471,7 @@ namespace KingdomGame.Character
             if (fired) Audio.Sounds.Fired(weapon, Muzzle);
         }
 
-        // A club: hits every zombie in front within reach.
+        // A club: hits every zombie (and wild animal) in front within reach.
         void Swing(WeaponConfig weapon)
         {
             if (look != null) look.Swing();
@@ -481,7 +481,7 @@ namespace KingdomGame.Character
             var hit = new System.Collections.Generic.List<Health>();
             foreach (var h in Health.Creatures)
             {
-                if (h == null || h.Dead || h.Team != Team.Zombie) continue;
+                if (h == null || h.Dead || h.Team == Team.Friendly) continue;
                 var to = h.Position - here;
                 if (to.magnitude > weapon.range + h.Radius || Vector2.Angle(aim, to) > halfArc) continue;
                 hit.Add(h);

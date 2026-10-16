@@ -64,6 +64,7 @@ namespace UnityEngine
         public static float Cos(float v) => (float)System.Math.Cos(v);
         public static float Atan2(float y, float x) => (float)System.Math.Atan2(y, x);
         public static float Sqrt(float v) => (float)System.Math.Sqrt(v);
+        public static float Exp(float v) => (float)System.Math.Exp(v);
         public static float Abs(float v) => System.Math.Abs(v);
         public static float Sign(float v) => v >= 0f ? 1f : -1f;
         public static int Max(int a, int b) => a > b ? a : b;

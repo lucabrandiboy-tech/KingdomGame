@@ -4,11 +4,13 @@ using UnityEngine;
 
 namespace KingdomGame
 {
-    /// <summary>Who is on whose side. Zombies attack the Friendly team; your shots only hit zombies.</summary>
+    /// <summary>Who is on whose side. Zombies (and wolves) attack the Friendly team; your shots hit zombies and wild animals.</summary>
     public enum Team
     {
         Friendly,
         Zombie,
+        /// <summary>Deer and wolves (World/Wildlife.cs). Zombies leave them alone; shots and blows hit them.</summary>
+        Wild,
     }
 
     /// <summary>
@@ -149,7 +151,14 @@ namespace KingdomGame
         /// <paramref name="from"/> to <paramref name="to"/> passes through, and how far
         /// along the line it is hit (0..1).
         /// </summary>
-        public static bool Raycast(Vector2 from, Vector2 to, Team team, out Health hit, out float along)
+        public static bool Raycast(Vector2 from, Vector2 to, Team team, out Health hit, out float along) =>
+            Cast(from, to, team, false, out hit, out along);
+
+        /// <summary>Like <see cref="Raycast"/>, for anything not on the friendly side: zombies and wild animals (what shots hit).</summary>
+        public static bool RaycastFoes(Vector2 from, Vector2 to, out Health hit, out float along) =>
+            Cast(from, to, Team.Zombie, true, out hit, out along);
+
+        static bool Cast(Vector2 from, Vector2 to, Team team, bool foes, out Health hit, out float along)
         {
             hit = null;
             along = 1f;
@@ -158,7 +167,7 @@ namespace KingdomGame
             if (length2 < 1e-10f) return false;
             foreach (var h in creatures)
             {
-                if (h.Team != team || h.Dead) continue;
+                if (h.Dead || (foes ? h.Team == Team.Friendly : h.Team != team)) continue;
                 // Where the line passes closest to the middle, and whether that's inside the body.
                 var toCenter = h.Position - from;
                 float t = Mathf.Clamp01(Vector2.Dot(toCenter, line) / length2);
@@ -180,7 +189,7 @@ namespace KingdomGame
         /// <summary>
         /// An explosion: everything within <paramref name="radius"/> tiles takes damage,
         /// <paramref name="damage"/> in the middle falling to a quarter at the edge: zombies
-        /// all of it, the friendly side (the ruler, villagers, doors, furniture, storehouses)
+        /// and animals all of it, the friendly side (the ruler, villagers, doors, furniture, storehouses)
         /// <paramref name="friendlyShare"/> of it.
         /// </summary>
         public static void Blast(Vector2 at, float radius, float damage, float friendlyShare = 1f)

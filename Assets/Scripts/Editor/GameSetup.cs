@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 24;
+        const int SettingsVersion = 25;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -403,6 +403,7 @@ namespace KingdomGame.EditorTools
             if (content.view == null) content.view = view;
             if (content.fire == null) content.fire = Asset<FireConfig>("Building/FireConfig", f => { });
             if (content.seasons == null) content.seasons = seasonConfig;
+            if (content.wildlife == null) content.wildlife = Asset<WildlifeConfig>("World/WildlifeConfig", w => { });
             if (content.kingdom == null) content.kingdom = kingdomConfig;
             if (content.villager == null) content.villager = villagerConfig;
             if (content.storehouse == null) content.storehouse = storehouse;
@@ -579,6 +580,7 @@ namespace KingdomGame.EditorTools
                 }
             }
             if (fireUpdate) Burnable(content);
+            HunterBow(content.villager);
 
             if (villagerNeeds && content.kingdom != null && content.kingdom.startFood < 60)
             {
@@ -908,6 +910,20 @@ namespace KingdomGame.EditorTools
         // What every age's things take on top of wood and stone: some of that age's part (from its crafting table) and of every
         // earlier age's part. Set every time (so older settings get them too); big things (2x2 and up) take twice as many.
         // The sound a weapon makes when it fires: set every time, so older settings get it too.
+        // The hunters' bow (hunters are a villager job): one good arrow brings down a deer, two a wolf.
+        static void HunterBow(VillagerConfig villagers)
+        {
+            var bow = Asset<WeaponConfig>("Combat/HunterBow", w =>
+            {
+                w.hitDamage = 50f; w.fireRate = 1f; w.automatic = false; w.projectileSpeed = 19f; w.range = 10f; w.spreadDegrees = 2.5f;
+                w.projectileLength = 12; w.projectileThickness = 2; w.projectileColor = new Color32(176, 140, 92, 255); w.overWalls = 0.8f;
+            });
+            SoundOf(bow, ShotSound.Bow);
+            if (villagers == null || villagers.huntWeapon != null) return;
+            villagers.huntWeapon = bow;
+            EditorUtility.SetDirty(villagers);
+        }
+
         static void SoundOf(WeaponConfig w, ShotSound sound)
         {
             if (w == null || w.sound == sound) return;

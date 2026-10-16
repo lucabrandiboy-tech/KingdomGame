@@ -117,3 +117,40 @@ Try it:
 6. Survival: F10 > send 5 **Burning** zombies at a wooden gate.
 
 Tell me if fires spread too fast or too slow, or villagers ignore them.
+
+## 4. Deer and wolves
+
+The wild has animals now. They come and go out of sight round wherever you are (about
+45-65 tiles away), so there are always some, however far you go. They aren't saved.
+
+- **Deer:** herds of 3-5 graze and wander in open ground (fewer in winter). They're shy:
+  get within about 7 tiles, or let a zombie or wolf near, and the whole herd runs. Shoot
+  or club one and it leaves a **bag of 20 food** where it falls (walk over it).
+- **Hunters** (a new villager job, **V**): they take a bow, creep up on a deer, shoot it
+  (one good arrow), fetch the meat and carry it to storage. If no deer are about, the
+  villagers panel says so.
+- **Wolves:** from the second night, packs of 2-3 come in the dark. You hear them howl.
+  They prowl closer and go for anyone out of the firelight (you, villagers), rushing in
+  faster than you can run and biting. They won't step into the light of a brazier, torch,
+  campfire or burning building, so a well-lit kingdom keeps them out. Hurt one badly and
+  it runs off; they all leave at dawn, and they don't come while zombies are attacking.
+  Villagers run from them (to the throne); hunters shoot them; towers shoot them when
+  there's no zombie to shoot. A dead wolf leaves a little food. Their eyes shine in the dark.
+- Online, each player has their own animals (the others don't see yours).
+
+Try it:
+
+1. Free build. Walk out of your kingdom: within a minute or so you should find a herd
+   (or **F10 > Wildlife > A herd of deer near you**). Walk at them: they run.
+2. Shoot one (any gun or bow; the club works if you can catch one). It drops a bag: walk
+   over it for the food.
+3. **V**: make a villager a **Hunter**. Watch them go out, shoot, and bring meat home
+   (storage food goes up by 20).
+4. **F10 > Wildlife > Wolves now** (or wait for the second night; F10 > Time > Midnight
+   from day 2 on). A howl, then wolves come.
+   Stand in the dark: they rush you. Run to your throne's braziers: they stop at the
+   edge of the light and circle. Fight them with the club: two hits and one runs off.
+5. With wolves about, the top right says *Wolves about*. Watch a villager outside run
+   to the throne, and a hunter turn and shoot.
+
+Tell me if deer are too hard or too easy to hunt, and if wolves are too much.

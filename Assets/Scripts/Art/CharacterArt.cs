@@ -398,8 +398,112 @@ namespace KingdomGame.Art
             return Figure(ppu, 0.6f * k, 0.5f * k, 0.48f * k, light, parts);
         }
 
-        // The materials people are made of.
-        enum Mat { Cape, Hem, Tunic, Gold, Steel, Fur, Hair, Skin, Glove, Boot, Sack, Rope, Cap, Rot, Rag, Wound }
+        // ----------------------------------------------------------- animals --
+
+        /// <summary>The wild animals (each has its own pictures; ArtKeys.Animal).</summary>
+        public static readonly string[] AnimalKinds = { "Deer", "Wolf" };
+        public const int AnimalDirections = 8;
+        /// <summary>An animal's pictures: walking frames 0-3, then 4 (a deer grazing, head down; a wolf lunging to bite).</summary>
+        public const int AnimalFrames = 5;
+        // The parts below are drawn about a fifth smaller than life; this scales them up (a deer is then about 1.1 tiles long, a wolf 1.15 with its tail).
+        const float AnimalScale = 1.25f;
+
+        /// <summary>One picture of an animal (<see cref="AnimalKinds"/>), facing right and lit as if turned to <paramref name="facingDegrees"/>.</summary>
+        public static PixelImage AnimalFrame(int ppu, string kind, float facingDegrees, int frame)
+        {
+            int scaled = Mathf.RoundToInt(ppu * AnimalScale);
+            return kind == "Wolf" ? Wolf(scaled, ArtLight.For(facingDegrees), frame, false) : Deer(scaled, ArtLight.For(facingDegrees), frame, false);
+        }
+
+        /// <summary>A dead animal lying on its side.</summary>
+        public static PixelImage AnimalDead(int ppu, string kind, float facingDegrees)
+        {
+            int scaled = Mathf.RoundToInt(ppu * AnimalScale);
+            return kind == "Wolf" ? Wolf(scaled, ArtLight.For(facingDegrees), 0, true) : Deer(scaled, ArtLight.For(facingDegrees), 0, true);
+        }
+
+        /// <summary>How far an animal's body reaches from its middle, in tiles (for shots and bumping).</summary>
+        public static float AnimalRadius(string kind) => kind == "Wolf" ? 0.26f : 0.3f;
+
+        // A doe from above: a long brown back with a white rump, neck and head forward, big ears, thin legs
+        // showing in front and behind as it walks. Frame 4: grazing (head down at the grass). Dead: on its side.
+        static PixelImage Deer(int ppu, Vector3 light, int frame, bool dead)
+        {
+            var parts = new System.Collections.Generic.List<Part>();
+            var coat = PixelImage.Rgb(146, 98, 60);
+            var dark = PixelImage.Rgb(96, 66, 44);
+            var leg = PixelImage.Rgb(88, 62, 42);
+            var rump = PixelImage.Rgb(206, 192, 172);
+            float step = frame < WalkFrames ? Stride(frame) : 0f;
+            // Lying dead: everything low, the legs out to one side.
+            float z = dead ? 0.22f : 1f;
+            float side = dead ? 0.24f : 0f;
+            foreach (var (x, y, phase) in new[] { (0.17f, 0.055f, 1f), (0.17f, -0.055f, -1f), (-0.17f, 0.055f, -1f), (-0.17f, -0.055f, 1f) })
+            {
+                // Striding, the hooves reach out past the chest and the haunches.
+                float swing = step * phase * 0.14f;
+                if (dead) parts.Add(Limb(x, y * 0.5f, 0.12f, x + 0.06f * phase, 0.3f + y, 0.04f, 0.022f, Mat.Hide, leg));
+                else parts.Add(Limb(x, y, 0.5f, x + swing, y, 0.03f, 0.022f, Mat.Hide, leg));
+            }
+            parts.Add(Body(0f, side * 0.2f, 0.82f * z, 0.27f, 0.11f, 0.12f * z, dead ? Mat.Hide : Mat.Pelt, coat));
+            parts.Add(Body(-0.24f, side * 0.2f, 0.84f * z, 0.045f, 0.06f, 0.05f * z, Mat.Hide, rump));               // pale rump
+            parts.Add(Ball(-0.29f, side * 0.2f, 0.87f * z, 0.025f, Mat.Hide, dark));                                 // tail
+            bool grazing = frame == 4 && !dead;
+            float headX = grazing ? 0.4f : 0.38f, headZ = (grazing ? 0.3f : 1.12f) * z;
+            float headY = dead ? 0.12f : 0f;
+            parts.Add(Limb(0.2f, side * 0.2f, 0.9f * z, headX - 0.05f, headY, headZ - 0.04f, 0.045f, Mat.Hide, coat));   // neck
+            parts.Add(Body(headX, headY, headZ, 0.07f, 0.045f, 0.05f, Mat.Hide, PixelImage.Scale(coat, 0.92f)));
+            parts.Add(Limb(headX + 0.02f, headY, headZ, headX + 0.09f, headY, headZ - 0.03f, 0.025f, Mat.Hide, PixelImage.Rgb(70, 52, 40)));   // muzzle
+            parts.Add(Ball(headX + 0.1f, headY, headZ - 0.03f, 0.012f, Mat.Boot, PixelImage.Rgb(24, 20, 18)));                          // nose
+            for (int s = -1; s <= 1; s += 2)
+            {
+                parts.Add(Limb(headX - 0.02f, headY + s * 0.025f, headZ + 0.03f, headX - 0.05f, headY + s * 0.065f, headZ + 0.06f, 0.021f, Mat.Hide, PixelImage.Rgb(136, 94, 60)));   // big ears, laid back
+                parts.Add(Ball(headX + 0.03f, headY + s * 0.035f, headZ + 0.02f, 0.009f, Mat.Boot, PixelImage.Rgb(18, 14, 12)));                                                   // eyes
+            }
+            return Figure(ppu, 0.36f, 0.52f, dead ? 0.42f : 0.17f, light, parts);
+        }
+
+        // A grey wolf from above: a darker saddle, a pale ruff and muzzle, pointed ears and a bushy tail.
+        // Frame 4: lunging to bite (stretched forward, jaws open). Dead: on its side.
+        static PixelImage Wolf(int ppu, Vector3 light, int frame, bool dead)
+        {
+            var parts = new System.Collections.Generic.List<Part>();
+            var coat = PixelImage.Rgb(102, 96, 88);
+            var saddle = PixelImage.Rgb(60, 56, 52);
+            var pale = PixelImage.Rgb(142, 134, 120);
+            var leg = PixelImage.Rgb(80, 76, 70);
+            float step = frame < WalkFrames ? Stride(frame) : 0f;
+            bool lunge = frame == 4 && !dead;
+            float z = dead ? 0.3f : 1f;
+            float reach = lunge ? 0.08f : 0f;
+            foreach (var (x, y, phase) in new[] { (0.15f, 0.07f, 1f), (0.15f, -0.07f, -1f), (-0.15f, 0.06f, -1f), (-0.15f, -0.06f, 1f) })
+            {
+                float swing = step * phase * 0.12f + (lunge && x > 0f ? 0.1f : 0f);
+                if (dead) parts.Add(Limb(x, y * 0.5f, 0.1f, x + 0.05f * phase, 0.27f + y, 0.03f, 0.02f, Mat.Hide, leg));
+                else parts.Add(Limb(x, y, 0.36f, x + swing, y, 0.02f, 0.02f, Mat.Hide, leg));
+            }
+            float sideShift = dead ? 0.04f : 0f;
+            parts.Add(Body(reach * 0.4f, sideShift, 0.55f * z, 0.23f + reach * 0.4f, 0.1f, 0.09f * z, dead ? Mat.Hide : Mat.Pelt, coat));
+            float tailY = sideShift + (dead ? 0.06f : 0f);
+            parts.Add(Body(-0.3f, tailY, 0.46f * z, 0.1f, 0.038f, 0.035f * z, Mat.Hide, coat));                                      // bushy tail
+            parts.Add(Ball(-0.38f, tailY, 0.45f * z, 0.026f, Mat.Hide, saddle));                                                       // its dark tip
+            float headX = 0.27f + reach, headY = dead ? 0.1f : 0f, headZ = (lunge ? 0.58f : 0.64f) * z;
+            parts.Add(Body(0.16f + reach * 0.6f, sideShift, 0.57f * z, 0.09f, 0.1f, 0.08f * z, Mat.Hide, PixelImage.Rgb(122, 116, 106)));     // ruff
+            parts.Add(Body(headX, headY, headZ, 0.065f, 0.06f, 0.045f, Mat.Hide, PixelImage.Scale(coat, 1.06f)));
+            parts.Add(Limb(headX + 0.03f, headY, headZ - 0.01f, headX + 0.1f, headY, headZ - 0.045f, 0.024f, Mat.Hide, pale));            // muzzle
+            if (lunge) parts.Add(Limb(headX + 0.04f, headY, headZ - 0.06f, headX + 0.1f, headY, headZ - 0.09f, 0.018f, Mat.Wound, PixelImage.Rgb(120, 40, 44)));   // open jaws
+            parts.Add(Ball(headX + 0.11f, headY, headZ - 0.045f, 0.012f, Mat.Boot, PixelImage.Rgb(20, 18, 18)));                        // nose
+            for (int s = -1; s <= 1; s += 2)
+            {
+                parts.Add(Limb(headX - 0.02f, headY + s * 0.035f, headZ + 0.035f, headX - 0.045f, headY + s * 0.06f, headZ + 0.1f, 0.02f, Mat.Hide, saddle));   // pointed ears
+                parts.Add(Ball(headX + 0.04f, headY + s * 0.03f, headZ + 0.015f, 0.008f, Mat.Gold, PixelImage.Rgb(196, 156, 60)));                             // amber eyes
+            }
+            return Figure(ppu, 0.43f, 0.5f, dead ? 0.36f : 0.13f, light, parts);
+        }
+
+        // The materials people (and animals) are made of.
+        // Hide: an animal's short coat; Pelt: the same with a darker back.
+        enum Mat { Cape, Hem, Tunic, Gold, Steel, Fur, Hair, Skin, Glove, Boot, Sack, Rope, Cap, Rot, Rag, Wound, Hide, Pelt }
 
         // One body part: a capsule (A to B, radius R; A = B for a ball) or an ellipsoid (A = middle,
         // B = radii), seen from above. Heights (z) are in tiles: the head is about 1.5 tiles up.
@@ -623,6 +727,22 @@ namespace KingdomGame.Art
                         case Mat.Skin:
                             shine = 0.08f;
                             break;
+                        case Mat.Hide:
+                        case Mat.Pelt:
+                        {
+                            // An animal's short coat: fine hairs lying along its body.
+                            texture = (Noise.Value(wx * 1800f, wy * 500f, 67u) - 0.5f) * 0.16f + (Noise.Value(wx * 140f, wy * 140f, 68u) - 0.5f) * 0.08f;
+                            shine = 0.05f; shininess = 6f;
+                            if (m == Mat.Pelt)
+                            {
+                                // Darker along the spine, fading softly down the flanks and towards the ends.
+                                float along = Mathf.Clamp01((wx + 0.26f) / 0.08f) * Mathf.Clamp01((0.2f - wx) / 0.08f);
+                                float across = Mathf.Exp(-(wy * wy) / (0.055f * 0.055f));
+                                float wobble = 1f + (Noise.Value(wx * 60f, wy * 60f, 69u) - 0.5f) * 0.5f;
+                                baseColor = PixelImage.Scale(baseColor, 1f - 0.5f * along * across * wobble);
+                            }
+                            break;
+                        }
                         case Mat.Rot:
                         {
                             // Grey-green rotting skin: bruised blotches, dark veins, a clammy sheen.

@@ -93,6 +93,9 @@ namespace KingdomGame.Art
         public static string ZombieShadow(string kind) => $"Zombie/{kind}/Shadow";
         /// <summary>Faintly glowing eyes, drawn over any zombie.</summary>
         public const string ZombieEyes = "Zombie/Eyes";
+        public static string Animal(string kind, int direction, int frame) => $"Animal/{kind}/{direction}/{frame}";
+        public static string AnimalDead(string kind, int direction) => $"Animal/{kind}/Dead/{direction}";
+        public static string AnimalShadow(string kind) => $"Animal/{kind}/Shadow";
         /// <summary>A spitter's glob of acid, and a screamer's scream (a ring a tile across).</summary>
         public const string AcidGlob = "Zombie/Acid", ScreamRing = "Zombie/Scream";
     }
@@ -108,7 +111,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 17;
+        public const int Version = 18;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -260,6 +263,25 @@ namespace KingdomGame.Art
                         Add(items, ArtKeys.Zombie(kind, d, f), "Zombies", p => CharacterArt.ZombieFrame(p, kind, facing, frame), false, CharacterArt.ZombieDetail(kind));
                     }
                 Shadow(items, ArtKeys.Zombie(kind, 0, 0), "CharacterShadows", 0.02f, ArtKeys.ZombieShadow(kind));
+            }
+            // The wild animals, at a quarter of the detail (small on screen).
+            foreach (string kind in CharacterArt.AnimalKinds)
+            {
+                for (int d = 0; d < CharacterArt.AnimalDirections; d++)
+                {
+                    float facing = d * 360f / CharacterArt.AnimalDirections;
+                    for (int f = 0; f < CharacterArt.AnimalFrames; f++)
+                    {
+                        int frame = f;
+                        Add(items, ArtKeys.Animal(kind, d, f), "Animals", p => CharacterArt.AnimalFrame(p, kind, facing, frame), false, 0.25f);
+                    }
+                }
+                for (int d = 0; d < CharacterArt.DeadDirections; d++)
+                {
+                    float facing = d * 360f / CharacterArt.DeadDirections;
+                    Add(items, ArtKeys.AnimalDead(kind, d), "Animals", p => CharacterArt.AnimalDead(p, kind, facing), false, 0.25f);
+                }
+                Shadow(items, ArtKeys.Animal(kind, 0, 0), "CharacterShadows", 0.02f, ArtKeys.AnimalShadow(kind));
             }
             Add(items, ArtKeys.ZombieEyes, "Effects", CharacterArt.ZombieEyes, false, half);
             Add(items, ArtKeys.AcidGlob, "Effects", CharacterArt.AcidGlob, false, half);

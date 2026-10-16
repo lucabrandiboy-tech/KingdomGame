@@ -203,6 +203,11 @@ namespace KingdomGame.UI
                 if (fires != null && fires.Count > 0)
                     text.Append($"\n<color=#ffa060>Fire! {fires.Count} thing{(fires.Count == 1 ? " is" : "s are")} burning" +
                                 (kingdom.HasWell ? ": villagers are bringing water from the well" : ": build a well so villagers can put fires out (or hold E at one)") + "</color>");
+                // Wolves about at night.
+                var wild = World.Wildlife.Current;
+                int wolves = wild != null ? wild.WolvesOut : 0;
+                if (wolves > 0)
+                    text.Append($"\n<color=#c8b8ff>Wolves about ({wolves}): they hunt anyone out in the dark, but keep out of firelight</color>");
                 // Winter without firewood.
                 if (kingdom.Cold) text.Append("\n<color=#9fd0ff>Out of firewood: your villagers are cold and slow (they burn wood in winter)</color>");
                 // Going hungry with nothing to eat.
@@ -210,7 +215,7 @@ namespace KingdomGame.UI
                 {
                     int hungry = 0;
                     foreach (var v in kingdom.Villagers) if (v != null && v.Fed < Villagers.NeedsMath.EatBelow) hungry++;
-                    if (hungry > 0) text.Append($"\n<color=#ff8a80>No food: {hungry} villager{(hungry == 1 ? " is" : "s are")} going hungry (foragers: V)</color>");
+                    if (hungry > 0) text.Append($"\n<color=#ff8a80>No food: {hungry} villager{(hungry == 1 ? " is" : "s are")} going hungry (foragers or hunters: V)</color>");
                 }
             }
             Draw(text.ToString(), box, Corner.TopRight);

@@ -54,6 +54,8 @@ namespace KingdomGame.Audio
                 case Sound.Loot: return new Mix(0.5f, 2, 0.05f, 0f);
                 case Sound.Thunder: return new Mix(0.9f, 2, 0.4f, 0f);
                 case Sound.Crackle: return new Mix(0.4f, 3, 0.2f, 15f);
+                case Sound.Howl: return new Mix(0.5f, 2, 1.2f, 70f);
+                case Sound.Snarl: return new Mix(0.5f, 3, 0.15f, 18f);
                 default: return new Mix(0.55f, 1, 0.3f, 0f);   // the chime
             }
         }

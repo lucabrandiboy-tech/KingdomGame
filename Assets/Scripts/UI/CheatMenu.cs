@@ -121,6 +121,17 @@ namespace KingdomGame.UI
             GUI.enabled = true;
             GUILayout.EndHorizontal();
 
+            Heading("Wildlife");
+            GUILayout.BeginHorizontal();
+            var wild = World.Wildlife.Current;
+            GUI.enabled = wild != null;
+            if (GUILayout.Button("A herd of deer near you", button))
+                Say(wild.CallDeer(12f) ? "Deer! They run if you get within 7 tiles" : "No open ground near you for them");
+            if (GUILayout.Button("Wolves now (for 3 minutes, even by day)", button))
+                Say(wild.CallWolves(180f, 16f) ? "Wolves are coming (they keep out of firelight)" : "No dark open ground near you for them");
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+
             Heading("Villagers");
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Feed and rest everyone", button))

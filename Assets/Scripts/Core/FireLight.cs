@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -36,6 +37,15 @@ namespace KingdomGame
         Light2D fireLight;
         float baseIntensity;
         float seed;
+
+        static readonly List<FireLight> all = new List<FireLight>();
+        /// <summary>Every fire light there is (wolves keep out of them).</summary>
+        public static IReadOnlyList<FireLight> All => all;
+        /// <summary>How far its light reaches, in tiles.</summary>
+        public float Radius => fireLight != null ? fireLight.pointLightOuterRadius : 0f;
+
+        void OnEnable() => all.Add(this);
+        void OnDisable() => all.Remove(this);
 
         /// <summary>Makes a fire light as a child of <paramref name="parent"/>.</summary>
         public static FireLight Create(Transform parent, Vector2 localPosition, Color color, float radius, float intensity)

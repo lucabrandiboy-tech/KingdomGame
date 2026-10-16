@@ -35,7 +35,7 @@ namespace KingdomGame.Villagers
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter, Eat, Sleep, Water, Douse }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter, Eat, Sleep, Water, Douse, Hunt, PickUp }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -90,6 +90,10 @@ namespace KingdomGame.Villagers
         Fires.Blaze fire;
         bool bucket;
         float fillClock;
+        // Hunting (hunters): the animal it's after, when it can shoot next, find its way again, and give up; a bag of meat it's fetching.
+        World.Animal quarry;
+        float shotAt, repathAt, huntUntil;
+        LootBag pickup;
 
         public bool IsIdle => task == Task.Idle;
         /// <summary>Its job (the villagers panel changes it; it drops what it's doing, but keeps what it carries).</summary>
@@ -130,6 +134,8 @@ namespace KingdomGame.Villagers
                     case Task.Eat: return "eating";
                     case Task.Water: return "fetching water for a fire";
                     case Task.Douse: return "putting out a fire";
+                    case Task.Hunt: return quarry != null && quarry.IsWolf ? "fighting a wolf" : "hunting a deer";
+                    case Task.PickUp: return "fetching meat";
                     case Task.Sleep: return asleep ? (inBed ? "asleep in bed" : napping ? "napping on the ground" : "asleep on the ground") : "going to bed";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
                     case Task.Gather: return node != null ? $"gathering {ResourceText.Name(node.Config.resource)}" : "gathering";
@@ -155,7 +161,8 @@ namespace KingdomGame.Villagers
 
             Health = gameObject.AddComponent<Health>();
             Health.Setup(Team.Friendly, config.maxHealth, 0.18f, true);
-            Health.Hurt += (h, amount, from) => { if (!h.Dead && job != Job.Guard) Flee(from); };
+            // Hurt: it runs (guards stay on their towers, and a hunter keeps shooting what it's after).
+            Health.Hurt += (h, amount, from) => { if (!h.Dead && job != Job.Guard && task != Task.Hunt) Flee(from); };
             Health.Died += OnDied;
         }
 
@@ -460,6 +467,35 @@ namespace KingdomGame.Villagers
             return false;
         }
 
+        /// <summary>Go after an animal with a bow (hunters): close enough to shoot, then shoot until it's dead (or it gets away).</summary>
+        public bool StartHunt(World.Animal target)
+        {
+            if (target == null || target.Health == null || target.Health.Dead || config.huntWeapon == null) return false;
+            quarry = target;
+            quarry.Hunter = this;
+            task = Task.Hunt;
+            huntUntil = Time.time + config.huntSeconds;
+            shotAt = Time.time + 0.4f;
+            repathAt = Time.time + 1f;
+            if (space == null && InShot()) return true;
+            if (Walk(new RectInt(NavGrid.CellAt(target.Position), Vector2Int.one), true)) return true;
+            target.UnreachableUntil = Time.time + 15f;
+            Idle();
+            return false;
+        }
+
+        /// <summary>Go and pick up the food in a bag on the ground (meat from a deer), to take to storage.</summary>
+        public bool StartPickUp(LootBag bag)
+        {
+            if (bag == null) return false;
+            pickup = bag;
+            bag.Collector = this;
+            task = Task.PickUp;
+            if (Walk(new RectInt(NavGrid.CellAt(bag.Position), Vector2Int.one), true)) return true;
+            Idle();
+            return false;
+        }
+
         public bool StartReturn(Storage to)
         {
             storage = to;
@@ -542,7 +578,20 @@ namespace KingdomGame.Villagers
                 lookAt = Time.time + 0.3f;
                 var director = ZombieDirector.Current;
                 var zombie = director != null && job != Job.Guard ? director.NearestVisible(Position, config.fleeDistance) : null;
+                // Wolves: a hunter shoots one coming close; the others run (not guards).
+                var wild = World.Wildlife.Current;
+                bool hunter = job == Job.Hunter && config.huntWeapon != null;
+                var wolf = wild != null && space == null && job != Job.Guard ? wild.NearestWolf(Position, hunter ? config.huntRange : config.fleeDistance) : null;
                 if (zombie != null) Flee(zombie.Position);
+                else if (wolf != null && hunter)
+                {
+                    if (task != Task.Hunt || quarry != wolf)
+                    {
+                        Abandon();
+                        StartHunt(wolf);
+                    }
+                }
+                else if (wolf != null) Flee(wolf.Position);
                 // Zombies about: drop the job and make for the shelter (the kingdom sends it there). Not out of bed, though.
                 else if (job != Job.Guard && task != Task.Shelter && task != Task.Flee && !InBed && kingdom.ShelterNow && kingdom.HasShelter)
                 {
@@ -575,6 +624,15 @@ namespace KingdomGame.Villagers
             else if ((task == Task.Water || task == Task.Douse) && (fire == null || fire.Out || (task == Task.Water && well == null)))
             {
                 Idle();   // the fire's out (or the well went)
+                thinkAt = Time.time;
+            }
+            else if (task == Task.Hunt)
+            {
+                Hunting();
+            }
+            else if (task == Task.PickUp && pickup == null)
+            {
+                Idle();   // someone else picked it up (or it was left too long)
                 thinkAt = Time.time;
             }
             else if (task == Task.Dig && (mine == null || !mine.IsMarked(digCell)))
@@ -797,10 +855,82 @@ namespace KingdomGame.Villagers
                     Idle();
                     return;
                 }
+                case Task.PickUp:
+                {
+                    if (carryAmount > 0 && carryType != ResourceType.Food) { Idle(); return; }
+                    carryType = ResourceType.Food;
+                    carryAmount += pickup.Take(ResourceType.Food, config.carryAmount - carryAmount);
+                    Idle();
+                    thinkAt = Time.time;   // off to storage
+                    return;
+                }
                 default:
                     Idle();
                     return;
             }
+        }
+
+        // Hunting: closer until it's in range with nothing in the way, then a shot every so often (aimed where the
+        // animal will be when the arrow gets there). Gives up after a while, or if there's no way to it.
+        void Hunting()
+        {
+            if (quarry == null || quarry.Health == null || quarry.Health.Dead || quarry.Leaving || Time.time >= huntUntil)
+            {
+                if (quarry != null && Time.time >= huntUntil) quarry.UnreachableUntil = Time.time + 20f;   // (try another for a while)
+                Idle();
+                thinkAt = Time.time;
+                return;
+            }
+            if (space == null && InShot())
+            {
+                path.Clear();
+                pathIndex = 0;
+                portal = null;
+                var to = quarry.Position - Position;
+                if (to.sqrMagnitude > 1e-6f) facing = to.normalized;
+                if (Time.time >= shotAt)
+                {
+                    shotAt = Time.time + config.huntShotSeconds;
+                    Shoot();
+                }
+                return;
+            }
+            // Out of range (or something in the way): after it, finding the way again as it moves.
+            if (Time.time >= repathAt)
+            {
+                repathAt = Time.time + 1f;
+                if (!Walk(new RectInt(NavGrid.CellAt(quarry.Position), Vector2Int.one), true))
+                {
+                    quarry.UnreachableUntil = Time.time + 15f;
+                    Idle();
+                    thinkAt = Time.time;
+                    return;
+                }
+            }
+            if (pathIndex < path.Count) FollowPath();
+            else if ((object)portal != null) GoThrough();
+        }
+
+        // Close enough to shoot it, with no wall in the way.
+        bool InShot()
+        {
+            var to = quarry.Position - Position;
+            float d = to.magnitude;
+            if (d > config.huntRange) return false;
+            var pixels = Destruction.PixelWorld.Current;
+            return d < 0.5f || pixels == null || !pixels.Raycast(Position + to / d * 0.3f, quarry.Position, out _, out _);
+        }
+
+        void Shoot()
+        {
+            var shots = Combat.Projectiles.Current;
+            var bow = config.huntWeapon;
+            if (shots == null || bow == null) return;
+            float flight = Vector2.Distance(Position, quarry.Position) / Mathf.Max(1f, bow.projectileSpeed);
+            var aim = quarry.Position + quarry.Velocity * flight - Position;
+            if (aim.sqrMagnitude < 1e-6f) return;
+            aim.Normalize();
+            if (shots.Fire(bow, Position + aim * 0.3f, aim)) Audio.Sounds.Fired(bow, Position);
         }
 
         // Drops the current job, giving back anything promised.
@@ -830,6 +960,10 @@ namespace KingdomGame.Villagers
             meal = 0;
             if (fire != null) fire.Fighters = Mathf.Max(0, fire.Fighters - 1);
             fire = null;
+            if (quarry != null && quarry.Hunter == (Component)this) quarry.Hunter = null;
+            quarry = null;
+            if (pickup != null && pickup.Collector == (Component)this) pickup.Collector = null;
+            pickup = null;
             well = null;
             bucket = false;
             task = Task.Idle;

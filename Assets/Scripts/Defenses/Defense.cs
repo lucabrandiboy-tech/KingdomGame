@@ -38,7 +38,7 @@ namespace KingdomGame.Defenses
         float aim = 90f;
         float cloudUntil, cloudStarted, cloudClock;
         SpriteRenderer cloud;
-        Zombie target;
+        Health target;   // a zombie (or a wolf)
         readonly List<Zombie> caught = new List<Zombie>();
 
         public DefenseConfig Config => config;
@@ -250,7 +250,7 @@ namespace KingdomGame.Defenses
         {
             if (!Manned || config.weapon == null) return;
             float now = Time.time;
-            if (target != null && (target.Health == null || target.Health.Dead || !InRange(target.Position))) target = null;
+            if (target != null && (target.Dead || !InRange(target.Position))) target = null;
             if (target == null && now >= searchAt)
             {
                 searchAt = now + SearchSeconds;
@@ -275,15 +275,24 @@ namespace KingdomGame.Defenses
             return d2 <= range * range && d2 >= config.minRange * config.minRange;
         }
 
-        Zombie Nearest(ZombieDirector director)
+        // The nearest zombie in range; with none, the nearest wolf (not deer: they're for the hunters).
+        Health Nearest(ZombieDirector director)
         {
-            Zombie best = null;
+            Health best = null;
             float bestDistance = float.MaxValue;
             foreach (var z in director.Zombies)
             {
                 if (z == null || z.Health == null || z.Health.Dead || !InRange(z.Position)) continue;
                 float d = (z.Position - Center).sqrMagnitude;
-                if (d < bestDistance) { best = z; bestDistance = d; }
+                if (d < bestDistance) { best = z.Health; bestDistance = d; }
+            }
+            var wild = World.Wildlife.Current;
+            if (best != null || wild == null) return best;
+            foreach (var a in wild.Animals)
+            {
+                if (a == null || !a.IsWolf || a.Health == null || a.Health.Dead || !InRange(a.Position)) continue;
+                float d = (a.Position - Center).sqrMagnitude;
+                if (d < bestDistance) { best = a.Health; bestDistance = d; }
             }
             return best;
         }

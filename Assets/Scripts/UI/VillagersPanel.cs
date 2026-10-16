@@ -129,6 +129,11 @@ namespace KingdomGame.UI
                     string problem = kingdom.GuardProblem();
                     if (problem != null) about = $"<color=#ff8a80>{problem}</color>";
                 }
+                if (n > 0 && job == Job.Hunter)
+                {
+                    string problem = kingdom.HuntProblem();
+                    if (problem != null) about = $"<color=#ffcc80>{problem}</color>";
+                }
                 if (n > 0 && job == Job.Crafter)
                 {
                     string problem = kingdom.CraftProblem();

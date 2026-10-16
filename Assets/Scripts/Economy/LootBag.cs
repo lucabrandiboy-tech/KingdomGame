@@ -102,6 +102,18 @@ namespace KingdomGame.Economy
             return taken;
         }
 
+        /// <summary>The villager on its way to pick it up (a hunter fetching meat), or null.</summary>
+        public Component Collector { get; set; }
+
+        /// <summary>Takes out up to <paramref name="most"/> of <paramref name="type"/>; returns how much. The bag goes away once it's empty.</summary>
+        public int Take(ResourceType type, int most)
+        {
+            int n = Mathf.Clamp(amounts[(int)type], 0, Mathf.Max(0, most));
+            amounts[(int)type] -= n;
+            if (Total <= 0) Destroy(gameObject);
+            return n;
+        }
+
         /// <summary>What's inside, like "6 wood, 2 stone".</summary>
         public string Contents()
         {

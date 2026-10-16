@@ -1301,6 +1301,8 @@ namespace KingdomGame.Building
         const int SearchRadius = 128;
         // Towers a guard couldn't find a way to, and until when to leave them be.
         readonly Dictionary<Defenses.Defense, float> unreachableTowers = new Dictionary<Defenses.Defense, float>();
+        // Bags of meat no hunter could find a way to, and until when they're left alone.
+        readonly Dictionary<LootBag, float> unreachableBags = new Dictionary<LootBag, float>();
 
         /// <summary>Marks rock in a mine to be dug out. False if it can't be (with why in <paramref name="reason"/>).</summary>
         public bool MarkDig(Vector2Int cell, out string reason)
@@ -1382,6 +1384,57 @@ namespace KingdomGame.Building
                 var home = NearestWithSpace(v.Position);
                 if (home != null) v.StartReturn(home);
             }
+        }
+
+        // Hunters: meat lying about first (a deer someone shot), then the nearest animal to hunt (a wolf about, before deer).
+        void Hunt(Villager v)
+        {
+            float now = Time.time;
+            if (v.CarryAmount > 0 && (v.CarryType != ResourceType.Food || v.CarryAmount >= villagerConfig.carryAmount))
+            {
+                var home = NearestWithSpace(v.Position);
+                if (home != null) v.StartReturn(home);
+                return;
+            }
+            var bag = NearestMeat(v, now);
+            if (bag != null)
+            {
+                if (v.StartPickUp(bag)) return;
+                unreachableBags[bag] = now + 15f;
+            }
+            if (v.CarryAmount > 0)
+            {
+                var home = NearestWithSpace(v.Position);
+                if (home != null) v.StartReturn(home);
+                return;
+            }
+            var wild = World.Wildlife.Current;
+            if (wild == null || villagerConfig.huntWeapon == null) return;
+            var prey = wild.FindQuarry(v.Position, villagerConfig.huntDistance, Nav.Cells, v);
+            if (prey != null) v.StartHunt(prey);
+        }
+
+        // The closest bag with food in it (in the lands, not too far) that nobody else is fetching.
+        LootBag NearestMeat(Villager v, float now)
+        {
+            if (unreachableBags.Count > 64)
+            {
+                var old = new List<LootBag>();
+                foreach (var pair in unreachableBags) if (pair.Key == null || pair.Value <= now) old.Add(pair.Key);
+                foreach (var b in old) unreachableBags.Remove(b);
+            }
+            LootBag best = null;
+            float bestDistance = 50f * 50f;
+            foreach (var b in LootBag.All)
+            {
+                if (b == null || b.Amount(ResourceType.Food) <= 0 || (b.Collector != null && b.Collector != v)) continue;
+                if (unreachableBags.TryGetValue(b, out float until) && until > now) continue;
+                var at = b.Position;
+                if (!Nav.Cells.Contains(new Vector2Int(Mathf.FloorToInt(at.x), Mathf.FloorToInt(at.y)))) continue;
+                float d = (at - v.Position).sqrMagnitude;
+                if (d < bestDistance) { best = b; bestDistance = d; }
+            }
+            return best;
         }
 
         // The closest tree, rock or bush of this kind that nobody else is at; planted ones count as a little closer.
@@ -1773,6 +1826,17 @@ namespace KingdomGame.Building
             return "nothing to make: order weapons at an anvil, or build a crafting table (Industry tab; it needs its ingredients in storage)";
         }
 
+        /// <summary>Why hunters aren't bringing anything in, or null.</summary>
+        public string HuntProblem()
+        {
+            if (villagerConfig == null || villagerConfig.huntWeapon == null) return "they have no bow: run KingdomGame > Build Game Scenes again";
+            var wild = World.Wildlife.Current;
+            if (wild == null || wild.Config == null || !wild.Config.wildlife) return "there are no wild animals in this game";
+            foreach (var a in wild.Animals)
+                if (a != null && !a.IsWolf && Nav.Cells.Contains(new Vector2Int(Mathf.FloorToInt(a.Position.x), Mathf.FloorToInt(a.Position.y)))) return null;
+            return "no deer about: herds keep out in the wild, round wherever you are (and fewer in winter)";
+        }
+
         /// <summary>Gives an idle villager something to do, if there is anything.</summary>
         public void AssignJob(Villager v)
         {
@@ -1785,6 +1849,11 @@ namespace KingdomGame.Building
             }
             if (FightFire(v)) return;
             if (CareFor(v)) return;
+            if (v.Job == Job.Hunter)
+            {
+                Hunt(v);
+                return;
+            }
             if (v.Job == Job.Crafter && v.CarryAmount == 0)
             {
                 // Weapons on order first (at an anvil), then whichever crafting table is short of its part.

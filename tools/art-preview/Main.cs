@@ -329,6 +329,12 @@ static class Program
             Person(ArtKeys.Villager(true, 1, 1), -3.5f, 0.2f, 40f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
             Person(ArtKeys.Villager(false, 4, 2), -1.2f, -1.4f, 175f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
             Person(ArtKeys.Villager(false, 2, 0), 3.4f, 2.6f, 95f, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
+            // Wildlife (World/Wildlife.cs): deer grazing east of the outpost, two wolves prowling (one lunging) south of the throne.
+            Animal("Deer", 16.2f, -7.6f, 200f, 4);
+            Animal("Deer", 17.6f, -8.9f, 150f, 0);
+            Animal("Deer", 15.4f, -9.6f, 250f, 4);
+            Animal("Wolf", 1.6f, -3.9f, 185f, 1);
+            Animal("Wolf", 3.2f, -4.5f, 160f, 4);
         }
 
         // A small castle round the throne, as a player might build it (Kingdom.Build): a great hall
@@ -481,6 +487,15 @@ static class Program
             float k = CharacterArt.ZombieScale(kind);
             var eyes = Rotate(CharacterArt.ZombieEyesAt(kind, frame) * k, facing);
             Things.Add(new Inst { Key = ArtKeys.ZombieEyes, X = x + eyes.x, Y = y + eyes.y, Rot = facing, Scale = k, Order = 1000, Glow = true, Alpha = 0.85f });
+        }
+
+        // A deer or wolf like Animal.Show: the nearest direction's picture, turned the rest of the way.
+        void Animal(string kind, float x, float y, float facing, int frame)
+        {
+            float step = 360f / CharacterArt.AnimalDirections;
+            int d = ((int)MathF.Round(facing / step) % CharacterArt.AnimalDirections + CharacterArt.AnimalDirections) % CharacterArt.AnimalDirections;
+            Things.Add(new Inst { Key = ArtKeys.AnimalShadow(kind), X = x + 0.55f * 0.08f, Y = y - 0.65f * 0.08f, Rot = facing, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = ArtKeys.Animal(kind, d, frame), X = x, Y = y, Rot = facing, Order = 998 });
         }
 
         void Dead(string kind, float x, float y, float degrees)

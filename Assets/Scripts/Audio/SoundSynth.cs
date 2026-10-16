@@ -9,7 +9,7 @@ namespace KingdomGame.Audio
         ExplosionBig, ExplosionSmall,
         Groan, ZombieHit, ZombieDie, Claw, Spit, Splash, Scream,
         Hammer, Chop, Pick, Rustle, Door, Hurt, Horn, Loot, Chime,
-        Thunder, Crackle,
+        Thunder, Crackle, Howl, Snarl,
     }
 
     /// <summary>The background sounds, played on a loop (see <c>Ambience</c>).</summary>
@@ -37,6 +37,7 @@ namespace KingdomGame.Audio
                 case Sound.Groan: return 4;
                 case Sound.Thunder: return 2;
                 case Sound.Crackle: return 2;
+                case Sound.Howl: return 2;
                 case Sound.Gun: case Sound.ZombieHit: case Sound.Hammer: case Sound.Chop: case Sound.Pick: return 2;
                 default: return 1;
             }
@@ -77,6 +78,8 @@ namespace KingdomGame.Audio
                 case Sound.Loot: x = Loot(); break;
                 case Sound.Thunder: x = Thunder(r, variant); break;
                 case Sound.Crackle: x = Crackle(r); break;
+                case Sound.Howl: x = Howl(r, variant); break;
+                case Sound.Snarl: x = Snarl(r); break;
                 default: x = Chime(); break;
             }
             Finish(x, 0.9f, true);
@@ -589,6 +592,51 @@ namespace KingdomGame.Audio
             Add(x, pops, 0.8f);
             return x;
         }
+
+        // ------------------------------------------------------------ animals --
+
+        // A wolf howling: an almost pure voice sliding up, holding with a slight waver, then sinking away
+        // (variant 1 is another wolf, higher and shorter).
+        static float[] Howl(Rng r, int v)
+        {
+            float len = v == 0 ? 2.9f : 2.4f, low = v == 0 ? 330f : 400f, high = v == 0 ? 560f : 650f;
+            Func<float, float> pitch = t =>
+            {
+                float rise = Smooth(Math.Min(1f, t / 0.55f));
+                float fall = Smooth(Math.Max(0f, (t - (len - 0.9f)) / 0.9f));
+                float f = low + (high - low) * (rise - 0.45f * fall);
+                return f * (1f + 0.01f * (float)Math.Sin(2 * Math.PI * 4.8 * t) + 0.006f * (float)Math.Sin(2 * Math.PI * 1.1 * t));
+            };
+            var x = Tone(len, pitch, Sine);
+            Add(x, Tone(len, t => pitch(t) * 2f, Sine), 0.18f);
+            Add(x, Tone(len, t => pitch(t) * 3f, Sine), 0.06f);
+            var air = Noise(r, len);
+            BandPass(air, pitch, 4f);
+            Normalize(air);
+            Add(x, air, 0.08f);
+            Shape(x, t => Hold(t, 0.35f, len, 0.7f) * (0.9f + 0.1f * (float)Math.Sin(2 * Math.PI * 0.9 * t)));
+            return x;
+        }
+
+        // A wolf's snarl as it bites: a low rattling growl, then the snap of its jaws.
+        static float[] Snarl(Rng r)
+        {
+            const float len = 0.75f;
+            var growl = Voice(r, len, t => 110f * (1f + 0.15f * t), 650f, 1250f, 2600f, 0.7f);
+            Shape(growl, t => Hold(t, 0.06f, 0.6f, 0.15f) * (0.55f + 0.45f * Math.Abs((float)Math.Sin(2 * Math.PI * 14 * t))));
+            var snap = Noise(r, len);
+            HighPass(snap, 1500f);
+            Shape(snap, t => t < 0.55f ? 0f : Env(t - 0.55f, 0.001f, 0.025f));
+            var clack = Tone(len, t => 900f, Sine);
+            Shape(clack, t => t < 0.55f ? 0f : Env(t - 0.55f, 0.001f, 0.02f));
+            var x = Buffer(len);
+            Add(x, growl, 1f);
+            Add(x, snap, 0.9f);
+            Add(x, clack, 0.4f);
+            return x;
+        }
+
+        static float Smooth(float t) => t * t * (3f - 2f * t);
 
         // Rain: a soft hiss (not bright: rain is a "shh", not static), many little drops pattering on top of it,
         // and a low wash under it. It swells and eases a little.

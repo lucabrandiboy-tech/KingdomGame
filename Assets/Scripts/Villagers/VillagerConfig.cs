@@ -49,5 +49,17 @@ namespace KingdomGame.Villagers
         [Range(0f, 1f)] public float contentBonus = 0.1f;
         [Tooltip("Hit points a villager gets back each game hour asleep in a bed.")]
         [Min(0)] public float healPerHourInBed = 20f;
+
+        [Header("Hunting (hunters)")]
+        [Tooltip("What hunters shoot with (their bow). None: hunters can't hunt.")]
+        public Combat.WeaponConfig huntWeapon;
+        [Tooltip("They shoot from this close (tiles); deer take fright at the Wildlife Config's Deer Shy Distance.")]
+        [Min(1)] public float huntRange = 8.5f;
+        [Tooltip("Seconds between shots.")]
+        [Min(0.2f)] public float huntShotSeconds = 1.6f;
+        [Tooltip("They look for animals this far away (tiles), within the kingdom's lands.")]
+        [Min(5)] public float huntDistance = 80f;
+        [Tooltip("They give up on an animal after this many seconds and look for another.")]
+        [Min(5)] public float huntSeconds = 60f;
     }
 }

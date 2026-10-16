@@ -9,7 +9,7 @@ namespace KingdomGame.Combat
     /// Every bullet and rocket in flight. Each frame a shot checks the pixels
     /// along its path (<see cref="PixelWorld.Raycast"/>), so it flies through
     /// holes and hits the exact pixel it touches, then becomes a damage event.
-    /// Shots also hit zombies (<see cref="Health.Raycast"/>), whichever comes
+    /// Shots also hit zombies and wild animals (<see cref="Health.RaycastFoes"/>), whichever comes
     /// first, and fly over a wall right in front of the shooter
     /// (<see cref="WeaponConfig.overWalls"/>). Sprites are pooled and reused.
     /// </summary>
@@ -104,8 +104,8 @@ namespace KingdomGame.Combat
                         wallAlong = (wallPoint - shot.Position).magnitude / stepLength;
                     }
                 }
-                // A zombie in the way, if it's closer than the wall (lobbed shots fly over everything).
-                if (!shot.Lobbed && Health.Raycast(shot.Position, to, Team.Zombie, out var zombie, out float along) && (!hitWall || along <= wallAlong))
+                // A zombie (or a wild animal) in the way, if it's closer than the wall (lobbed shots fly over everything).
+                if (!shot.Lobbed && Health.RaycastFoes(shot.Position, to, out var zombie, out float along) && (!hitWall || along <= wallAlong))
                 {
                     var direction = step / Mathf.Max(stepLength, 1e-6f);
                     var at = shot.Position + step * along;

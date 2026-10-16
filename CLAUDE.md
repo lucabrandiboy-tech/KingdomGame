@@ -107,6 +107,8 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
 - **Ruins** (`World/RuinLayout.cs` decides where and what from the seed, plain maths that `tools/world-tests` checks
   and the art preview draws; `World/Ruins.cs` shows them near the ruler, sends their guards, E to search, saves
   `Ruins.State`). Art in `Art/RuinArt.cs`. Lost blueprints: `Research.AddBlueprint` (halves a research).
+- **Goals** (`Progression/Goals.cs`, each age's list in `AgeConfig.goals`, defaults in `GameSetup.DefaultGoals`):
+  checked every second (`Goals.Progress` per `GoalKind`), rewards go into storage. Saved as `SaveData.goals`.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.

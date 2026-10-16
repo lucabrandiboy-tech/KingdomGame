@@ -240,3 +240,28 @@ Try it:
 4. Find a watchtower and search its chest: the message says you found a lost blueprint.
 
 Tell me if they're too rare, too common, too hard or too easy.
+
+## 8. Goals for each age
+
+Every age has three or four goals now, with a reward for each. The list is on the left of
+the screen (**J** hides it), with how far along you are: for example in the Stone Age
+*Have 6 villagers*, *Build 20 tiles of wall*, *Hunt 2 deer*, *Live through 2 nights*.
+
+- Done, a goal pays its reward into storage at once (wood, stone, food, ores, steel) and
+  some give XP (V to spend). The message says what you got; if storage is full, the rest
+  is left in a bag by the throne.
+- The list shows the earliest age you've reached that still has goals left, so finishing
+  an age's goals brings up the next age's (once you've reached it; in free build, straight
+  away). Wave goals only count in survival.
+- Later ages: more villagers, longer walls, towers, rooms, ores and steel in storage,
+  zombies killed, chests searched in ruins, and in the last age, killing a Warlord.
+- What's done is saved.
+
+Try it:
+
+1. Start a game: the goals box is on the left. Press **J**: it hides; again: it's back.
+2. Build 20 wall tiles (free build is quickest): the goal ticks up, then the message says
+   *Goal done* and the stone goes into storage.
+3. Free build: once the Stone Age goals are done, the Bronze Age ones show.
+
+Tell me if goals are too easy, too slow, or the rewards too small.

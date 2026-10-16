@@ -15,5 +15,7 @@ namespace KingdomGame.Progression
         public BuildingConfig[] startUnlocks = new BuildingConfig[0];
         [Tooltip("Its techs; the one that Advances Age leads to the next age.")]
         public TechConfig[] techs = new TechConfig[0];
+        [Tooltip("Goals to reach in this age, each with a reward (shown on screen, J hides them).")]
+        public AgeGoal[] goals = new AgeGoal[0];
     }
 }

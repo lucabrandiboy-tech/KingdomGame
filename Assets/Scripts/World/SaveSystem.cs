@@ -50,6 +50,7 @@ namespace KingdomGame.World
         /// <summary>The zombie bases (survival), saved with the game, or null.</summary>
         public Zombies.ZombieBases Bases { get; set; }
         public Ruins Ruins { get; set; }
+        public Progression.Goals Goals { get; set; }
         /// <summary>
         /// Online, in someone else's game: saving sends this kingdom to the host, who keeps it for next time (no file here).
         /// </summary>
@@ -321,6 +322,7 @@ namespace KingdomGame.World
             if (Bases != null)
                 foreach (var (at, health) in Bases.Saved()) data.zombieBases.Add(new ZombieBaseSave { position = at, health = health });
             if (Ruins != null) data.ruins = Ruins.Save();
+            if (Goals != null) data.goals = Goals.Save();
             if (waves != null)
             {
                 data.hasSurvival = true;
@@ -488,6 +490,7 @@ namespace KingdomGame.World
             if (Bases != null && data.zombieBases != null)
                 foreach (var b in data.zombieBases) Bases.Place(b.position, b.health);
             if (Ruins != null) Ruins.Load(data.ruins);
+            if (Goals != null) Goals.Load(data.goals);
             if (waves != null && data.hasSurvival)
             {
                 var s = data.survival;

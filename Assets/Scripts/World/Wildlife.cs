@@ -42,6 +42,8 @@ namespace KingdomGame.World
         float checkAt, herdAt, packAt, wolvesForcedUntil;
 
         public static Wildlife Current { get; private set; }
+        /// <summary>An animal was killed (goals count the deer).</summary>
+        public event System.Action<Animal> Killed;
         public WildlifeConfig Config => config;
         public IReadOnlyList<Animal> Animals => animals;
         /// <summary>Where the ruler is (animals come and go round it).</summary>
@@ -452,6 +454,7 @@ namespace KingdomGame.World
             }
             int meat = a.IsWolf ? config.wolfMeat : config.deerMeat;
             if (meat > 0) LootBag.Drop(at, 0, 0, meat);
+            Killed?.Invoke(a);
         }
     }
 }

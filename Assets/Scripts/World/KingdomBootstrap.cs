@@ -144,10 +144,14 @@ namespace KingdomGame.World
             var ruins = new GameObject("Ruins").AddComponent<Ruins>();
             ruins.transform.SetParent(transform, false);
             ruins.Setup(seed, kingdom, zombies, waves);
+            // Each age's goals, with rewards.
+            var goals = gameObject.AddComponent<Progression.Goals>();
+            goals.Setup(content.progression, kingdom, research, dayNight, zombies, waves);
             var saves = gameObject.AddComponent<SaveSystem>();
             saves.Hosted = hosting;
             saves.Bases = zombieBases;
             saves.Ruins = ruins;
+            saves.Goals = goals;
             saves.Setup(content, Mode, seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
             if (saved != null) saves.Restore(saved);
             // Continuing failed: this new game mustn't save over the save on its own.
@@ -267,8 +271,11 @@ namespace KingdomGame.World
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, null);
             gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);
+            var goals = gameObject.AddComponent<Progression.Goals>();
+            goals.Setup(content.progression, kingdom, research, dayNight, null, null);
             // Saving sends your kingdom to the host (it keeps it for you), not to a file here.
             var saves = gameObject.AddComponent<SaveSystem>();
+            saves.Goals = goals;
             saves.Setup(content, Mode, welcome.Seed, kingdom, rulerController, research, dayNight, null, null, world);
             parts.Streamer.ShowNow();
             rulerController.ShowWeapon();

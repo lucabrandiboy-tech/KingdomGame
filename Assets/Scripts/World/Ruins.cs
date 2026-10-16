@@ -62,6 +62,18 @@ namespace KingdomGame.World
 
         public static Ruins Current { get; private set; }
 
+        /// <summary>Chests and crates searched in ruins, all game long.</summary>
+        public int SearchedCount
+        {
+            get
+            {
+                int n = 0;
+                foreach (var s in states.Values)
+                    for (int bits = s.searched; bits != 0; bits &= bits - 1) n++;
+                return n;
+            }
+        }
+
         public void Setup(int worldSeed, Kingdom owner, ZombieDirector zombies, SurvivalDirector survival)
         {
             seed = (uint)worldSeed;

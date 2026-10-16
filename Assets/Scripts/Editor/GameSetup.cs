@@ -594,6 +594,7 @@ namespace KingdomGame.EditorTools
                 EditorUtility.SetDirty(content.survival);
             }
             HunterBow(content.villager);
+            AddGoals(content.progression);
 
             if (villagerNeeds && content.kingdom != null && content.kingdom.startFood < 60)
             {
@@ -912,17 +913,83 @@ namespace KingdomGame.EditorTools
                     a.color = colors[index];
                     a.startUnlocks = unlocks.ToArray();
                     a.techs = advance != null ? new[] { advance } : new TechConfig[0];
+                    a.goals = DefaultGoals(index);
                 });
             }
             return Asset<ProgressionConfig>("Progression/ProgressionConfig", p => p.ages = ages);
         }
 
-        // The smelter (Medieval: iron and wood into steel) and the Industrial machines built with that steel.
-        // ---------------------------------------------------------- age parts --
+        // Each age's goals and their rewards (shown on screen; Progression/Goals.cs checks them). Later ages ask for more and give more.
+        static AgeGoal[] DefaultGoals(int age)
+        {
+            switch (age)
+            {
+                case 0: return new[]
+                {
+                    new AgeGoal("Have 6 villagers", GoalKind.Villagers, 6, food: 60, xp: 20),
+                    new AgeGoal("Build 20 tiles of wall", GoalKind.WallTiles, 20, stone: 80),
+                    new AgeGoal("Hunt 2 deer", GoalKind.Deer, 2, wood: 80, xp: 20),
+                    new AgeGoal("Live through 2 nights", GoalKind.Nights, 2, food: 50),
+                };
+                case 1: return new[]
+                {
+                    new AgeGoal("Have 10 villagers", GoalKind.Villagers, 10, food: 100, xp: 30),
+                    new AgeGoal("Build 2 towers", GoalKind.Towers, 2, stone: 150),
+                    new AgeGoal("Search 2 chests in ruins", GoalKind.Ruins, 2, xp: 30, extra: ResourceType.Copper, extraAmount: 40),
+                    new AgeGoal("Survive 3 waves", GoalKind.Waves, 3, wood: 150),
+                };
+                case 2: return new[]
+                {
+                    new AgeGoal("Have 400 stone in storage", GoalKind.Stock, 400, extra: ResourceType.Iron, extraAmount: 40, resource: ResourceType.Stone),
+                    new AgeGoal("Kill 150 zombies", GoalKind.Kills, 150, wood: 200, xp: 40),
+                    new AgeGoal("Have 4 rooms", GoalKind.Rooms, 4, food: 150),
+                };
+                case 3: return new[]
+                {
+                    new AgeGoal("Have 14 villagers", GoalKind.Villagers, 14, food: 200, xp: 50),
+                    new AgeGoal("Build 60 tiles of wall", GoalKind.WallTiles, 60, stone: 300),
+                    new AgeGoal("Have 100 iron in storage", GoalKind.Stock, 100, extra: ResourceType.Gold, extraAmount: 30, resource: ResourceType.Iron),
+                };
+                case 4: return new[]
+                {
+                    new AgeGoal("Build 6 towers", GoalKind.Towers, 6, extra: ResourceType.Steel, extraAmount: 30),
+                    new AgeGoal("Search 6 chests in ruins", GoalKind.Ruins, 6, xp: 60, extra: ResourceType.Gold, extraAmount: 40),
+                    new AgeGoal("Live through 15 nights", GoalKind.Nights, 15, food: 300),
+                };
+                case 5: return new[]
+                {
+                    new AgeGoal("Have 18 villagers", GoalKind.Villagers, 18, food: 300, xp: 80),
+                    new AgeGoal("Kill 600 zombies", GoalKind.Kills, 600, extra: ResourceType.Iron, extraAmount: 120),
+                    new AgeGoal("Have 100 steel in storage", GoalKind.Stock, 100, extra: ResourceType.Coal, extraAmount: 150, resource: ResourceType.Steel),
+                };
+                case 6: return new[]
+                {
+                    new AgeGoal("Build 120 tiles of wall", GoalKind.WallTiles, 120, stone: 600),
+                    new AgeGoal("Have 22 villagers", GoalKind.Villagers, 22, food: 400, xp: 100),
+                    new AgeGoal("Kill 1,200 zombies", GoalKind.Kills, 1200, extra: ResourceType.Steel, extraAmount: 80),
+                };
+                default: return new[]
+                {
+                    new AgeGoal("Kill a Warlord", GoalKind.Bosses, 1, xp: 200, extra: ResourceType.Gold, extraAmount: 100),
+                    new AgeGoal("Have 26 villagers", GoalKind.Villagers, 26, food: 500, xp: 100),
+                    new AgeGoal("Live through 40 nights", GoalKind.Nights, 40, xp: 300),
+                };
+            }
+        }
 
-        // What every age's things take on top of wood and stone: some of that age's part (from its crafting table) and of every
-        // earlier age's part. Set every time (so older settings get them too); big things (2x2 and up) take twice as many.
-        // The sound a weapon makes when it fires: set every time, so older settings get it too.
+        // Ages made before goals existed get theirs.
+        static void AddGoals(ProgressionConfig progression)
+        {
+            if (progression == null || progression.ages == null) return;
+            for (int i = 0; i < progression.ages.Length; i++)
+            {
+                var age = progression.ages[i];
+                if (age == null || (age.goals != null && age.goals.Length > 0)) continue;
+                age.goals = DefaultGoals(i);
+                EditorUtility.SetDirty(age);
+            }
+        }
+
         // The hunters' bow (hunters are a villager job): one good arrow brings down a deer, two a wolf.
         static void HunterBow(VillagerConfig villagers)
         {
@@ -937,6 +1004,12 @@ namespace KingdomGame.EditorTools
             EditorUtility.SetDirty(villagers);
         }
 
+        // The smelter (Medieval: iron and wood into steel) and the Industrial machines built with that steel.
+        // ---------------------------------------------------------- age parts --
+
+        // What every age's things take on top of wood and stone: some of that age's part (from its crafting table) and of every
+        // earlier age's part. Set every time (so older settings get them too); big things (2x2 and up) take twice as many.
+        // The sound a weapon makes when it fires: set every time, so older settings get it too.
         static void SoundOf(WeaponConfig w, ShotSound sound)
         {
             if (w == null || w.sound == sound) return;

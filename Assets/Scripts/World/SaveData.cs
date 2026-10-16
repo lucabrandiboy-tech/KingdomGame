@@ -52,6 +52,8 @@ namespace KingdomGame.World
         public List<ZombieBaseSave> zombieBases = new List<ZombieBaseSave>();
         /// <summary>The ruins out in the world that have been found, searched or fought over.</summary>
         public List<Ruins.State> ruins = new List<Ruins.State>();
+        /// <summary>The goals of the ages done so far, and the counts they need.</summary>
+        public Progression.Goals.Saved goals;
     }
 
     [Serializable]

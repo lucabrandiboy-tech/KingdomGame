@@ -129,6 +129,7 @@ namespace KingdomGame.World
                 zombieBases.Setup(content.survival, zombies, kingdom, dayNight, waves);
             }
 
+            AddSeasons(seed);
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
             gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);   // wind, birds by day, crickets at night
@@ -250,6 +251,7 @@ namespace KingdomGame.World
             chat.Ruler = rulerController;
             var (others, mirror) = KingdomSharing(world, kingdom, ruler.transform);
 
+            AddSeasons(welcome.Seed);   // (the same seasons and weather as the host: from the seed and the host's clock)
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, null);
             gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);
@@ -327,6 +329,14 @@ namespace KingdomGame.World
                 if (content.view != null) view.backgroundColor = content.view.backgroundColor;
             }
             return rig;
+        }
+
+        // The seasons and the weather (from the world's seed and the clock).
+        void AddSeasons(int seed)
+        {
+            var seasons = new GameObject("Seasons and weather").AddComponent<Seasons>();
+            seasons.transform.SetParent(transform, false);
+            seasons.Setup(content.seasons, dayNight, seed);
         }
 
         void AddDebug()

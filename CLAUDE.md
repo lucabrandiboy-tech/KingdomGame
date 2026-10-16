@@ -87,6 +87,10 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   64-tile squares round the camera (maths on a background thread). Each kingdom works in
   its **lands** (`KingdomConfig.landsSize`, 512, a square round the throne = `Kingdom.Nav.Cells`):
   building, villagers' paths and gathering, zombie paths. No code may assume a whole map.
+- **Seasons and weather** (`World/Seasons.cs`, numbers in `SeasonConfig`): worked out from the day, hour and
+  seed by `SeasonMath` (same for everyone online, nothing to save). Plants grow by `Economy/NatureClock.Now`
+  (slower or stopped by the season), never `Time.time`. Snow slows walking (`Seasons.MoveFactor`), fog shortens
+  tower sight, winter burns firewood (`Kingdom.Cold`); `Seasons.LightningStruck` says where lightning hit.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.
@@ -127,8 +131,8 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
   the Unity-free code: destruction math (`DamageShape.cs`, `PixelAlgorithms.cs`),
   path finding (`Villagers/GridPathfinder.cs`), the zombies' flow field and
   waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`), room finding
-  (`Building/RoomFinder.cs`), sounds (`Audio/SoundSynth.cs`) and villagers' needs
-  (`Villagers/NeedsMath.cs`). Keep those files free of `UnityEngine` so the
+  (`Building/RoomFinder.cs`), sounds (`Audio/SoundSynth.cs`), villagers' needs
+  (`Villagers/NeedsMath.cs`) and the seasons and weather (`World/SeasonMath.cs`). Keep those files free of `UnityEngine` so the
   tests can compile them.
 - `dotnet run --project tools/world-tests/WorldTests.csproj`: the endless world outside
   Unity (`Economy/NatureMap.cs` with stand-ins in `tools/world-tests/Stubs.cs` and the art

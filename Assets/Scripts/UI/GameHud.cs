@@ -177,6 +177,8 @@ namespace KingdomGame.UI
         {
             text.Clear();
             if (dayNight != null) text.Append("<b>").Append(dayNight.ClockText()).Append("</b>").Append(dayNight.IsNight ? "  (night)" : "").Append('\n');
+            string season = Seasons.Current != null ? Seasons.Current.Describe() : null;
+            if (season != null) text.Append(season).Append('\n');
             if (ruler != null && ruler.Backpack != null)
             {
                 var pack = ruler.Backpack;
@@ -196,6 +198,8 @@ namespace KingdomGame.UI
                 int busy = 0;
                 foreach (var v in kingdom.Villagers) if (v != null && !v.IsIdle) busy++;
                 text.Append($"Villagers: {kingdom.Villagers.Count} (homes for {kingdom.VillagerCapacity}), {busy} busy   Blueprints: {kingdom.Blueprints.Count}");
+                // Winter without firewood.
+                if (kingdom.Cold) text.Append("\n<color=#9fd0ff>Out of firewood: your villagers are cold and slow (they burn wood in winter)</color>");
                 // Going hungry with nothing to eat.
                 if (kingdom.Stock(ResourceType.Food) <= 0)
                 {

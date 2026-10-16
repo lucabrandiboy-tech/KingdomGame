@@ -57,6 +57,13 @@ static partial class Tests
         Run(nameof(VillagersSleepAtNightGuardsByDay), VillagersSleepAtNightGuardsByDay);
         Run(nameof(KitchenMealsTakeLessFood), KitchenMealsTakeLessFood);
 
+        Run(nameof(SeasonsGoRoundTheYear), SeasonsGoRoundTheYear);
+        Run(nameof(DaysAreLongestInSummer), DaysAreLongestInSummer);
+        Run(nameof(SnowLiesOnlyInWinter), SnowLiesOnlyInWinter);
+        Run(nameof(WeatherIsTheSameEverywhereAndFitsTheSeason), WeatherIsTheSameEverywhereAndFitsTheSeason);
+        Run(nameof(WeatherFadesInAndOut), WeatherFadesInAndOut);
+        Run(nameof(NothingGrowsInWinter), NothingGrowsInWinter);
+
         Run(nameof(EverySoundIsMadeCleanly), EverySoundIsMadeCleanly);
         Run(nameof(GroansAreAllDifferent), GroansAreAllDifferent);
         Run(nameof(LoopsJoinUpSeamlessly), LoopsJoinUpSeamlessly);

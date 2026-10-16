@@ -35,6 +35,8 @@ namespace KingdomGame.World
         [Header("World")]
         public WorldConfig world;
         public DayNightConfig dayNight;
+        [Tooltip("The seasons and the weather.")]
+        public SeasonConfig seasons;
 
         [Header("Camera and look")]
         public ViewConfig view;

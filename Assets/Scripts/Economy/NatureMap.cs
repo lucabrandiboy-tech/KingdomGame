@@ -185,7 +185,7 @@ namespace KingdomGame.Economy
         // A node that isn't a real object finished growing (or growing back) while nobody was near: it's full now.
         void Settle(Vector2Int cell, Chunk chunk, int i)
         {
-            if (!timers.TryGetValue(cell, out var t) || Time.time < t.End || live.ContainsKey(cell)) return;
+            if (!timers.TryGetValue(cell, out var t) || NatureClock.Now < t.End || live.ContainsKey(cell)) return;
             timers.Remove(cell);
             if (chunk.Kind[i] == 0) return;
             chunk.Left[i] = (short)Mathf.Clamp(kinds[chunk.Kind[i] - 1].amount, 0, short.MaxValue);
@@ -256,7 +256,7 @@ namespace KingdomGame.Economy
             chunk.Left[i] = 0;
             chunk.Flags[i] |= Flag.Planted;
             MarkChanged(chunk, i);
-            float now = Time.time;
+            float now = NatureClock.Now;
             timers[cell] = new Timer { Growing = true, Start = now, End = now + Mathf.Max(1f, growSeconds) };
             SetBlocks(cell, chunk, i, true);
             Planted?.Invoke(cell);
@@ -307,7 +307,7 @@ namespace KingdomGame.Economy
         }
 
         /// <summary>
-        /// The state of a node for its object: how much is left, and (as times on Time.time) whether
+        /// The state of a node for its object: how much is left, and (as times on NatureClock.Now) whether
         /// it's growing (from <paramref name="start"/> to <paramref name="end"/>) or growing back at <paramref name="end"/>.
         /// </summary>
         public void StateOf(Vector2Int cell, out int amountLeft, out bool growing, out float start, out float end)
@@ -378,7 +378,7 @@ namespace KingdomGame.Economy
         {
             foreach (var pair in live)
                 if (pair.Value != null) pair.Value.WriteBack();
-            float now = Time.time;
+            float now = NatureClock.Now;
             var changes = new List<Change>();
             // (The changed squares are listed first: settling a cell tells listeners, who may ask about other squares.)
             var changed = new List<KeyValuePair<Vector2Int, Chunk>>();
@@ -440,7 +440,7 @@ namespace KingdomGame.Economy
             else chunk.Flags[i] &= ~Flag.Planted;
             MarkChanged(chunk, i);
             timers.Remove(c.Cell);
-            float now = Time.time;
+            float now = NatureClock.Now;
             bool blocks;
             if (c.Grown >= 0f && c.Grown < 1f)
             {

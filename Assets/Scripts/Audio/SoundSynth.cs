@@ -9,10 +9,11 @@ namespace KingdomGame.Audio
         ExplosionBig, ExplosionSmall,
         Groan, ZombieHit, ZombieDie, Claw, Spit, Splash, Scream,
         Hammer, Chop, Pick, Rustle, Door, Hurt, Horn, Loot, Chime,
+        Thunder,
     }
 
     /// <summary>The background sounds, played on a loop (see <c>Ambience</c>).</summary>
-    public enum Loop { Wind, Crickets, Birds }
+    public enum Loop { Wind, Crickets, Birds, Rain }
 
     /// <summary>
     /// Makes the game's sounds from scratch (noise, tones, filters and envelopes), the way the art is drawn in
@@ -34,6 +35,7 @@ namespace KingdomGame.Audio
             switch (s)
             {
                 case Sound.Groan: return 4;
+                case Sound.Thunder: return 2;
                 case Sound.Gun: case Sound.ZombieHit: case Sound.Hammer: case Sound.Chop: case Sound.Pick: return 2;
                 default: return 1;
             }
@@ -72,6 +74,7 @@ namespace KingdomGame.Audio
                 case Sound.Hurt: x = Hurt(r); break;
                 case Sound.Horn: x = Horn(r); break;
                 case Sound.Loot: x = Loot(); break;
+                case Sound.Thunder: x = Thunder(r, variant); break;
                 default: x = Chime(); break;
             }
             Finish(x, 0.9f, true);
@@ -88,6 +91,7 @@ namespace KingdomGame.Audio
             {
                 case Loop.Wind: x = Wind(r, seconds); break;
                 case Loop.Crickets: x = Crickets(r, seconds); break;
+                case Loop.Rain: x = Rain(r, seconds); break;
                 default: x = Birds(r, seconds); break;
             }
             var looped = Seamless(x, (int)(LoopSeconds * Rate), Rate);
@@ -520,6 +524,75 @@ namespace KingdomGame.Audio
                 Shape(note, t => Env(t, 0.003f, 0.45f));
                 Add(x, note, 0.5f, (int)(start * Rate));
             }
+            return x;
+        }
+
+        // ------------------------------------------------------------ weather --
+
+        // Thunder: a crack (the near one, variant 0, louder), then a long roll of rumbles dying away.
+        static float[] Thunder(Rng r, int v)
+        {
+            bool near = v == 0;
+            float len = near ? 4.5f : 5.5f;
+            var x = Buffer(len);
+            if (near)
+            {
+                // The crack of a strike close by (far away only the rumble is heard).
+                var crack = Noise(r, len);
+                HighPass(crack, 900f);
+                LowPass(crack, 5000f);
+                Shape(crack, t => Env(t, 0.002f, 0.12f));
+                Add(x, crack, 0.9f);
+            }
+            // Rumbles: low noise in a few swells, each later one weaker.
+            float at = near ? 0.05f : 0.25f;
+            for (int k = 0; k < 6 && at < len - 0.5f; k++)
+            {
+                float swell = r.Range(0.5f, 1.2f), start = at;
+                var roll = Noise(r, len);
+                LowPass(roll, near ? 260f : 180f);
+                LowPass(roll, near ? 260f : 180f);
+                float gain = (float)Math.Pow(0.72, k);
+                Shape(roll, t => t < start ? 0f : Env(t - start, swell * 0.25f, swell));
+                Add(x, roll, gain);
+                at += r.Range(0.35f, 0.9f);
+            }
+            var sub = Tone(len, t => 32f + 8f * (float)Math.Sin(t * 3f), Sine);
+            Shape(sub, t => Env(t, 0.1f, 1.4f));
+            Add(x, sub, 0.4f);
+            Shape(x, t => Math.Min(1f, (len - t) / 0.8f));   // the tail dies right away
+            return x;
+        }
+
+        // Rain: a soft hiss (not bright: rain is a "shh", not static), many little drops pattering on top of it,
+        // and a low wash under it. It swells and eases a little.
+        static float[] Rain(Rng r, float seconds)
+        {
+            var hiss = Noise(r, seconds);
+            BandPass(hiss, t => 1800f, 0.35f);
+            LowPass(hiss, 4000f);
+            Shape(hiss, t => 0.8f + 0.2f * (float)Math.Sin(2 * Math.PI * 0.07 * t));
+            // Drops: short ticks, each ringing at its own pitch (on leaves, the ground, puddles).
+            var drops = Buffer(seconds);
+            int count = (int)(seconds * 260);
+            for (int d = 0; d < count; d++)
+            {
+                int start = (int)(r.Next() * drops.Length), length = (int)(r.Range(0.004f, 0.012f) * Rate);
+                float loud = r.Range(0.15f, 1f), pitch = r.Range(1200f, 4500f);
+                for (int i = 0; i < length && start + i < drops.Length; i++)
+                {
+                    float k = i / (float)length;
+                    drops[start + i] += loud * (float)Math.Sin(2 * Math.PI * pitch * i / Rate) * (float)Math.Exp(-k * 5f) * (1f - k);
+                }
+            }
+            Normalize(drops);
+            var wash = Noise(r, seconds);
+            LowPass(wash, 350f);
+            LowPass(wash, 350f);
+            var x = Buffer(seconds);
+            Add(x, hiss, 0.45f);
+            Add(x, drops, 0.6f);
+            Add(x, wash, 0.4f);
             return x;
         }
 

@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 22;
+        const int SettingsVersion = 23;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -208,6 +208,7 @@ namespace KingdomGame.EditorTools
             // ---- World
             var worldConfig = Asset<WorldConfig>("World/WorldConfig", w => { });
             var dayNight = Asset<DayNightConfig>("World/DayNightConfig", d => { });
+            var seasonConfig = Asset<SeasonConfig>("World/SeasonConfig", s => { });
             if (newLook)
             {
                 StoneLook(stone);
@@ -384,6 +385,7 @@ namespace KingdomGame.EditorTools
             });
             // A Game Content made by an older version of this menu doesn't know the newer settings yet.
             if (content.view == null) content.view = view;
+            if (content.seasons == null) content.seasons = seasonConfig;
             if (content.kingdom == null) content.kingdom = kingdomConfig;
             if (content.villager == null) content.villager = villagerConfig;
             if (content.storehouse == null) content.storehouse = storehouse;

@@ -139,6 +139,20 @@ namespace KingdomGame.UI
                     if (GUILayout.Button(name, button)) dayNight.SetTime(dayNight.Day, hour);
                 GUILayout.EndHorizontal();
             }
+            var seasons = World.Seasons.Current;
+            if (seasons != null && seasons.On && dayNight != null)
+            {
+                GUILayout.Label(seasons.Describe(), text);
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Next season", button)) dayNight.SetTime(dayNight.Day + seasons.DaysLeft + 1, dayNight.Hour);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Weather:", text, GUILayout.Width(font * 7f));
+                if (GUILayout.Button(seasons.Forced == null ? "<b>The sky's</b>" : "The sky's", button)) seasons.Forced = null;
+                foreach (World.Weather sky in System.Enum.GetValues(typeof(World.Weather)))
+                    if (GUILayout.Button(seasons.Forced == sky ? $"<b>{sky}</b>" : sky.ToString(), button)) seasons.Forced = sky;
+                GUILayout.EndHorizontal();
+            }
             GUILayout.BeginHorizontal();
             GUILayout.Label("Game speed:", text, GUILayout.Width(font * 7f));
             foreach (float s in Speeds)

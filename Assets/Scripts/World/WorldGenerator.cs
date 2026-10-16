@@ -103,6 +103,8 @@ namespace KingdomGame.World
                 looks[(int)NodeLook.Tree, v] = new NodeSprites
                 {
                     Full = ArtSprites.Get(ArtKeys.TreeTrunk(v)), Empty = ArtSprites.Get(ArtKeys.TreeStump(v)), Canopy = ArtSprites.Get(ArtKeys.TreeLeaves(v)),
+                    // (a pine stays green in autumn)
+                    CanopyAutumn = v % Variants == 3 ? null : ArtSprites.Get(ArtKeys.TreeLeavesAutumn(v)), CanopyWinter = ArtSprites.Get(ArtKeys.TreeLeavesWinter(v)),
                     Shadow = ArtSprites.Get(ArtKeys.Shadow(ArtKeys.TreeLeaves(v))), EmptyShadow = ArtSprites.Get(ArtKeys.Shadow(ArtKeys.TreeStump(v))),
                     ShadowHeight = 0.6f, EmptyShadowHeight = 0.05f,
                 };

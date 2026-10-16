@@ -12,6 +12,7 @@
 //   castle_night.png  a furnished castle (great hall, bedroom, library) at night
 //   castle_close.png  inside it up close, by day
 //   horde_night.png   zombies at the castle gate at night
+//   game_autumn.png, game_winter.png  the normal view in autumn (orange leaves) and winter (bare snowy trees, snow lying)
 // The mock lights sprites the way URP's 2D lights do (color times light, normal
 // maps for point lights) and adds bloom, vignette and color grading like the game's
 // post-processing. It's an approximation: Unity's own result will differ a little.
@@ -109,6 +110,8 @@ static class Program
         Render(castle, Path.Combine(dir, "castle_close.png"), 1920, 1080, new Vector2(-1.2f, 1.2f), 3f, Time.Day);
         Render(castle, Path.Combine(dir, "horde_night.png"), 1920, 1080, new Vector2(0.5f, -4.2f), 5f, Time.Night);
         Render(castle, Path.Combine(dir, "zombie_kinds.png"), 1920, 1080, new Vector2(0f, -15.4f), 5f, Time.Day);
+        Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
+        Render(world, Path.Combine(dir, "game_winter.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 2);
         Console.WriteLine($"done in {sw.Elapsed.TotalSeconds:0.0}s");
     }
 
@@ -611,8 +614,10 @@ static class Program
     static float Srgb(float c) => c <= 0f ? 0f : MathF.Pow(c, 1f / 2.2f);
     static Vector3 Lin(Vector3 c) => new Vector3(Lin(c.x), Lin(c.y), Lin(c.z));
 
-    static void Render(MockWorld world, string path, int w, int h, Vector2 center, float zoom, Time time)
+    // `season`: 0 as normal, 1 autumn leaves, 2 winter (bare snowy trees, snow lying on the ground, like Seasons does).
+    static void Render(MockWorld world, string path, int w, int h, Vector2 center, float zoom, Time time, int season = 0)
     {
+        var snow = season == 2 ? WeatherArt.SnowGround(512, world.Seed + 5u) : null;
         float ppt = h / (2f * zoom);                       // screen pixels per tile
         var color = new float[w * h * 3];                  // linear
         bool night = time == Time.Night;
@@ -641,13 +646,33 @@ static class Program
                 // The soft tint is a lit, see-through sprite over the ground.
                 var tint = world.TintAt(wx, wy);
                 float r = c.x + (Lin(tint.r) - c.x) * tint.a, g = c.y + (Lin(tint.g) - c.y) * tint.a, b = c.z + (Lin(tint.b) - c.z) * tint.a;
+                if (snow != null)
+                {
+                    // Lying snow: a see-through (90%) lit layer over the ground, 16 tiles to a repeat.
+                    var sc = snow.Pixels[(int)(Mod(wy, 16f) / 16f * snow.Height) * snow.Width + (int)(Mod(wx, 16f) / 16f * snow.Width)];
+                    r += (Lin(sc.r / 255f) - r) * 0.9f; g += (Lin(sc.g / 255f) - g) * 0.9f; b += (Lin(sc.b / 255f) - b) * 0.9f;
+                }
                 int i = (sy * w + sx) * 3;
                 color[i] = r * lit.x; color[i + 1] = g * lit.y; color[i + 2] = b * lit.z;
             }
 
         var things = new List<Inst>(world.Things);
         things.Sort((a, b) => a.Order.CompareTo(b.Order));
-        foreach (var t in things) Draw(world, t, color, w, h, center, ppt, ambient, fire);
+        foreach (var t in things)
+        {
+            var thing = t;
+            // The season's leaves (a pine keeps its green in autumn).
+            if (season > 0 && !t.Shadow && t.Key.StartsWith("Tree/Leaves/"))
+            {
+                int v = int.Parse(t.Key.Substring("Tree/Leaves/".Length));
+                string key = season == 2 ? ArtKeys.TreeLeavesWinter(v) : v % NatureArt.Variants == 3 ? t.Key : ArtKeys.TreeLeavesAutumn(v);
+                thing = new Inst { Key = key, X = t.X, Y = t.Y, Order = t.Order, Rot = t.Rot, Scale = t.Scale, Shadow = t.Shadow };
+            }
+            // A bare winter tree's shadow is fainter (a pine's isn't).
+            if (season == 2 && t.Shadow && t.Key.StartsWith("Tree/Leaves/") && !t.Key.StartsWith("Tree/Leaves/3/"))
+                thing = new Inst { Key = t.Key, X = t.X, Y = t.Y, Order = t.Order, Rot = t.Rot, Scale = t.Scale, Shadow = true, Alpha = t.Alpha * 0.35f };
+            Draw(world, thing, color, w, h, center, ppt, ambient, fire);
+        }
 
         PostProcess(color, w, h);
         Save(path, color, w, h);

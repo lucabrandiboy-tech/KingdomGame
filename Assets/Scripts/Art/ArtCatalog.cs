@@ -47,6 +47,9 @@ namespace KingdomGame.Art
     public static class ArtKeys
     {
         public static string TreeLeaves(int v) => $"Tree/Leaves/{v}";
+        /// <summary>The leaves in autumn (orange and red), and in winter (bare branches with snow; a pine with snow on it).</summary>
+        public static string TreeLeavesAutumn(int v) => $"Tree/Autumn/{v}";
+        public static string TreeLeavesWinter(int v) => $"Tree/Winter/{v}";
         public static string TreeTrunk(int v) => $"Tree/Trunk/{v}";
         public static string TreeStump(int v) => $"Tree/Stump/{v}";
         public static string Rock(int v) => $"Rock/{v}";
@@ -105,7 +108,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 16;
+        public const int Version = 17;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -128,6 +131,14 @@ namespace KingdomGame.Art
                 Shadow(items, ArtKeys.TreeStump(v), "NatureShadows", 0.015f);
                 Shadow(items, ArtKeys.Rock(v), "NatureShadows", 0.025f);
                 Shadow(items, ArtKeys.BushBerries(v), "NatureShadows", 0.02f);
+            }
+            // The seasons' trees, at half detail (a pine keeps its green leaves in autumn, so it has no autumn picture).
+            for (int v = 0; v < NatureArt.Variants; v++)
+            {
+                int variant = v;
+                if (v % NatureArt.Variants != 3)
+                    Add(items, ArtKeys.TreeLeavesAutumn(v), "Seasons", p => NatureArt.AutumnCanopy(variant, p), true, 0.5f);
+                Add(items, ArtKeys.TreeLeavesWinter(v), "Seasons", p => NatureArt.WinterCanopy(variant, p), true, 0.5f);
             }
 
             Add(items, ArtKeys.Throne, "Buildings", BuildingArt.Throne, true);

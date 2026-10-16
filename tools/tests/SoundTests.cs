@@ -12,7 +12,9 @@ static partial class Tests
                 var x = SoundSynth.Make(s, v);
                 string name = $"{s} #{v}";
                 float seconds = x.Length / (float)SoundSynth.Rate;
-                Check(seconds >= 0.1f && seconds <= 3f, $"{name} is {seconds:0.00} s long");
+                // (thunder rolls on for longer: only two at once)
+                float longest = s == Sound.Thunder ? 6f : 3f;
+                Check(seconds >= 0.1f && seconds <= longest, $"{name} is {seconds:0.00} s long");
                 float peak = 0f;
                 double energy = 0;
                 foreach (float a in x)

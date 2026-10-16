@@ -267,7 +267,9 @@ namespace KingdomGame.Defenses
         bool InRange(Vector2 p)
         {
             float d2 = (p - Center).sqrMagnitude;
-            return d2 <= config.range * config.range && d2 >= config.minRange * config.minRange;
+            // Fog: it only sees that far.
+            float range = config.range * (World.Seasons.Current != null ? World.Seasons.Current.TowerRange : 1f);
+            return d2 <= range * range && d2 >= config.minRange * config.minRange;
         }
 
         Zombie Nearest(ZombieDirector director)

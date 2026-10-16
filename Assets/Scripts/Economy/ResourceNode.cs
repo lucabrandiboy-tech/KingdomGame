@@ -14,6 +14,8 @@ namespace KingdomGame.Economy
         public Sprite Empty;
         /// <summary>Leaves above everything (trees only), or null.</summary>
         public Sprite Canopy;
+        /// <summary>The leaves in autumn and in winter (null: the same as <see cref="Canopy"/>).</summary>
+        public Sprite CanopyAutumn, CanopyWinter;
         public Sprite Shadow;
         public Sprite EmptyShadow;
         /// <summary>How high it is, in tiles (how far its shadow falls).</summary>
@@ -31,6 +33,8 @@ namespace KingdomGame.Economy
     public sealed class ResourceNode : MonoBehaviour
     {
         static readonly List<ResourceNode> all = new List<ResourceNode>();
+        // How trees' leaves look now: 0 green, 1 autumn, 2 winter (the seasons set it).
+        static int seasonLook;
 
         /// <summary>Every node that's a real object right now (for finding the closest one).</summary>
         public static IReadOnlyList<ResourceNode> All => all;
@@ -54,7 +58,7 @@ namespace KingdomGame.Economy
         /// <summary>A young planted tree or bush, still growing (nothing to gather yet).</summary>
         public bool Growing => growing;
         /// <summary>How grown it is, 0..1 (1 when it isn't growing).</summary>
-        public float Grown => growing ? Mathf.Clamp01((Time.time - growStart) / Mathf.Max(0.01f, growEnd - growStart)) : 1f;
+        public float Grown => growing ? Mathf.Clamp01((NatureClock.Now - growStart) / Mathf.Max(0.01f, growEnd - growStart)) : 1f;
         /// <summary>True while it's solid (people bump into it and walk round it).</summary>
         public bool Blocks => solid;
         /// <summary>The grid cell it stands in.</summary>
@@ -75,7 +79,7 @@ namespace KingdomGame.Economy
             restPosition = transform.position;
 
             look = Part("Look", sprites.Full, SortOrder.Nature, rotation);
-            if (sprites.Canopy != null) leaves = Part("Leaves", sprites.Canopy, SortOrder.Canopies, rotation * 1.7f + 40f);
+            if (sprites.Canopy != null) leaves = Part("Leaves", CanopyFor(seasonLook), SortOrder.Canopies, rotation * 1.7f + 40f);
             // Farmed kinds are tinted so they can be told apart.
             if (config.tint.r != 255 || config.tint.g != 255 || config.tint.b != 255)
             {
@@ -87,6 +91,7 @@ namespace KingdomGame.Economy
                 // A tree's shadow comes from its leaves; everything else from its own picture.
                 shadow = Look.AddShadow(transform, sprites.Shadow, sprites.ShadowHeight, leaves != null ? rotation * 1.7f + 40f : rotation);
             }
+            if (leaves != null) ShowSeason();
 
             block = gameObject.AddComponent<CircleCollider2D>();
             block.radius = config.blockRadius;
@@ -117,7 +122,7 @@ namespace KingdomGame.Economy
             ShowEmpty();
             if (config.regrowSeconds > 0)
             {
-                regrowAt = end > 0f ? end : Time.time + config.regrowSeconds;
+                regrowAt = end > 0f ? end : NatureClock.Now + config.regrowSeconds;
                 enabled = true;
             }
         }
@@ -149,6 +154,35 @@ namespace KingdomGame.Economy
         }
 
         void Awake() => all.Add(this);
+
+        /// <summary>Trees' leaves for a season: 0 green (spring, summer), 1 autumn colours, 2 winter (bare, snowy). Every tree changes.</summary>
+        public static void SetSeasonLook(int look)
+        {
+            if (look == seasonLook) return;
+            seasonLook = look;
+            foreach (var n in all)
+                if (n != null && n.leaves != null) n.ShowSeason();
+        }
+
+        // The leaves for the season, and a bare winter tree's shadow is fainter (its shadow is the crown's).
+        void ShowSeason()
+        {
+            leaves.sprite = CanopyFor(seasonLook);
+            if (shadow != null && leaves.enabled)
+            {
+                var c = shadow.color;
+                c.a = Look.ShadowOpacity * (seasonLook == 2 && sprites.CanopyWinter != null && config.look == NodeLook.Tree && !IsPine ? 0.35f : 1f);
+                shadow.color = c;
+            }
+        }
+
+        // Pines keep their needles (their winter crown is still full).
+        bool IsPine => sprites.CanopyAutumn == null;
+
+        Sprite CanopyFor(int look) =>
+            look == 1 && sprites.CanopyAutumn != null ? sprites.CanopyAutumn
+            : look == 2 && sprites.CanopyWinter != null ? sprites.CanopyWinter
+            : sprites.Canopy;
 
         void OnDestroy()
         {
@@ -190,8 +224,8 @@ namespace KingdomGame.Economy
         {
             Left = 0;
             growing = true;
-            growStart = Time.time;
-            growEnd = Time.time + Mathf.Max(1f, seconds);
+            growStart = NatureClock.Now;
+            growEnd = NatureClock.Now + Mathf.Max(1f, seconds);
             look.sprite = sprites.Full;
             look.enabled = true;
             if (leaves != null) leaves.enabled = true;
@@ -236,7 +270,7 @@ namespace KingdomGame.Economy
                 return;
             }
             ShowEmpty();
-            if (config.regrowSeconds > 0) regrowAt = Time.time + config.regrowSeconds;
+            if (config.regrowSeconds > 0) regrowAt = NatureClock.Now + config.regrowSeconds;
         }
 
         // A stump, a bare bush, or (a rock) nothing.
@@ -297,7 +331,7 @@ namespace KingdomGame.Economy
             {
                 busy = true;
                 ShowGrowth();
-                if (Time.time >= growEnd)
+                if (NatureClock.Now >= growEnd)
                 {
                     growing = false;
                     Left = config.amount;
@@ -308,7 +342,7 @@ namespace KingdomGame.Economy
             else if (Empty && config.regrowSeconds > 0)
             {
                 busy = true;
-                if (Time.time >= regrowAt) Regrow();
+                if (NatureClock.Now >= regrowAt) Regrow();
             }
             if (!busy) enabled = false;
         }

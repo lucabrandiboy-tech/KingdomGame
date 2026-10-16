@@ -181,7 +181,9 @@ namespace KingdomGame.Character
                 return;
             }
 
-            wantedVelocity = GameInput.Move * config.moveSpeed;
+            // Deep snow slows you down (on the map; not inside a house or a mine).
+            float snow = Inside == null && World.Seasons.Current != null ? World.Seasons.Current.MoveFactor : 1f;
+            wantedVelocity = GameInput.Move * config.moveSpeed * snow;
             if (view != null)
             {
                 Vector2 mouse = view.ScreenToWorldPoint(GameInput.PointerPosition);

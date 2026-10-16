@@ -20,18 +20,119 @@ namespace KingdomGame.Art
         {
             uint seed = 1000u + (uint)variant * 7919u;
             if (variant % Variants == 3) return Pine(ppu, seed);
-            var leaf = new FoliageStyle
+            return Foliage(ppu, Leaves(variant, new[]
             {
-                Size = 2.8f, LobeCount = 6 + variant % 3, LobeDistance = 0.7f, CenterRadius = 0.62f, LobeRadius = new Vector2(0.4f, 0.55f),
-                Clusters = 420, ClusterRadius = new Vector2(0.065f, 0.12f), LeafLength = new Vector2(0.026f, 0.042f), LeafWidth = 0.45f,
-                Palette = new[]
+                PixelImage.Rgb(34, 48, 24), PixelImage.Rgb(42, 56, 26), PixelImage.Rgb(30, 44, 26),
+                PixelImage.Rgb(48, 60, 30), PixelImage.Rgb(38, 52, 32), PixelImage.Rgb(52, 58, 28),
+            }, 1f), seed);
+        }
+
+        /// <summary>
+        /// The same crown in autumn: its leaves turned orange, red and yellow (the same shape as <see cref="Canopy"/>,
+        /// so the two can swap). A pine stays green: use its <see cref="Canopy"/>.
+        /// </summary>
+        public static PixelImage AutumnCanopy(int variant, int ppu)
+        {
+            uint seed = 1000u + (uint)variant * 7919u;
+            if (variant % Variants == 3) return Pine(ppu, seed);
+            var leaves = Leaves(variant, new[]
+            {
+                PixelImage.Rgb(118, 54, 20), PixelImage.Rgb(138, 74, 22), PixelImage.Rgb(96, 36, 18),
+                PixelImage.Rgb(146, 100, 30), PixelImage.Rgb(112, 64, 26), PixelImage.Rgb(84, 46, 22),
+            }, 0.95f);
+            leaves.Sheen = PixelImage.Rgb(196, 150, 60);
+            return Foliage(ppu, leaves, seed);
+        }
+
+        /// <summary>
+        /// The crown in winter: bare branches with snow along them (a pine keeps its needles, snow lying on them).
+        /// About the size of <see cref="Canopy"/>.
+        /// </summary>
+        public static PixelImage WinterCanopy(int variant, int ppu)
+        {
+            uint seed = 1000u + (uint)variant * 7919u;
+            var img = variant % Variants == 3 ? Pine(ppu, seed) : BareCrown(variant, ppu, seed);
+            Snow(img, variant % Variants == 3 ? 0.85f : 0.8f, seed + 77u, ppu);
+            return img;
+        }
+
+        static FoliageStyle Leaves(int variant, Color32[] palette, float brightness) => new FoliageStyle
+        {
+            Size = 2.8f, LobeCount = 6 + variant % 3, LobeDistance = 0.7f, CenterRadius = 0.62f, LobeRadius = new Vector2(0.4f, 0.55f),
+            Clusters = 420, ClusterRadius = new Vector2(0.065f, 0.12f), LeafLength = new Vector2(0.026f, 0.042f), LeafWidth = 0.45f,
+            Palette = palette, Brightness = brightness,
+        };
+
+        // A leafless crown from above: branches spreading out from the trunk, forking into twigs, highest in the middle.
+        static PixelImage BareCrown(int variant, int ppu, uint seed)
+        {
+            float t = ppu;
+            int size = Mathf.CeilToInt(2.8f * t);
+            var img = new PixelImage(size, size) { Bumpiness = 0.9f };
+            var dice = new Dice(seed + 31u);
+            float c = size / 2f;
+            var bark = PixelImage.Rgb(46, 38, 32);
+            var twig = PixelImage.Rgb(70, 60, 50);
+            var heights = img.EnsureHeights();
+            float reach = 1.2f * t;
+
+            void Branch(float x, float y, float angle, float length, float width, float height, int depth)
+            {
+                float bend = angle + dice.Range(-0.25f, 0.25f);
+                float x1 = x + Mathf.Cos(bend) * length, y1 = y + Mathf.Sin(bend) * length;
+                // Lower towards the edge of the crown.
+                float h1 = height - length / reach * 0.25f * t;
+                img.Capsule(x, y, x1, y1, width, width * 0.65f, depth == 0 ? bark : PixelImage.Mix(bark, twig, depth / 3f), PixelImage.Mix(bark, twig, (depth + 1) / 3f), height, h1);
+                if (depth >= 4 || width < 0.003f * t) return;
+                int forks = depth == 0 ? 3 : depth == 3 ? 3 : 2;
+                for (int k = 0; k < forks; k++)
+                    Branch(x1, y1, bend + dice.Range(-0.75f, 0.75f), length * dice.Range(0.5f, 0.72f), width * 0.58f, h1, depth + 1);
+            }
+
+            int main = 6 + variant % 3;
+            float turn = dice.Range(0f, Mathf.PI * 2f);
+            for (int i = 0; i < main; i++)
+            {
+                float a = turn + i / (float)main * Mathf.PI * 2f + dice.Range(-0.3f, 0.3f);
+                Branch(c, c, a, reach * dice.Range(0.34f, 0.42f), 0.035f * t, 0.45f * t, 0);
+            }
+            // The top of the trunk in the middle.
+            img.Capsule(c - 0.01f * t, c, c + 0.01f * t, c, 0.07f * t, 0.07f * t, bark, bark, 0.5f * t, 0.5f * t);
+            for (int i = 0; i < heights.Length; i++) if (img.Pixels[i].a == 0) heights[i] = 0f;
+            ShadeFoliage(img, 1.05f, 0.4f, Mathf.Max(1, Mathf.RoundToInt(0.015f * t)), PixelImage.Rgb(140, 128, 112));
+            return img;
+        }
+
+        // Snow lying on whatever faces up: the highest, sunlit parts first, in patches (dark underneath shows through).
+        static void Snow(PixelImage img, float amount, uint seed, int ppu)
+        {
+            var heights = img.EnsureHeights();
+            float lowest = float.MaxValue, highest = float.MinValue, brightest = 0f;
+            for (int i = 0; i < heights.Length; i++)
+            {
+                var c = img.Pixels[i];
+                if (c.a == 0) continue;
+                lowest = Mathf.Min(lowest, heights[i]);
+                highest = Mathf.Max(highest, heights[i]);
+                brightest = Mathf.Max(brightest, c.r + c.g + c.b);
+            }
+            var white = PixelImage.Rgb(222, 228, 236);
+            float patch = Mathf.Max(4f, 0.05f * ppu);
+            for (int y = 0; y < img.Height; y++)
+                for (int x = 0; x < img.Width; x++)
                 {
-                    PixelImage.Rgb(34, 48, 24), PixelImage.Rgb(42, 56, 26), PixelImage.Rgb(30, 44, 26),
-                    PixelImage.Rgb(48, 60, 30), PixelImage.Rgb(38, 52, 32), PixelImage.Rgb(52, 58, 28),
-                },
-                Brightness = 1f,
-            };
-            return Foliage(ppu, leaf, seed);
+                    int i = y * img.Width + x;
+                    var col = img.Pixels[i];
+                    if (col.a == 0) continue;
+                    float up = (heights[i] - lowest) / Mathf.Max(1f, highest - lowest);
+                    float lit = (col.r + col.g + col.b) / Mathf.Max(1f, brightest);   // the sunlit side, as already shaded
+                    float lumps = Noise.Fractal(x / patch, y / patch, seed, 3);
+                    float lying = PixelImage.Smooth(0.62f, 0.82f, up * 0.35f + lit * 0.45f + lumps * 0.45f) * amount;
+                    var snow = PixelImage.Scale(white, 0.72f + lit * 0.35f);
+                    var mixed = PixelImage.Mix(col, snow, lying);
+                    mixed.a = col.a;
+                    img.Pixels[i] = mixed;
+                }
         }
 
         /// <summary>The bottom of a trunk with its roots, seen from above (shown when the leaves fade).</summary>
@@ -319,6 +420,8 @@ namespace KingdomGame.Art
             public float LeafWidth;           // share of the length
             public Color32[] Palette;
             public float Brightness;
+            /// <summary>The shine on the highest, sunlit leaves.</summary>
+            public Color32 Sheen = PixelImage.Rgb(120, 132, 70);
         }
 
         /// <summary>
@@ -412,7 +515,7 @@ namespace KingdomGame.Art
                 col.a = (byte)Mathf.RoundToInt(Mathf.Clamp01(cover[i]) * 255f);
                 img.Pixels[i] = col;
             }
-            ShadeFoliage(img, style.Brightness, 0.6f, Mathf.Max(1, Mathf.RoundToInt(0.025f * t)));
+            ShadeFoliage(img, style.Brightness, 0.6f, Mathf.Max(1, Mathf.RoundToInt(0.025f * t)), style.Sheen);
             return img;
         }
 
@@ -449,8 +552,9 @@ namespace KingdomGame.Art
         }
 
         /// <summary>Lights foliage by its heights: leaves facing the top-left brighter, low and hidden leaves darker.</summary>
-        static void ShadeFoliage(PixelImage img, float brightness, float occlusion, int radius)
+        static void ShadeFoliage(PixelImage img, float brightness, float occlusion, int radius, Color32? sheenColor = null)
         {
+            var sheen = sheenColor ?? PixelImage.Rgb(120, 132, 70);
             int w = img.Width, h = img.Height;
             var height = img.EnsureHeights();
             var light = ArtLight.Sun;
@@ -477,7 +581,7 @@ namespace KingdomGame.Art
                     float cavity = Mathf.Clamp((height[i] - blurred[i]) / Mathf.Max(1f, radius * 0.8f), -1f, 1f);
                     float shade = (0.25f + lit * 1.05f) * (0.45f + 0.55f * Mathf.Sqrt(Mathf.Clamp01(up))) * (1f + cavity * occlusion * 0.5f) * brightness;
                     var col = PixelImage.Scale(c, shade * 1.25f);
-                    if (lit > 0.92f && up > 0.55f) col = PixelImage.Mix(col, PixelImage.Rgb(120, 132, 70), (lit - 0.92f) * 4f * brightness);
+                    if (lit > 0.92f && up > 0.55f) col = PixelImage.Mix(col, sheen, (lit - 0.92f) * 4f * brightness);
                     col.a = c.a;
                     img.Pixels[i] = col;
                 }

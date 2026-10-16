@@ -70,8 +70,13 @@ namespace KingdomGame.UI
                 : $"Beds for {kingdom.Beds}: everyone has one (sleeping in a bed heals too).";
             string hall = kingdom.HasDiningHall ? "Dining hall: fed, rested villagers work 10% faster."
                 : "A dining hall (a room with a table and a seat) makes fed, rested villagers work 10% faster.";
+            float firewood = kingdom.FirewoodPerDay;
+            string winter = firewood > 0f
+                ? (kingdom.Cold ? $" <color=#9fd0ff>Winter: they burn {firewood:0} wood a day to keep warm, and it's run out: they're cold and slow.</color>"
+                                : $" Winter: they burn {firewood:0} wood a day to keep warm.")
+                : "";
             GUI.Label(new Rect(x, y, width, font * 4.2f),
-                $"Meals take {meal} food ({kitchen}). Food in storage: {food}{lasts}. They sleep at night (guards by day). {beds} {hall}", small);
+                $"Meals take {meal} food ({kitchen}). Food in storage: {food}{lasts}. They sleep at night (guards by day). {beds} {hall}{winter}", small);
         }
 
         void OnGUI()

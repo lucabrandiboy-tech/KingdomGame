@@ -214,10 +214,10 @@ namespace KingdomGame.Villagers
         public bool Asleep => asleep;
         public bool InBed => asleep && inBed;
 
-        /// <summary>How fast it works and walks now (hunger, tiredness, a dining hall).</summary>
-        public float Pace => config != null && config.needs
+        /// <summary>How fast it works and walks now (hunger, tiredness, a dining hall, the cold in winter).</summary>
+        public float Pace => (config != null && config.needs
             ? NeedsMath.WorkFactor(fed, rested, kingdom.HasDiningHall, config.tiredSpeed, config.exhaustedSpeed, config.contentBonus)
-            : 1f;
+            : 1f) * kingdom.ColdFactor;
 
         /// <summary>Puts back how fed and rested it was (a saved game).</summary>
         public void SetNeeds(float fedLevel, float restedLevel)
@@ -594,7 +594,9 @@ namespace KingdomGame.Villagers
                 return;
             }
             Vector2 here = transform.position;
-            float step = config.moveSpeed * kingdom.Boost(Kingdom.Upgrade.Speed) * Pace * Time.deltaTime;
+            // (deep snow slows walking on the map, not inside houses and mines)
+            float snow = space == null && World.Seasons.Current != null ? World.Seasons.Current.MoveFactor : 1f;
+            float step = config.moveSpeed * kingdom.Boost(Kingdom.Upgrade.Speed) * Pace * snow * Time.deltaTime;
             var to = target - here;
             if (to.magnitude <= step)
             {

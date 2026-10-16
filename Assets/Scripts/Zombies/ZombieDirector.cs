@@ -121,7 +121,8 @@ namespace KingdomGame.Zombies
         /// <summary>A zombie died (for counting and the HUD).</summary>
         public event Action<Zombie> ZombieDied;
         /// <summary>Zombies are faster at night...</summary>
-        public float SpeedFactor => dayNight != null && dayNight.IsNight && config != null ? config.nightSpeed : 1f;
+        public float SpeedFactor => (dayNight != null && dayNight.IsNight && config != null ? config.nightSpeed : 1f)
+                                    * (World.Seasons.Current != null ? World.Seasons.Current.MoveFactor : 1f);   // (deep snow slows them too)
         /// <summary>...and hit harder.</summary>
         public float DamageFactor => dayNight != null && dayNight.IsNight && config != null ? config.nightDamage : 1f;
 

@@ -52,6 +52,7 @@ namespace KingdomGame.Audio
                 case Sound.Hurt: return new Mix(0.6f, 1, 0.15f, 0f);
                 case Sound.Horn: return new Mix(0.65f, 1, 1f, 0f);
                 case Sound.Loot: return new Mix(0.5f, 2, 0.05f, 0f);
+                case Sound.Thunder: return new Mix(0.9f, 2, 0.4f, 0f);
                 default: return new Mix(0.55f, 1, 0.3f, 0f);   // the chime
             }
         }
@@ -224,7 +225,7 @@ namespace KingdomGame.Audio
             source.volume = Mathf.Clamp01(loudness);
             source.panStereo = pan;
             // A little different every time (not the tunes).
-            source.pitch = s == Sound.Horn || s == Sound.Chime || s == Sound.Loot ? 1f : Random.Range(0.93f, 1.07f);
+            source.pitch = s == Sound.Horn || s == Sound.Chime || s == Sound.Loot ? 1f : s == Sound.Thunder ? Random.Range(0.8f, 1.05f) : Random.Range(0.93f, 1.07f);
             source.Play();
             playing[use] = s;
             started[use] = now;

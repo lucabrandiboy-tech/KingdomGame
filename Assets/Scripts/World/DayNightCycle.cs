@@ -26,6 +26,15 @@ namespace KingdomGame.World
         /// <summary>1 in full daylight, 0 at night.</summary>
         public float Daylight { get; private set; } = 1f;
         public bool IsNight => Daylight < 0.25f;
+        /// <summary>Hours the day is longer at each end (the seasons: more in summer, less, below 0, in winter).</summary>
+        public float DayLengthShift { get; set; }
+        /// <summary>How much clouds darken the day, 0..1 (rain, storms, fog).</summary>
+        public float Overcast { get; set; }
+        /// <summary>A lightning flash lighting everything, 0..1 (fades by itself).</summary>
+        public float Flash { get; set; }
+        /// <summary>When the sun rises and sets today (the season moves them).</summary>
+        public float Sunrise => config != null ? config.sunrise - DayLengthShift : 6f;
+        public float Sunset => config != null ? config.sunset + DayLengthShift : 19.5f;
 
         public void Setup(DayNightConfig dayNightConfig, Light2D globalLight)
         {
@@ -54,7 +63,7 @@ namespace KingdomGame.World
         {
             if (config == null || IsNight) return 0f;
             // Daylight drops below a quarter a little after sunset (see Apply).
-            float nightStarts = config.sunset + 0.174f * config.twilightHours;
+            float nightStarts = Sunset + 0.174f * config.twilightHours;
             float hours = Mathf.Repeat(nightStarts - hour, 24f);
             return hours * config.minutesPerDay * 60f / 24f;
         }
@@ -77,6 +86,7 @@ namespace KingdomGame.World
                 hour -= 24f;
                 Day++;
             }
+            Flash = Mathf.Max(0f, Flash - Time.deltaTime * 5f);
             Apply();
         }
 
@@ -84,8 +94,8 @@ namespace KingdomGame.World
         {
             if (config == null) return;
             float t = config.twilightHours;
-            float dawn = Mathf.Clamp01((hour - config.sunrise) / t + 0.5f);
-            float dusk = Mathf.Clamp01((config.sunset - hour) / t + 0.5f);
+            float dawn = Mathf.Clamp01((hour - Sunrise) / t + 0.5f);
+            float dusk = Mathf.Clamp01((Sunset - hour) / t + 0.5f);
             Daylight = Smooth(Mathf.Min(dawn, dusk));
 
             if (sun != null)
@@ -95,6 +105,10 @@ namespace KingdomGame.World
                     ? Color.Lerp(config.nightColor, config.duskColor, Daylight * 2f)
                     : Color.Lerp(config.duskColor, config.dayColor, (Daylight - 0.5f) * 2f);
                 var light = color * Mathf.Lerp(config.nightBrightness, config.dayBrightness, Daylight);
+                // Clouds dull and grey the day; lightning lights everything up for a moment.
+                float cloud = Mathf.Clamp01(Overcast);
+                if (cloud > 0f) light = Color.Lerp(light, new Color(0.55f, 0.58f, 0.64f) * light.maxColorComponent, cloud * 0.5f) * (1f - cloud);
+                if (Flash > 0f) light = Color.Lerp(light, new Color(0.9f, 0.93f, 1f) * Mathf.Max(1f, config.dayBrightness), Mathf.Clamp01(Flash));
                 light.a = 1f;
                 // The config's colors and brightness are as they look on screen. URP uses the
                 // global 2D light's color as a linear light value without converting it (the

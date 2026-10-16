@@ -43,3 +43,42 @@ Try it:
 
 Tell me if villagers get stuck going back and forth, never go to bed, or a bed shows a
 villager standing on it.
+
+## 2. Seasons and weather
+
+The year goes **spring, summer, autumn, winter**, three game days each (a game day is
+12 minutes, so a season is about 36 minutes and a year about 2.4 hours). The weather
+changes every few game hours. Both come from the world's seed and the clock, so everyone
+in an online game has the same.
+
+- **Day length:** summer days are longer (the sun rises earlier and sets later), winter
+  nights are longer (longer horde nights in survival).
+- **Plants** (planted trees and bushes, berries growing back) grow a bit faster in spring,
+  slower in autumn, and **not at all in winter**; rain makes them grow faster. Store food
+  before winter.
+- **Winter:** villagers burn **2 wood each a day** for warmth (taken from storage, a bit at
+  a time). Without wood they're **cold**: 75% speed. Snow settles over the first day of
+  winter and melts in spring; deep snow slows everyone a little (you, villagers and
+  zombies). Trees lose their leaves (pines get snow on them).
+- **Autumn:** the leaves turn orange and red.
+- **Weather:** rain (darker sky, plants grow faster), storms (summer: heavy rain and
+  lightning flashes with thunder), fog (drifting fog; towers only see two thirds as far)
+  and snow (winter). Rain and storms are heard outside, not inside a house.
+- The top right shows the season, days left and the weather.
+
+Try it (**F10** has a *Time* part with **Next season** and the weather buttons):
+
+1. Free build. The top right says *Spring (2 days left): clear* or similar.
+2. F10 > Weather **Rain**: rain streaks fall and splash, the sky dims, you hear rain.
+   Walk into a house: the rain sound fades. **Fog**: fog drifts over everything.
+   **Storm**: lightning flashes now and then and thunder follows (sooner when it's close).
+   **Snow**: snowflakes drift down. **The sky's** puts the real weather back.
+3. **Next season** three times to reach winter (or wait). Snow settles on the ground over
+   the first day; the trees go bare and snowy. You walk a little slower in it.
+4. In winter open **V**: the panel says how much wood they burn a day. Spend all the wood:
+   the top right says they're cold, and hovering a villager shows them slower.
+5. Plant a berry bush in winter: it doesn't grow until spring.
+6. In autumn the leaves are orange; in spring the snow melts away.
+
+Tell me how it looks (too dark, too much rain, fog too thick?) and whether walking
+through deep snow feels too slow.

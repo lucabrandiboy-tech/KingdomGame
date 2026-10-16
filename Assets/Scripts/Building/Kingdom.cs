@@ -1519,6 +1519,48 @@ namespace KingdomGame.Building
         /// <summary>A room with a table and somewhere to sit: fed and rested villagers are content (a little faster).</summary>
         public bool HasDiningHall => diningHall;
 
+        /// <summary>Winter, and no firewood left: villagers are cold (slower).</summary>
+        public bool Cold { get; private set; }
+        /// <summary>Firewood the kingdom burns a day now (in winter), from storage.</summary>
+        public float FirewoodPerDay
+        {
+            get
+            {
+                var seasons = World.Seasons.Current;
+                return seasons != null && seasons.Winter ? villagers.Count * seasons.Config.firewoodPerVillager : 0f;
+            }
+        }
+        float firewoodOwed;
+
+        // In winter the kingdom burns firewood from storage, a little at a time; when there's none, everyone is cold.
+        void BurnFirewood()
+        {
+            float perDay = FirewoodPerDay;
+            if (perDay <= 0f)
+            {
+                Cold = false;
+                firewoodOwed = 0f;
+                return;
+            }
+            firewoodOwed += perDay / 24f * GameHoursPerSecond * Time.deltaTime;
+            int due = Mathf.FloorToInt(firewoodOwed);
+            if (due <= 0) return;
+            int burnt = Mathf.Min(due, Available(ResourceType.Wood));
+            if (burnt > 0) Take(ResourceType.Wood, burnt);
+            firewoodOwed -= due;   // (what couldn't be burnt isn't owed later: they were cold instead)
+            Cold = burnt < due;
+        }
+
+        /// <summary>How fast villagers work and walk for the cold (1 when they're warm).</summary>
+        public float ColdFactor
+        {
+            get
+            {
+                var seasons = World.Seasons.Current;
+                return Cold && seasons != null ? seasons.Config.coldSpeed : 1f;
+            }
+        }
+
         /// <summary>Food one meal takes now (less with a kitchen).</summary>
         public int MealFood => NeedsMath.MealFood(villagerConfig.mealFood, villagerConfig.cookedMealFood, HasKitchen);
 
@@ -1810,6 +1852,7 @@ namespace KingdomGame.Building
             }
             CollapseRoofs();
             UpdateRooms(false);
+            BurnFirewood();
         }
 
         static bool BlocksZombies(BuildingConfig b) => NeedsClearSpot(b) || b.kind == BuildingKind.Door;

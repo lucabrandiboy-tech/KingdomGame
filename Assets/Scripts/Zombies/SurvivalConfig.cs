@@ -77,7 +77,20 @@ namespace KingdomGame.Zombies
         [Min(0.1f)] public float nightDamage = 1.25f;
 
         [Header("Survivors")]
-        [Tooltip("Survivors who come to join you after each wave, if you have room: each bed is a home for one more villager.")]
+        [Tooltip("Survivors who come to your throne after each wave asking to join, if you have room: each bed is a home for one more villager.")]
         [Min(0)] public int survivorsPerWave = 2;
+        [Tooltip("Free build: survivors who come each morning, if you have room.")]
+        [Min(0)] public int survivorsPerDay = 1;
+        [Tooltip("Chance a survivor has been bitten and is hiding it (survival: 2% more each wave, up to Most Infected).")]
+        [Range(0, 1)] public float infectedChance = 0.15f;
+        [Range(0, 1)] public float mostInfected = 0.35f;
+        [Tooltip("Chance a bitten survivor shows a sign of it when they ask to join...")]
+        [Range(0, 1)] public float infectedSigns = 0.7f;
+        [Tooltip("...and that a healthy one looks ill (from hunger or the cold).")]
+        [Range(0, 1)] public float falseSigns = 0.15f;
+        [Tooltip("Seconds after being taken in before a bitten survivor turns into a zombie (shortest, longest).")]
+        public Vector2 turnSeconds = new Vector2(120f, 300f);
+        [Tooltip("Seconds a survivor waits for an answer before going away.")]
+        [Min(10)] public float survivorPatience = 150f;
     }
 }

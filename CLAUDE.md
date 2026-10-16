@@ -101,6 +101,9 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
 - **Boss** (`SurvivalConfig.boss`, a `ZombieConfig` with `boss` and `ZombieAbility.Ram`): every `bossEvery` waves;
   rams straight for the throne through walls (`ZombieDirector.RamGoal/SmashAhead`), health bar in `GameHud.DrawBossBar`,
   loot in `ZombieDirector.BossLoot`.
+- **Survivors** (`Villagers/Survivors.cs` + `Survivor.cs`, numbers in `SurvivalConfig`): after each wave (survival) or each
+  morning (free build) they walk to the throne and ask to join (Y / K). Bitten ones become villagers with
+  `Villager.Infect(seconds)` and turn into a zombie (saved as `VillagerSave.turnsIn`).
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.

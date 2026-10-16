@@ -139,6 +139,21 @@ namespace KingdomGame.UI
             if (GUILayout.Button("Make everyone hungry and tired", button))
                 foreach (var v in kingdom.Villagers) if (v != null) v.SetNeeds(0.1f, 0.1f);
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            var gate = Villagers.Survivors.Current;
+            GUI.enabled = gate != null;
+            if (GUILayout.Button("A survivor comes", button))
+                Say(gate.Arrive(1, 0, false) > 0 ? "A survivor is coming to your throne (healthy)" : "No room (build a bed) or nowhere for them to come from");
+            if (GUILayout.Button("A bitten survivor comes", button))
+                Say(gate.Arrive(1, 0, true) > 0 ? "A bitten survivor is coming: take them in to see them turn" : "No room (build a bed) or nowhere for them to come from");
+            GUI.enabled = true;
+            if (GUILayout.Button("Bitten villagers turn in 10 s", button))
+            {
+                int n = 0;
+                foreach (var v in kingdom.Villagers) if (v != null && v.TurnsIn >= 0f) { v.Infect(10f); n++; }
+                Say(n > 0 ? $"{n} villager{(n == 1 ? "" : "s")} will turn in 10 seconds" : "Nobody here is bitten");
+            }
+            GUILayout.EndHorizontal();
 
             Heading("You");
             GUILayout.BeginHorizontal();

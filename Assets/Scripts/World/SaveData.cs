@@ -244,6 +244,10 @@ namespace KingdomGame.World
         /// <summary>How fed and rested (1 = fully; older saves: fully).</summary>
         public float fed = 1f;
         public float rested = 1f;
+        /// <summary>A survivor's name (empty for the first villagers).</summary>
+        public string name;
+        /// <summary>Bitten: seconds until it turns into a zombie (-1: it isn't).</summary>
+        public float turnsIn = -1f;
     }
 
     [Serializable]

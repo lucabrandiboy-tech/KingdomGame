@@ -705,6 +705,17 @@ namespace KingdomGame.Zombies
             return best;
         }
 
+        /// <summary>What a bitten villager turns into: the first kind of zombie (a walker), or null.</summary>
+        public ZombieConfig TurnedKind
+        {
+            get
+            {
+                if (config == null || config.zombies == null) return null;
+                foreach (var k in config.zombies) if (k != null && !k.boss) return k;
+                return null;
+            }
+        }
+
         /// <summary>The boss of the Survival Config (it comes every Boss Every waves), or null.</summary>
         public ZombieConfig BossKind => config != null ? config.boss : null;
 

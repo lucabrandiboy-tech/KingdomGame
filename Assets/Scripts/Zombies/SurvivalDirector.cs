@@ -182,7 +182,16 @@ namespace KingdomGame.Zombies
             Now = Phase.Calm;
             TimeLeft = config.breakSeconds;
             string news = $"Wave {Wave} survived!";
-            if (kingdom != null && kingdom.Throne != null)
+            var gate = Villagers.Survivors.Current;
+            if (gate != null && kingdom != null && kingdom.Throne != null)
+            {
+                // Survivors come to the throne and ask to join (Y or K): you choose who to let in.
+                int room = kingdom.VillagerCapacity - kingdom.Villagers.Count;
+                int coming = gate.Arrive(config.survivorsPerWave, Wave);
+                if (coming > 0) news += coming == 1 ? " A survivor is coming to your throne to ask to join you." : $" {coming} survivors are coming to your throne to ask to join you.";
+                else if (room <= 0 && config.survivorsPerWave > 0) news += " Survivors are out there: build beds so they can join you.";
+            }
+            else if (kingdom != null && kingdom.Throne != null)
             {
                 int room = kingdom.VillagerCapacity - kingdom.Villagers.Count;
                 int joining = Mathf.Clamp(room, 0, config.survivorsPerWave);

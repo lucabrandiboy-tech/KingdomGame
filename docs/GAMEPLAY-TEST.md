@@ -178,3 +178,31 @@ Try it:
 4. Free build: **F10 > Zombies > +1 Warlord** sends one at you.
 
 Tell me if it's too strong or too weak for wave 10.
+
+## 6. Survivors at the gate
+
+Villagers no longer just appear after a wave. Survivors come out of the wild and walk up to
+your throne to **ask to join**: after each wave in survival, and each morning in free build,
+as many as you have room for (each bed is a home for one more villager).
+
+- When one is waiting, a box on the right says who they are, what they did before (they
+  take that job: a hunter, a soldier, a blacksmith...) and what you notice about them.
+  Their name shows over their head. **Y** takes them in, **K** keeps them out (they walk
+  back into the wild). They wait about two and a half minutes for an answer.
+- **Some have been bitten** and hide it (15% at first, more in later waves, at most 35%).
+  Often you notice something (a bloody rag round an arm, grey and sweating, a dark cough),
+  but not always, and a healthy one can look ill from hunger or the cold.
+- Take in a bitten one and a few minutes later (2-5) they **turn into a zombie** where
+  they stand, inside your walls. In their last half minute they look grey-green.
+- Zombies and wolves can kill survivors on their way in.
+
+Try it:
+
+1. Free build, build a bed (so there's room). **F10 > Villagers > A survivor comes.** Watch
+   them walk to your throne; the box appears. Press **Y**: they join with their job (V).
+2. **F10 > A bitten survivor comes**, press **Y**, then **F10 > Bitten villagers turn in
+   10 s**. They go pale, then turn into a zombie. Kill it.
+3. Another one, press **K**: they walk away.
+4. Survival: finish a wave; survivors come instead of appearing at the throne.
+
+Tell me if it's too easy or too hard to tell who's bitten.

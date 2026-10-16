@@ -113,6 +113,8 @@ namespace KingdomGame.Building
         public int Beds { get; private set; }
         /// <summary>How many villagers can live here: the starting ones, plus one per bed.</summary>
         public int VillagerCapacity => config.startVillagers + Beds;
+        /// <summary>The pictures villagers use (survivors at the gate use them too).</summary>
+        public VillagerSprites VillagerLooks => villagerSprites;
         /// <summary>Something was built, torn down or broken (rooms and zombie paths change).</summary>
         public event Action Changed;
         /// <summary>Fades tree leaves near the ruler (planted trees join it).</summary>

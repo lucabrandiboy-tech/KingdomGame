@@ -94,8 +94,16 @@ namespace KingdomGame.Villagers
         World.Animal quarry;
         float shotAt, repathAt, huntUntil;
         LootBag pickup;
+        float turnAt = -1f;      // bitten: when it turns into a zombie (-1: it isn't)
 
         public bool IsIdle => task == Task.Idle;
+        /// <summary>Its name (survivors who joined have one; the first villagers don't).</summary>
+        public string Name { get; set; }
+        /// <summary>Bitten (a survivor who hid it): seconds until it turns into a zombie, or -1.</summary>
+        public float TurnsIn => turnAt >= 0f ? Mathf.Max(0f, turnAt - Time.time) : -1f;
+
+        /// <summary>It was bitten: in <paramref name="seconds"/> it turns into a zombie (pale and slow for the last half minute).</summary>
+        public void Infect(float seconds) => turnAt = Time.time + Mathf.Max(1f, seconds);
         /// <summary>Its job (the villagers panel changes it; it drops what it's doing, but keeps what it carries).</summary>
         public Job Job
         {
@@ -556,6 +564,28 @@ namespace KingdomGame.Villagers
             Destroy(gameObject);
         }
 
+        // It turns into a zombie where it stands (what it carried is left on the ground).
+        void Turn()
+        {
+            var at = Position;
+            if (carryAmount > 0)
+            {
+                var carried = new int[Inventory.TypeCount];
+                carried[(int)carryType] = carryAmount;
+                LootBag.Drop(at, carried);
+                carryAmount = 0;
+            }
+            Abandon();
+            kingdom.Lost(this);
+            var director = ZombieDirector.Current;
+            if (director != null && director.TurnedKind != null) director.Spawn(director.TurnedKind, at, 1f);
+            var pixels = Destruction.PixelWorld.Current;
+            if (pixels != null) pixels.Burst(at, new Color32(80, 10, 12, 255), 8, 2f);
+            Audio.Sounds.Play(Audio.Sound.Groan, at);
+            kingdom.Report($"{(string.IsNullOrEmpty(Name) ? "A villager" : Name)} was bitten, and has turned! A zombie is loose in your kingdom.");
+            Destroy(gameObject);
+        }
+
         /// <summary>Carrying something that nobody needs right now.</summary>
         public bool HasLeftovers => carryAmount > 0 && task == Task.Idle;
         public ResourceType CarryType => carryType;
@@ -570,6 +600,12 @@ namespace KingdomGame.Villagers
         void Update()
         {
             if (config == null || Health == null || Health.Dead) return;
+            // Bitten: it turns (out on the map: not inside a house or mine, where zombies can't be).
+            if (turnAt >= 0f && Time.time >= turnAt && space == null)
+            {
+                Turn();
+                return;
+            }
             Vector2 before = transform.position;
             if (config.needs) Needs();
 
@@ -1077,6 +1113,9 @@ namespace KingdomGame.Villagers
                 stepClock = 0f;
             }
             var frames = carryAmount > 0 || bucket ? sprites.Carrying : sprites.Walking;
+            // Turning: greyer and greener over its last half minute.
+            float turning = turnAt >= 0f ? Mathf.Clamp01(1f - (turnAt - Time.time) / 30f) : 0f;
+            bodyRenderer.color = Color.Lerp(Color.white, new Color(0.7f, 0.84f, 0.64f), turning);
             // Turn smoothly towards where it's going, showing the drawing for the nearest direction.
             float wanted = Mathf.Atan2(facing.y, facing.x) * Mathf.Rad2Deg;
             float now = Mathf.MoveTowardsAngle(body.localEulerAngles.z, wanted, 540f * Time.deltaTime);

@@ -129,6 +129,13 @@ namespace KingdomGame.World
                 zombieBases.Setup(content.survival, zombies, kingdom, dayNight, waves);
             }
 
+            // Survivors who come to the throne asking to join (after each wave, or each morning in free build).
+            if (content.survival != null)
+            {
+                var gate = new GameObject("Survivors").AddComponent<Villagers.Survivors>();
+                gate.transform.SetParent(transform, false);
+                gate.Setup(content.survival, kingdom, dayNight, survival);
+            }
             AddSeasons(seed);
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);

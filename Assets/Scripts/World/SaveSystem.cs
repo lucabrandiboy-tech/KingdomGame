@@ -288,6 +288,8 @@ namespace KingdomGame.World
                     health = v.Health.Current,
                     fed = v.Fed,
                     rested = v.Rested,
+                    name = v.Name,
+                    turnsIn = v.TurnsIn,
                 });
             }
 
@@ -471,6 +473,8 @@ namespace KingdomGame.World
                 var villager = kingdom.AddVillager(at, (Villagers.Job)v.job);
                 villager.Restore(kingdom.PlaceAt(at), (ResourceType)Mathf.Clamp(v.carryType, 0, Inventory.TypeCount - 1), v.carryAmount, v.health);
                 villager.SetNeeds(v.fed, v.rested);
+                villager.Name = v.name;
+                if (v.turnsIn >= 0f) villager.Infect(v.turnsIn);
             }
 
             foreach (var bag in data.bags) LootBag.Drop(bag.position, bag.amounts);

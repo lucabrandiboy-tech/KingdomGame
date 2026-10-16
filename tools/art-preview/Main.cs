@@ -22,6 +22,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using KingdomGame.Art;
+using KingdomGame.World;
 using UnityEngine;
 
 static class Program
@@ -112,6 +113,8 @@ static class Program
         Render(castle, Path.Combine(dir, "zombie_kinds.png"), 1920, 1080, new Vector2(0f, -15.4f), 5f, Time.Day);
         Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
         Render(world, Path.Combine(dir, "game_winter.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 2);
+        Render(world, Path.Combine(dir, "ruins_village.png"), 1920, 1080, new Vector2(-20f, 30f), 8f, Time.Day);
+        Render(world, Path.Combine(dir, "ruins_tower.png"), 1920, 1080, new Vector2(8f, 29f), 8f, Time.Day);
         Console.WriteLine($"done in {sw.Elapsed.TotalSeconds:0.0}s");
     }
 
@@ -335,6 +338,29 @@ static class Program
             Animal("Deer", 15.4f, -9.6f, 250f, 4);
             Animal("Wolf", 1.6f, -3.9f, 185f, 1);
             Animal("Wolf", 3.2f, -4.5f, 160f, 4);
+            // Ruins north of the start (ruins_village.png, ruins_tower.png): one of each kind, as World/RuinLayout makes them.
+            PlaceRuins(new Dictionary<RuinKind, Vector2> { [RuinKind.Village] = new Vector2(-20f, 30f), [RuinKind.Tower] = new Vector2(0f, 30f), [RuinKind.Caravan] = new Vector2(16f, 28f) });
+        }
+
+        // The first ruin of each kind the layout makes, moved to the spots asked for (World/Ruins.cs draws them the same way).
+        void PlaceRuins(Dictionary<RuinKind, Vector2> where)
+        {
+            for (int r = 0; r < 2000 && where.Count > 0; r++)
+            {
+                var site = RuinLayout.At(4242u, new Vector2Int(r % 40, r / 40));
+                if (site == null || !where.TryGetValue(site.Kind, out var to)) continue;
+                where.Remove(site.Kind);
+                var shift = new Vector2(MathF.Round(to.x - site.Center.x), MathF.Round(to.y - site.Center.y));
+                foreach (var p in site.Pieces) RuinPiece(p.Art, p.Rotation, p.At + shift, p.Layer, p.Height);
+                foreach (var c in site.Caches) RuinPiece(c.Art, c.Rotation, c.At + shift, RuinLayer.Standing, 0.3f);
+            }
+        }
+
+        void RuinPiece(string art, int rotation, Vector2 at, RuinLayer layer, float height)
+        {
+            string key = ArtKeys.Turned(art, rotation);
+            if (layer != RuinLayer.Floor) Things.Add(new Inst { Key = ArtKeys.Shadow(key), X = at.x + 0.55f * height, Y = at.y - 0.65f * height, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = key, X = at.x, Y = at.y, Order = layer == RuinLayer.Floor ? -1005 : layer == RuinLayer.Low ? 99 : 150 });
         }
 
         // A small castle round the throne, as a player might build it (Kingdom.Build): a great hall

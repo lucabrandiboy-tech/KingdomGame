@@ -137,6 +137,8 @@ namespace KingdomGame.UI
                 line.Append("\nNext: ");
                 for (int i = 1; i < research.Queue.Count; i++) line.Append(i > 1 ? ", " : "").Append(research.Queue[i].displayName);
             }
+            if (research.Blueprints > 0)
+                line.Append($"\n<color=#f0d08a>Lost blueprints: {research.Blueprints} (from ruins): each halves the next research.</color>");
             if (research.Config.allowCheats) line.Append("   <color=#8a8478>(F8: finish it now, for testing)</color>");
             return line.ToString();
         }

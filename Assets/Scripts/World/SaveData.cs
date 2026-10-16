@@ -50,6 +50,8 @@ namespace KingdomGame.World
         public int xp;
         public int[] upgrades = new int[0];
         public List<ZombieBaseSave> zombieBases = new List<ZombieBaseSave>();
+        /// <summary>The ruins out in the world that have been found, searched or fought over.</summary>
+        public List<Ruins.State> ruins = new List<Ruins.State>();
     }
 
     [Serializable]

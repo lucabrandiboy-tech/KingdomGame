@@ -22,6 +22,7 @@
     <Compile Include="../../Assets/Scripts/Art/*.cs" />
     <Compile Include="../../Assets/Scripts/Core/PixelArt.cs" />
     <Compile Include="../../Assets/Scripts/Destruction/DamageShape.cs" />
+    <Compile Include="../../Assets/Scripts/World/RuinLayout.cs" />
     <Compile Include="../../Assets/Scripts/Economy/NatureMap.cs" />
     <Compile Include="../../Assets/Scripts/Economy/NatureClock.cs" />
     <Compile Include="../../Assets/Scripts/Economy/ResourceNodeConfig.cs" />

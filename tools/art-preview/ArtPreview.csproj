@@ -19,5 +19,6 @@
     <Compile Include="../../Assets/Scripts/Art/*.cs" />
     <Compile Include="../../Assets/Scripts/Core/PixelArt.cs" />
     <Compile Include="../../Assets/Scripts/Destruction/DamageShape.cs" />
+    <Compile Include="../../Assets/Scripts/World/RuinLayout.cs" />
   </ItemGroup>
 </Project>

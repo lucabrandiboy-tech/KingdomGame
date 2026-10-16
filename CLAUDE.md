@@ -104,6 +104,9 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
 - **Survivors** (`Villagers/Survivors.cs` + `Survivor.cs`, numbers in `SurvivalConfig`): after each wave (survival) or each
   morning (free build) they walk to the throne and ask to join (Y / K). Bitten ones become villagers with
   `Villager.Infect(seconds)` and turn into a zombie (saved as `VillagerSave.turnsIn`).
+- **Ruins** (`World/RuinLayout.cs` decides where and what from the seed, plain maths that `tools/world-tests` checks
+  and the art preview draws; `World/Ruins.cs` shows them near the ruler, sends their guards, E to search, saves
+  `Ruins.State`). Art in `Art/RuinArt.cs`. Lost blueprints: `Research.AddBlueprint` (halves a research).
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.

@@ -206,3 +206,37 @@ Try it:
 4. Survival: finish a wave; survivors come instead of appearing at the throne.
 
 Tell me if it's too easy or too hard to tell who's bitten.
+
+## 7. Ruins in the wild
+
+The endless world has ruins in it now: about one in three squares of 96 x 96 tiles has one
+(none within about 55 tiles of your throne). Each is the same for the same world seed.
+
+- **An abandoned village:** two to four houses fallen in (broken walls, old floors, rubble),
+  sometimes the old well, a chest or two. **A wrecked caravan:** one or two wagons on their
+  side with crates thrown about. **A fallen watchtower:** a broken ring of stone with a
+  chest inside that always holds a **lost blueprint**.
+- **Guards:** a camp of zombies (2 to 8) round each ruin comes out when you get near. If
+  you leave, they hide again and are still there when you come back; kill them all and the
+  ruin is clear (+25 XP). Guards can only be inside your kingdom's lands (256 tiles from
+  the throne): further out, ruins are unguarded.
+- **Searching:** walk up to a chest or crates: the screen says **E: search**. You find a bag
+  of supplies (wood, stone, food in villages; food, ores and steel in caravans; iron, gold
+  and stone in towers), more the further the ruin is from your throne. A searched chest
+  turns dark. A **lost blueprint** halves your next research (or the one going now): the
+  research screen (T) shows how many you have. In free build and survival-by-waves (no
+  research) a blueprint gives 60 XP instead.
+- The broken walls are low: you (and zombies) can climb over them.
+- What you've searched, which ruins you've found and how many guards are left are saved.
+  Ruins are only in your own game or one you host (not when you join someone else's).
+
+Try it:
+
+1. Free build (or survival). Walk away from your kingdom in one direction for a while.
+   When you get near a ruin the top of the screen says *You've found an abandoned village*
+   (or a caravan or a watchtower). A few zombies come out.
+2. Fight them, then stand by the chest: **E**. A bag drops: walk over it.
+3. Walk far away and come back: the searched chest is still dark.
+4. Find a watchtower and search its chest: the message says you found a lost blueprint.
+
+Tell me if they're too rare, too common, too hard or too easy.

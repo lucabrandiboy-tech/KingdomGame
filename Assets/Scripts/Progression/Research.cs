@@ -246,8 +246,34 @@ namespace KingdomGame.Progression
             }
             Waiting = null;
             StartedUtc = when;
+            UseBlueprint();
             return true;
         }
+
+        /// <summary>Share of a research's time a lost blueprint saves.</summary>
+        public const float BlueprintShare = 0.5f;
+        /// <summary>Lost blueprints found in ruins and not used yet: the next research to start takes half as long.</summary>
+        public int Blueprints { get; private set; }
+
+        /// <summary>A lost blueprint was found: it halves what's being researched now (or the next research, if nothing is).</summary>
+        public void AddBlueprint()
+        {
+            Blueprints++;
+            UseBlueprint();
+            CatchUp();
+            Changed?.Invoke();
+        }
+
+        // A blueprint goes into the research under way (if it hasn't had one), taking half its time off.
+        void UseBlueprint()
+        {
+            var t = Researching;
+            if (Blueprints <= 0 || t == null || !StartedUtc.HasValue || helped == t) return;
+            Blueprints--;
+            helped = t;
+            StartedUtc = StartedUtc.Value.AddSeconds(-SecondsFor(t) * BlueprintShare);
+        }
+        TechConfig helped;   // the research a blueprint went into (one each)
 
         public static string Cost(TechConfig t)
         {
@@ -348,11 +374,13 @@ namespace KingdomGame.Progression
             public List<string> queue = new List<string>();
             /// <summary>When the current research started, as UTC ticks (0 = not started).</summary>
             public long startedTicks;
+            /// <summary>Lost blueprints found in ruins, not used yet.</summary>
+            public int blueprints;
         }
 
         public Saved Save()
         {
-            var s = new Saved { age = Age, startedTicks = StartedUtc.HasValue ? StartedUtc.Value.Ticks : 0 };
+            var s = new Saved { age = Age, startedTicks = StartedUtc.HasValue ? StartedUtc.Value.Ticks : 0, blueprints = Blueprints };
             foreach (var t in done) if (t != null) s.done.Add(t.name);
             foreach (var t in queue) if (t != null) s.queue.Add(t.name);
             return s;
@@ -369,6 +397,7 @@ namespace KingdomGame.Progression
             foreach (var n in s.queue) if (n != null && byName.TryGetValue(n, out var t) && !done.Contains(t)) queue.Add(t);
             Age = Mathf.Clamp(s.age, 0, Mathf.Max(0, AgeCount - 1));
             StartedUtc = s.startedTicks > 0 && queue.Count > 0 ? new DateTime(s.startedTicks, DateTimeKind.Utc) : (DateTime?)null;
+            Blueprints = Mathf.Max(0, s.blueprints);
             CatchUp();
             Changed?.Invoke();
         }

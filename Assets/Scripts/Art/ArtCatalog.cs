@@ -111,7 +111,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 19;
+        public const int Version = 20;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -187,6 +187,16 @@ namespace KingdomGame.Art
                     int rotation = r;
                     string key = ArtKeys.Turned(piece.Art, r);
                     Add(items, key, "Furniture", p => draw(p, rotation), true, half);
+                    if (!piece.Flat) Shadow(items, key, "FurnitureShadows", 0.025f);
+                }
+            // The ruins out in the wild (World/Ruins.cs).
+            foreach (var piece in FurnitureArt.RuinPieces)
+                for (int r = 0; r < piece.Rotations; r++)
+                {
+                    var draw = piece.Draw;
+                    int rotation = r;
+                    string key = ArtKeys.Turned(piece.Art, r);
+                    Add(items, key, "Ruins", p => draw(p, rotation), true, half);
                     if (!piece.Flat) Shadow(items, key, "FurnitureShadows", 0.025f);
                 }
             foreach (bool stone in new[] { false, true })

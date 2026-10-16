@@ -22,6 +22,8 @@ static class Tests
         Run(nameof(GroundSquaresJoinUp), GroundSquaresJoinUp);
         Run(nameof(GroundTintJoinsUp), GroundTintJoinsUp);
         Run(nameof(AGroundSquareIsQuickToMake), AGroundSquareIsQuickToMake);
+        Run(nameof(RuinsAreTheSameEveryTime), RuinsAreTheSameEveryTime);
+        Run(nameof(RuinsStayInTheirSquare), RuinsStayInTheirSquare);
         Console.WriteLine(failed == 0 ? "All world tests passed." : $"{failed} world test(s) FAILED.");
         return failed == 0 ? 0 : 1;
     }
@@ -45,6 +47,53 @@ static class Tests
     static void Check(bool condition, string what)
     {
         if (!condition) throw new Exception(what);
+    }
+
+    // ------------------------------------------------------------- ruins --
+
+    // The same seed and square always give the same ruin (online, and after loading, everyone sees the same).
+    static void RuinsAreTheSameEveryTime()
+    {
+        for (int i = 0; i < 300; i++)
+        {
+            var region = new Vector2Int(i % 30 - 15, i / 30 - 5);
+            var a = KingdomGame.World.RuinLayout.At(77u, region);
+            var b = KingdomGame.World.RuinLayout.At(77u, region);
+            Check((a == null) == (b == null), $"{region}: there one time and not the next");
+            if (a == null) continue;
+            Check(a.Kind == b.Kind && a.Center.x == b.Center.x && a.Center.y == b.Center.y, $"{region}: moved or changed kind");
+            Check(a.Pieces.Count == b.Pieces.Count && a.Caches.Count == b.Caches.Count && a.Guards == b.Guards, $"{region}: laid out differently");
+            for (int k = 0; k < a.Pieces.Count; k++)
+                Check(a.Pieces[k].Art == b.Pieces[k].Art && a.Pieces[k].At.x == b.Pieces[k].At.x && a.Pieces[k].At.y == b.Pieces[k].At.y, $"{region}: piece {k} differs");
+        }
+    }
+
+    // Every ruin fits inside its own square (so two never overlap), has something to search and some guards,
+    // and about a third of the squares have one, of every kind.
+    static void RuinsStayInTheirSquare()
+    {
+        int found = 0, total = 0;
+        var kinds = new HashSet<KingdomGame.World.RuinKind>();
+        const int size = KingdomGame.World.RuinLayout.Region;
+        for (int ry = -20; ry < 20; ry++)
+            for (int rx = -20; rx < 20; rx++)
+            {
+                total++;
+                var site = KingdomGame.World.RuinLayout.At(4242u, new Vector2Int(rx, ry));
+                if (site == null) continue;
+                found++;
+                kinds.Add(site.Kind);
+                Check(site.Caches.Count > 0, $"{site.Id}: nothing to search");
+                Check(site.Guards > 0, $"{site.Id}: no guards");
+                Check(site.Pieces.Count > 0 && site.Footprint.Count > 0, $"{site.Id}: nothing there");
+                foreach (var cell in site.Footprint)
+                    Check(cell.x > rx * size && cell.x < (rx + 1) * size - 1 && cell.y > ry * size && cell.y < (ry + 1) * size - 1, $"{site.Id}: cell {cell} is outside its square");
+                foreach (var c in site.Caches)
+                    Check(site.Footprint.Contains(new Vector2Int(Mathf.FloorToInt(c.At.x), Mathf.FloorToInt(c.At.y))), $"{site.Id}: a chest at {c.At.x},{c.At.y} isn't on cleared ground");
+            }
+        float share = found / (float)total;
+        Check(share > 0.25f && share < 0.4f, $"{share:P0} of the squares have ruins");
+        Check(kinds.Count == 3, $"only {kinds.Count} kinds of ruin turned up");
     }
 
     // ------------------------------------------------------------ helpers --

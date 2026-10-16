@@ -705,6 +705,12 @@ namespace KingdomGame.Zombies
             return best;
         }
 
+        /// <summary>Whether zombies can be at <paramref name="p"/>: inside the kingdom's lands (their paths don't reach further).</summary>
+        public bool Covers(Vector2 p) => fullMap.Contains(CellOf(p));
+
+        /// <summary>The kinds of zombie of the Survival Config.</summary>
+        public IReadOnlyList<ZombieConfig> Kinds => config != null && config.zombies != null ? config.zombies : Array.Empty<ZombieConfig>();
+
         /// <summary>What a bitten villager turns into: the first kind of zombie (a walker), or null.</summary>
         public ZombieConfig TurnedKind
         {

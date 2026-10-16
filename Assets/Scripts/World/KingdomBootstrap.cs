@@ -140,9 +140,14 @@ namespace KingdomGame.World
             var hud = gameObject.AddComponent<GameHud>();
             hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
             gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);   // wind, birds by day, crickets at night
+            // Ruins out in the wild, with things to search and zombies guarding them.
+            var ruins = new GameObject("Ruins").AddComponent<Ruins>();
+            ruins.transform.SetParent(transform, false);
+            ruins.Setup(seed, kingdom, zombies, waves);
             var saves = gameObject.AddComponent<SaveSystem>();
             saves.Hosted = hosting;
             saves.Bases = zombieBases;
+            saves.Ruins = ruins;
             saves.Setup(content, Mode, seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
             if (saved != null) saves.Restore(saved);
             // Continuing failed: this new game mustn't save over the save on its own.

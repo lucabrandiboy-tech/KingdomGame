@@ -16,6 +16,7 @@ namespace UnityEngine
         public static Vector2 operator *(Vector2 a, float k) => new Vector2(a.x * k, a.y * k);
         public static Vector2 operator /(Vector2 a, float k) => new Vector2(a.x / k, a.y / k);
         public float sqrMagnitude => x * x + y * y;
+        public float magnitude => (float)System.Math.Sqrt(x * x + y * y);
     }
     public struct Vector2Int : System.IEquatable<Vector2Int>
     {

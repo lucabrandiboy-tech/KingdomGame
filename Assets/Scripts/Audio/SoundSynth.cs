@@ -9,7 +9,7 @@ namespace KingdomGame.Audio
         ExplosionBig, ExplosionSmall,
         Groan, ZombieHit, ZombieDie, Claw, Spit, Splash, Scream,
         Hammer, Chop, Pick, Rustle, Door, Hurt, Horn, Loot, Chime,
-        Thunder,
+        Thunder, Crackle,
     }
 
     /// <summary>The background sounds, played on a loop (see <c>Ambience</c>).</summary>
@@ -36,6 +36,7 @@ namespace KingdomGame.Audio
             {
                 case Sound.Groan: return 4;
                 case Sound.Thunder: return 2;
+                case Sound.Crackle: return 2;
                 case Sound.Gun: case Sound.ZombieHit: case Sound.Hammer: case Sound.Chop: case Sound.Pick: return 2;
                 default: return 1;
             }
@@ -75,6 +76,7 @@ namespace KingdomGame.Audio
                 case Sound.Horn: x = Horn(r); break;
                 case Sound.Loot: x = Loot(); break;
                 case Sound.Thunder: x = Thunder(r, variant); break;
+                case Sound.Crackle: x = Crackle(r); break;
                 default: x = Chime(); break;
             }
             Finish(x, 0.9f, true);
@@ -561,6 +563,30 @@ namespace KingdomGame.Audio
             Shape(sub, t => Env(t, 0.1f, 1.4f));
             Add(x, sub, 0.4f);
             Shape(x, t => Math.Min(1f, (len - t) / 0.8f));   // the tail dies right away
+            return x;
+        }
+
+        // A fire burning: a soft roar under sharp crackles and pops (wood splitting in the heat).
+        static float[] Crackle(Rng r)
+        {
+            const float len = 0.9f;
+            var roar = Noise(r, len);
+            LowPass(roar, 700f);
+            LowPass(roar, 900f);
+            Shape(roar, t => Hold(t, 0.08f, len, 0.3f) * (0.7f + 0.3f * (float)Math.Sin(t * 23f)));
+            var pops = Buffer(len);
+            int count = 9 + (int)(r.Next() * 8f);
+            for (int k = 0; k < count; k++)
+            {
+                int start = (int)(r.Range(0.02f, len - 0.05f) * Rate), length = (int)(r.Range(0.002f, 0.009f) * Rate);
+                float loud = r.Range(0.3f, 1f);
+                for (int i = 0; i < length && start + i < pops.Length; i++)
+                    pops[start + i] += r.Signed() * loud * (1f - i / (float)length);
+            }
+            HighPass(pops, 1200f);
+            var x = Buffer(len);
+            Add(x, roar, 0.6f);
+            Add(x, pops, 0.8f);
             return x;
         }
 

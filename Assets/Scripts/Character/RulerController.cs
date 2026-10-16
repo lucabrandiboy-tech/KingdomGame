@@ -556,6 +556,15 @@ namespace KingdomGame.Character
                     UseHouseDoor(door);
                     return;
                 }
+                // A fire right here: beat it out.
+                var fires = Fires.Current;
+                var blaze = fires != null ? fires.Nearest(here, reach + 0.2f) : null;
+                if (blaze != null)
+                {
+                    Hint = $"Hold E: beat out the fire ({Mathf.RoundToInt(blaze.Heat * 100f)}%)";
+                    if (GameInput.Held(KeyCode.E)) fires.Douse(blaze, fires.Config.rulerDousePerSecond * Time.deltaTime);
+                    return;
+                }
                 if (kingdom.Throne != null && Closer(BuildingLook.Distance(kingdom.Throne.Cells, here), reach, ref best)) throne = kingdom.Throne;
                 foreach (var f in kingdom.AllFurniture)
                 {

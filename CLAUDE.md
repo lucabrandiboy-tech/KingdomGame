@@ -91,6 +91,9 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   seed by `SeasonMath` (same for everyone online, nothing to save). Plants grow by `Economy/NatureClock.Now`
   (slower or stopped by the season), never `Time.time`. Snow slows walking (`Seasons.MoveFactor`), fog shortens
   tower sight, winter burns firewood (`Kingdom.Cold`); `Seasons.LightningStruck` says where lightning hit.
+- **Fire** (`Building/Fires.cs`, numbers in `FireConfig`): wood walls (`StructureMaterial.flammable`) and buildings
+  marked `BuildingConfig.flammable` burn, spread, and are put out by villagers with buckets from a `water` building
+  (a well), by the ruler (hold E) and by rain. Start one with `Fires.Current.Ignite/IgniteNear`. Not saved.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.

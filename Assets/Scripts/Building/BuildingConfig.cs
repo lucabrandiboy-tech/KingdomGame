@@ -125,6 +125,10 @@ namespace KingdomGame.Building
         public bool shelter;
         [Tooltip("A ladder or stairs: it leans on the wall it faces, and the ruler climbs up there with E.")]
         public bool climb;
+        [Tooltip("It burns (made mostly of wood or cloth): it can catch fire, and fire spreads to it.")]
+        public bool flammable;
+        [Tooltip("A well: villagers fetch water here to put out fires.")]
+        public bool water;
 
         [Header("Light (torches, candles, fireplaces)")]
         [Tooltip("0 = no light. 1 = as far and bright as a brazier.")]

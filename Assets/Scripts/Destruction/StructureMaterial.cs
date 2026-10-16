@@ -30,6 +30,8 @@ namespace KingdomGame.Destruction
         [Header("Zombies")]
         [Tooltip("How much zombie battering one tile of this wall takes before it caves in (a walker does 10 a blow, a brute 60). Zombies' blows only scratch the picture; this is what wears the wall down. Less is left once explosions have broken pieces off.")]
         [Min(1)] public float siegeHealth = 400f;
+        [Tooltip("It burns (wood): fire wears it down and spreads along it.")]
+        public bool flammable;
 
         /// <summary>The percentage of a hit of this kind that gets through. Whole numbers, so every computer agrees.</summary>
         public int PercentFor(DamageCategory category)

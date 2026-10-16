@@ -198,6 +198,11 @@ namespace KingdomGame.UI
                 int busy = 0;
                 foreach (var v in kingdom.Villagers) if (v != null && !v.IsIdle) busy++;
                 text.Append($"Villagers: {kingdom.Villagers.Count} (homes for {kingdom.VillagerCapacity}), {busy} busy   Blueprints: {kingdom.Blueprints.Count}");
+                // Fire!
+                var fires = Fires.Current;
+                if (fires != null && fires.Count > 0)
+                    text.Append($"\n<color=#ffa060>Fire! {fires.Count} thing{(fires.Count == 1 ? " is" : "s are")} burning" +
+                                (kingdom.HasWell ? ": villagers are bringing water from the well" : ": build a well so villagers can put fires out (or hold E at one)") + "</color>");
                 // Winter without firewood.
                 if (kingdom.Cold) text.Append("\n<color=#9fd0ff>Out of firewood: your villagers are cold and slow (they burn wood in winter)</color>");
                 // Going hungry with nothing to eat.

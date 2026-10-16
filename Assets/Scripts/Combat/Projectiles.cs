@@ -132,6 +132,9 @@ namespace KingdomGame.Combat
                 {
                     var at = PixelWorld.PixelCenter(pixel.x, pixel.y);
                     Detonate(world, shot.Weapon, at);
+                    // A flamethrower's fire can set a wooden wall alight.
+                    var fires = Building.Fires.Current;
+                    if (shot.Weapon.incendiary && fires != null && fires.Config != null) fires.Ignite(at, fires.Config.flameShotIgnites);
                     shot.OnLand?.Invoke(at);
                     RemoveAt(i--);
                     continue;

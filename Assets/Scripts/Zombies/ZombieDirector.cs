@@ -391,6 +391,9 @@ namespace KingdomGame.Zombies
             }
             Kills++;
             Audio.Sounds.Play(Audio.Sound.ZombieDie, at);
+            // A burning zombie falls in flames: wood next to it may catch.
+            var fires = Fires.Current;
+            if (c.ability == ZombieAbility.Burn && fires != null && fires.Config != null) fires.IgniteNear(at, 1.2f, fires.Config.burningBlowIgnites);
             var remains = Remains.Current;
             if (remains != null)
             {
@@ -709,6 +712,10 @@ namespace KingdomGame.Zombies
         public void HitCell(Vector2Int cell, Zombie z, float blow = -1f)
         {
             if (blow < 0f) Audio.Sounds.Play(Audio.Sound.ZombieHit, (Vector2)cell + new Vector2(0.5f, 0.5f));
+            // A burning zombie's blows set wood alight.
+            var fires = Fires.Current;
+            if (z.Config.ability == ZombieAbility.Burn && fires != null && fires.Config != null)
+                fires.Ignite((Vector2)cell + new Vector2(0.5f, 0.5f), fires.Config.burningBlowIgnites);
             float damage = DamageFactor;
             var chunk = world != null ? world.ChunkAt(cell) : null;
             if (chunk != null && chunk.Owner != null)

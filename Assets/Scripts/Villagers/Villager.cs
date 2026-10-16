@@ -35,7 +35,7 @@ namespace KingdomGame.Villagers
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter, Eat, Sleep }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter, Eat, Sleep, Water, Douse }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -85,6 +85,11 @@ namespace KingdomGame.Villagers
         Furniture bed;           // the bed it's going to or asleep in (null: the ground)
         bool asleep, inBed, napping;
         Vector2 bedside;         // where it got into bed (it gets out there)
+        // Fighting a fire: the well it fetches water from, the fire, and whether its bucket is full.
+        Furniture well;
+        Fires.Blaze fire;
+        bool bucket;
+        float fillClock;
 
         public bool IsIdle => task == Task.Idle;
         /// <summary>Its job (the villagers panel changes it; it drops what it's doing, but keeps what it carries).</summary>
@@ -123,6 +128,8 @@ namespace KingdomGame.Villagers
                     case Task.Craft: return benchMachine != null ? $"making {ResourceText.Name(benchMachine.Config.makes)}" : "making weapons";
                     case Task.Shelter: return "sheltering from the zombies";
                     case Task.Eat: return "eating";
+                    case Task.Water: return "fetching water for a fire";
+                    case Task.Douse: return "putting out a fire";
                     case Task.Sleep: return asleep ? (inBed ? "asleep in bed" : napping ? "napping on the ground" : "asleep on the ground") : "going to bed";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
                     case Task.Gather: return node != null ? $"gathering {ResourceText.Name(node.Config.resource)}" : "gathering";
@@ -240,6 +247,13 @@ namespace KingdomGame.Villagers
             return true;
         }
 
+        // A fire in the kingdom wanting hands, and a well to fetch water from.
+        bool FireToFight()
+        {
+            var fires = Fires.Current;
+            return fires != null && fires.Count > 0 && kingdom.HasWell && fires.NeedingHands(Position) != null;
+        }
+
         /// <summary>Go to a storehouse and eat a meal there (<paramref name="amount"/> food, already reserved there).</summary>
         public bool StartEat(Storage from, int amount)
         {
@@ -331,15 +345,15 @@ namespace KingdomGame.Villagers
             if (task == Task.Sleep)
             {
                 if (!asleep) return;   // still on the way
-                // Zombies about: guards get up for their towers.
-                if ((guard && kingdom.ShelterNow) || !NeedsMath.StayAsleep(hour, night, rested, guard, napping))
+                // Zombies about: guards get up for their towers. A fire nearby and a well to fight it with: everyone up.
+                if ((guard && kingdom.ShelterNow) || !NeedsMath.StayAsleep(hour, night, rested, guard, napping) || (!guard && FireToFight()))
                 {
                     Idle();
                     thinkAt = Time.time + Random.Range(0f, 2f);   // not everyone at once
                 }
                 return;
             }
-            if (task == Task.Idle || task == Task.Eat || task == Task.Flee || task == Task.Shelter || task == Task.MakeRoom || Scared) return;
+            if (task == Task.Idle || task == Task.Eat || task == Task.Flee || task == Task.Shelter || task == Task.MakeRoom || task == Task.Water || task == Task.Douse || Scared) return;
             if (guard && kingdom.ShelterNow) return;   // keeps watch while zombies are about
             bool sleepy = NeedsMath.ShouldSleep(hour, night, rested, guard);
             bool starving = fed < NeedsMath.Urgent && Time.time >= noMealUntil && kingdom.Available(ResourceType.Food) > 0;
@@ -348,6 +362,21 @@ namespace KingdomGame.Villagers
                 Abandon();
                 thinkAt = Time.time;
             }
+        }
+
+        /// <summary>Fetch a bucket of water from <paramref name="fromWell"/> and throw it on <paramref name="blaze"/>.</summary>
+        public bool StartFirefight(Furniture fromWell, Fires.Blaze blaze)
+        {
+            if (fromWell == null || blaze == null || blaze.Out) return false;
+            well = fromWell;
+            fire = blaze;
+            fire.Fighters++;
+            bucket = false;
+            fillClock = 0f;
+            task = Task.Water;
+            if (Walk(well.Cells, true)) return true;
+            Idle();
+            return false;
         }
 
         /// <summary>Go to an anvil and make the weapons on order there (crafters).</summary>
@@ -543,6 +572,11 @@ namespace KingdomGame.Villagers
                 Idle();   // its bed was broken or torn down
                 thinkAt = Time.time;
             }
+            else if ((task == Task.Water || task == Task.Douse) && (fire == null || fire.Out || (task == Task.Water && well == null)))
+            {
+                Idle();   // the fire's out (or the well went)
+                thinkAt = Time.time;
+            }
             else if (task == Task.Dig && (mine == null || !mine.IsMarked(digCell)))
             {
                 Idle();   // the mark was taken off, or the mine is gone
@@ -666,6 +700,30 @@ namespace KingdomGame.Villagers
                 case Task.Sleep:
                     if (!asleep) LieDown();
                     return;
+                case Task.Water:
+                {
+                    var toWell = well.Cells.center - Position;
+                    if (toWell.sqrMagnitude > 0.0001f) facing = toWell.normalized;
+                    fillClock += Time.deltaTime;
+                    if (fillClock < 1f) return;
+                    bucket = true;
+                    task = Task.Douse;
+                    if (!Walk(fire.Cells, true)) { Idle(); thinkAt = Time.time; }
+                    return;
+                }
+                case Task.Douse:
+                {
+                    var toFire = fire.Center - Position;
+                    if (toFire.sqrMagnitude > 0.0001f) facing = toFire.normalized;
+                    var fires = Fires.Current;
+                    if (fires != null) fires.Douse(fire, fires.Config.bucketDouse);
+                    var pixels = Destruction.PixelWorld.Current;
+                    if (pixels != null) pixels.Burst(Position + facing * 0.6f, new Color32(150, 180, 210, 255), 14, 2.5f);
+                    Audio.Sounds.Play(Audio.Sound.Splash, Position, 0.7f);
+                    Idle();
+                    thinkAt = Time.time;   // another bucket, if it's still burning
+                    return;
+                }
                 case Task.Eat:
                 {
                     var toStore = storage.Center - Position;
@@ -770,6 +828,10 @@ namespace KingdomGame.Villagers
             napping = false;
             if (meal > 0 && storage != null) storage.Unreserve(ResourceType.Food, meal);
             meal = 0;
+            if (fire != null) fire.Fighters = Mathf.Max(0, fire.Fighters - 1);
+            fire = null;
+            well = null;
+            bucket = false;
             task = Task.Idle;
             if (node != null && node.Gatherer == (Component)this) node.Gatherer = null;
             node = null;
@@ -880,7 +942,7 @@ namespace KingdomGame.Villagers
             {
                 stepClock = 0f;
             }
-            var frames = carryAmount > 0 ? sprites.Carrying : sprites.Walking;
+            var frames = carryAmount > 0 || bucket ? sprites.Carrying : sprites.Walking;
             // Turn smoothly towards where it's going, showing the drawing for the nearest direction.
             float wanted = Mathf.Atan2(facing.y, facing.x) * Mathf.Rad2Deg;
             float now = Mathf.MoveTowardsAngle(body.localEulerAngles.z, wanted, 540f * Time.deltaTime);

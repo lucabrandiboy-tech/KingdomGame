@@ -82,3 +82,38 @@ Try it (**F10** has a *Time* part with **Next season** and the weather buttons):
 
 Tell me how it looks (too dark, too much rain, fog too thick?) and whether walking
 through deep snow feels too slow.
+
+## 3. Fire
+
+Wooden things can burn now: **wood walls**, and wooden **doors, gates, furniture, chests,
+storehouses, towers and traps** (the build bar's hover box says "Burns"), and houses with
+a thatch roof or wooden walls. Stone and metal don't.
+
+- **What starts a fire:** lightning in a storm, explosions (rockets, C4, bloaters, cannon
+  shells), a flamethrower's fire, napalm, a **burning zombie** (a new kind from wave 8:
+  charred, with flames on it; its blows set wood alight, and so does it when it falls), and
+  a torch, brazier, lamp or fireplace being knocked over (broken).
+- **Burning:** a fire grows hot over a few seconds, wears what's burning down until it's
+  gone (a wood wall lasts about 17 seconds) and spreads to wooden things right next to it.
+  Flames, light, smoke and crackling.
+- **Putting it out:** build a **well** (Furniture tab). Every villager but the guards fetches
+  a bucket from it and throws it on the nearest fire (two to a fire); a bucket puts out one
+  burning thing. A fire wakes sleeping villagers. You can beat a fire out yourself: stand
+  next to it and **hold E**. **Rain** puts fires out (not under a roof) and **snow** keeps
+  them from spreading.
+- Fires aren't saved: a loaded game has none.
+
+Try it:
+
+1. Free build. Build a line of wood walls and a few wooden things next to them (chairs,
+   a chest). Hover them on the build bar: "Burns".
+2. Stand by them, **F10 > Fire > Set fire to wood near you**. Flames and smoke appear,
+   the top right says *Fire!*, and it spreads along the wood.
+3. Without a well, hold **E** next to a burning wall: the hint shows the fire going down
+   to nothing.
+4. Build a well, set fire again: villagers run to the well, then to the fire, splash, and
+   it goes out. Hover a burning thing on the throne: it says how hot it is and who's coming.
+5. F10 > Weather > Rain while something burns outside: it goes out by itself.
+6. Survival: F10 > send 5 **Burning** zombies at a wooden gate.
+
+Tell me if fires spread too fast or too slow, or villagers ignore them.

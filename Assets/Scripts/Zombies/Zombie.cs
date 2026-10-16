@@ -56,6 +56,7 @@ namespace KingdomGame.Zombies
         float slowKeep = 1f;               // share of its speed it keeps (stakes, wire), this frame
         int slowFrame = -10;
         Vector2Int smashing;
+        Color skin = Color.white;           // its tint (a burning one is charred)
 
         Vector2 campAt, wanderTo;          // camping (round a base, or besieging the kingdom): where, and where it's wandering to
         float campRadius, sight, wanderAt;
@@ -158,6 +159,18 @@ namespace KingdomGame.Zombies
                 eyeRenderer.sortingOrder = SortOrder.Characters;
                 eyeRenderer.color = new Color(1f, 1f, 1f, 0.85f);
                 Look.MakeGlow(eyeRenderer);
+            }
+            if (config.ability == ZombieAbility.Burn)
+            {
+                // On fire: charred, with flames on it (and their light).
+                skin = new Color(0.62f, 0.5f, 0.44f);
+                var fire = ArtSprites.Get(ArtKeys.Flame);
+                if (fire != null)
+                {
+                    var flames = new GameObject("Flames").AddComponent<Building.Flames>();
+                    flames.transform.SetParent(body, false);
+                    flames.Setup(fire, new[] { new Vector2(0.05f, 0.1f), new Vector2(-0.08f, -0.08f), new Vector2(0.12f, -0.06f) }, 0.9f, 0.55f, SortOrder.Characters + 1);
+                }
             }
             Show(Vector2.zero, 0f);
         }
@@ -409,8 +422,8 @@ namespace KingdomGame.Zombies
             if (eyes != null) eyes.localPosition = sprites.EyesAt[frame] * sprites.Scale;
             bodyRenderer.color = hurtFlash > 0f ? new Color(1f, 0.55f, 0.5f)
                 : attackClock >= 0f && blow == Blow.Burst ? Color.Lerp(Color.white, new Color(1f, 1f, 0.45f), Mathf.PingPong(attackClock * 6f, 1f))   // swelling up to burst
-                : Time.time < boostUntil ? new Color(1f, 0.8f, 0.72f)   // worked up by a scream
-                : Color.white;
+                : Time.time < boostUntil ? new Color(1f, 0.8f, 0.72f) * skin   // worked up by a scream
+                : skin;
             var turn = Quaternion.Euler(0f, 0f, angle);
             body.localRotation = turn;
             if (shadow != null) shadow.transform.localRotation = turn;

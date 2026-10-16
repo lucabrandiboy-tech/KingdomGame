@@ -331,12 +331,15 @@ namespace KingdomGame.World
             return rig;
         }
 
-        // The seasons and the weather (from the world's seed and the clock).
+        // The seasons and the weather (from the world's seed and the clock), and fire (it burns this kingdom).
         void AddSeasons(int seed)
         {
             var seasons = new GameObject("Seasons and weather").AddComponent<Seasons>();
             seasons.transform.SetParent(transform, false);
             seasons.Setup(content.seasons, dayNight, seed);
+            var fires = new GameObject("Fires").AddComponent<Fires>();
+            fires.transform.SetParent(transform, false);
+            fires.Setup(content.fire, Kingdom.Current, PixelWorld.Current);
         }
 
         void AddDebug()

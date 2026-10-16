@@ -456,6 +456,11 @@ namespace KingdomGame.Building
             bool rightClick = !PointerOverHud && (GameInput.AltFirePressed || GameInput.Pressed(KeyCode.Delete));
             var room = kingdom.RoomAt(cell);
             string roomText = room != null ? $"\n{room.Name} ({room.Size} tiles)" : "";
+            // Burning?
+            var burning = Fires.Current != null ? Fires.Current.BlazeAt(cell) : null;
+            if (burning != null)
+                roomText += $"\n<color=#ffa060>On fire ({Mathf.RoundToInt(burning.Heat * 100f)}%)" +
+                            (burning.Fighters > 0 ? $": {burning.Fighters} villager{(burning.Fighters == 1 ? "" : "s")} bringing water" : kingdom.HasWell ? "" : ": no well to fetch water from") + "</color>";
             // The roof overhead: Shift + right click takes the whole roof off.
             var roof = kingdom.RoofAt(cell);
             if (roof != null)

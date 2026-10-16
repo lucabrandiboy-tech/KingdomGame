@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 23;
+        const int SettingsVersion = 24;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -103,6 +103,8 @@ namespace KingdomGame.EditorTools
             bool gatesUpdate = oldContent != null && oldContent.settingsVersion < 18;
             bool zombieKinds = oldContent != null && oldContent.settingsVersion < 21;   // crawlers, screamers, spitters, bloaters, armored, giants
             bool villagerNeeds = oldContent != null && oldContent.settingsVersion < 22;   // villagers eat and sleep
+            // Fire: what burns (wood walls, wooden furniture and doors), wells, flamethrowers, burning zombies. New settings get it too.
+            bool fireUpdate = oldContent == null || oldContent.settingsVersion < 24;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -162,8 +164,14 @@ namespace KingdomGame.EditorTools
             var wood = Asset<StructureMaterial>("Destruction/WoodPalisade", m =>
             {
                 m.pixelHealth = 140; m.bulletPercent = 8; m.meleePercent = 35; m.explosivePercent = 140; m.siegeHealth = 200f;
+                m.flammable = true;
                 WoodLook(m);
             });
+            if (fireUpdate && !wood.flammable)
+            {
+                wood.flammable = true;
+                EditorUtility.SetDirty(wood);
+            }
 
             // ---- Combat
             var rifle = Asset<WeaponConfig>("Combat/Rifle", w =>
@@ -374,7 +382,15 @@ namespace KingdomGame.EditorTools
                 z.damage = 50f; z.attackSeconds = 2.4f; z.reach = 0.4f; z.structureDamage = 120f; z.wallDamage = 160f; z.wallScratch = smash;
                 z.firstWave = 12; z.weight = 0.06f; z.lootChance = 1f; z.lootAmount = 60;
             });
-            var allZombies = new[] { walker, runner, brute, crawler, screamer, spitter, bloater, armored, giant };
+            // On fire: its blows set wood alight, and so does it when it falls (from wave 8).
+            var burning = Asset<ZombieConfig>("Zombies/Burning", z =>
+            {
+                z.displayName = "Burning"; z.art = "Walker"; z.health = 70f; z.moveSpeed = 1.1f; z.radius = 0.22f;
+                z.damage = 12f; z.attackSeconds = 1.3f; z.reach = 0.25f; z.structureDamage = 14f; z.wallDamage = 12f; z.wallScratch = claw;
+                z.ability = ZombieAbility.Burn;
+                z.firstWave = 8; z.weight = 0.3f; z.lootChance = 0.25f; z.lootAmount = 8;
+            });
+            var allZombies = new[] { walker, runner, brute, crawler, screamer, spitter, bloater, armored, giant, burning };
             var survival = Asset<SurvivalConfig>("Zombies/SurvivalConfig", s => s.zombies = allZombies);
 
             var content = Asset<GameContent>("GameContent", c =>
@@ -385,6 +401,7 @@ namespace KingdomGame.EditorTools
             });
             // A Game Content made by an older version of this menu doesn't know the newer settings yet.
             if (content.view == null) content.view = view;
+            if (content.fire == null) content.fire = Asset<FireConfig>("Building/FireConfig", f => { });
             if (content.seasons == null) content.seasons = seasonConfig;
             if (content.kingdom == null) content.kingdom = kingdomConfig;
             if (content.villager == null) content.villager = villagerConfig;
@@ -548,15 +565,20 @@ namespace KingdomGame.EditorTools
                 Debug.Log("Added each age's new things: machines and crafting tables (Industry tab), furniture, plants (Farming tab), towers and electric lights. Your other settings were kept.");
             }
 
-            if (zombieKinds && content.survival != null)
+            if ((zombieKinds || fireUpdate) && content.survival != null)
             {
                 // The newer kinds of zombie join the waves (after the ones you have).
                 var kinds = new List<ZombieConfig>(content.survival.zombies ?? new ZombieConfig[0]);
+                int before = kinds.Count;
                 foreach (var z in allZombies) if (!kinds.Contains(z)) kinds.Add(z);
-                content.survival.zombies = kinds.ToArray();
-                EditorUtility.SetDirty(content.survival);
-                Debug.Log("Six more kinds of zombie come in the waves now: crawlers, screamers, spitters, bloaters, armored zombies and giants. Your other settings were kept.");
+                if (kinds.Count != before)
+                {
+                    content.survival.zombies = kinds.ToArray();
+                    EditorUtility.SetDirty(content.survival);
+                    Debug.Log("New kinds of zombie come in the waves now (burning zombies from wave 8). Your other settings were kept.");
+                }
             }
+            if (fireUpdate) Burnable(content);
 
             if (villagerNeeds && content.kingdom != null && content.kingdom.startFood < 60)
             {
@@ -627,6 +649,35 @@ namespace KingdomGame.EditorTools
             EditorSceneManager.OpenScene(KingdomScenePath);
             Debug.Log("Game scenes are ready: Assets/Scenes/Kingdom (open now: Play starts survival), Assets/Scenes/MainMenu " +
                       "(pick survival or free build) and Assets/Scenes/StressTest. Press Play.");
+        }
+
+        // Fire: which buildings burn (made mostly of wood or cloth: wooden doors and gates, furniture, chests, storehouses,
+        // wooden towers and traps; not stone, metal or machines), the wells villagers fetch water from, and the flamethrowers
+        // whose shots set wood alight. Set once (when fire came in); after that it's yours to change.
+        static void Burnable(GameContent content)
+        {
+            var all = new List<BuildingConfig>();
+            if (content.buildMenu != null) all.AddRange(content.buildMenu);
+            if (content.storehouse != null) all.Add(content.storehouse);
+            foreach (var b in all)
+            {
+                if (b == null) continue;
+                bool wooden = (b.kind == BuildingKind.Furniture || b.kind == BuildingKind.Door || b.kind == BuildingKind.Storage)
+                              && b.health > 0f && b.machine == null && b.steelCost == 0 && b.woodCost + b.foodCost > b.stoneCost;
+                bool well = b.art == FurnitureArt.Well;
+                if (b.flammable != wooden || b.water != well)
+                {
+                    b.flammable = wooden;
+                    b.water = well;
+                    EditorUtility.SetDirty(b);
+                }
+                var gun = b.defense != null ? b.defense.weapon : null;
+                if (gun != null && gun.sound == ShotSound.Flame && !gun.incendiary)
+                {
+                    gun.incendiary = true;
+                    EditorUtility.SetDirty(gun);
+                }
+            }
         }
 
         // Explosions hurt creatures, doors and furniture too (zombies, and you if you're too close).

@@ -174,6 +174,9 @@ namespace KingdomGame.Defenses
                 armed = false;
                 cloudUntil = now + config.cloudSeconds;
                 cloudStarted = now;
+                // Napalm (a glowing, burning cloud) sets wooden things in it alight.
+                var fires = Fires.Current;
+                if (config.cloudGlows && fires != null && fires.Config != null) fires.IgniteNear(Center, config.cloudRadius, fires.Config.napalmIgnites);
                 rearmAt = now + Mathf.Max(config.rearmSeconds, config.cloudSeconds);
                 if (look != null && sprungLook != null) look.sprite = sprungLook;
                 ShowCloud(now);

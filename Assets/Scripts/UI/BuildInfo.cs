@@ -29,6 +29,8 @@ namespace KingdomGame.UI
                 text.Append($"+{b.boostPercent:0.#}% {BoostName(b.boost)} for the kingdom (each kind counts once)\n");
             if (b.sleeps > 0) text.Append($"Homes for {b.sleeps} villager{(b.sleeps > 1 ? "s" : "")}\n");
             if (b.lightSize > 0f) text.Append("Gives light at night\n");
+            if (b.water) text.Append("Villagers fetch water here to put out fires\n");
+            if (b.flammable) text.Append("Burns: it can catch fire\n");
             if (b.blocksMovement) text.Append("Blocks the way (zombies too)\n");
             else if (b.kind == BuildingKind.Furniture) text.Append("Can be walked through\n");
             return text.ToString().TrimEnd('\n');

@@ -112,6 +112,15 @@ namespace KingdomGame.UI
             GUI.enabled = true;
             GUILayout.EndHorizontal();
 
+            Heading("Fire");
+            GUILayout.BeginHorizontal();
+            var fires = Fires.Current;
+            GUI.enabled = fires != null && ruler != null;
+            if (GUILayout.Button("Set fire to wood near you", button))
+                Say(fires.IgniteNear(ruler.transform.position, 3f, 1f) > 0 ? "Fire!" : "Nothing wooden near you to burn (wood walls, wooden furniture)");
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+
             Heading("Villagers");
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Feed and rest everyone", button))

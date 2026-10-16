@@ -1196,6 +1196,10 @@ namespace KingdomGame.Building
                 var splinters = c.stoneCost > c.woodCost ? new Color32(120, 116, 110, 255) : new Color32(120, 86, 54, 255);
                 world.Burst(thing.Cells.center, splinters, 16, 3f);
             }
+            // A torch, brazier, lamp or fireplace knocked over: what's next to it may catch fire.
+            var fires = Fires.Current;
+            if (fires != null && fires.Config != null && thing.Config.lightSize > 0f && thing.Config.flames != null && thing.Config.flames.Length > 0)
+                fires.IgniteNear(thing.Cells.center, 1.5f, fires.Config.knockedOverIgnites);
             Forget(thing);
             thing.Remove();
         }
@@ -1629,6 +1633,43 @@ namespace KingdomGame.Building
             return v.StartEat(store, amount);   // (if it can't get there, it gives the meal back)
         }
 
+        // --------------------------------------------------------------- fire --
+
+        /// <summary>A well to fetch water from (villagers put fires out with it).</summary>
+        public bool HasWell
+        {
+            get
+            {
+                foreach (var f in furniture) if (f != null && f.Config.water) return true;
+                return false;
+            }
+        }
+
+        Furniture NearestWell(Vector2 from)
+        {
+            Furniture best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var f in furniture)
+            {
+                if (f == null || !f.Config.water) continue;
+                float d = Travel(from, f.Cells.center);
+                if (d < bestDistance) { bestDistance = d; best = f; }
+            }
+            return best;
+        }
+
+        // Something's burning and there's a well: everyone but the guards fetches water (a few to each fire).
+        bool FightFire(Villager v)
+        {
+            if (v.Job == Job.Guard) return false;
+            var fires = Fires.Current;
+            if (fires == null || fires.Count == 0) return false;
+            var blaze = fires.NeedingHands(v.Position);
+            if (blaze == null) return false;
+            var well = NearestWell(v.Position);
+            return well != null && v.StartFirefight(well, blaze);
+        }
+
         // ------------------------------------------------------------ shelter --
 
         /// <summary>How near the throne zombies have to be before villagers go to shelter (tiles).</summary>
@@ -1742,6 +1783,7 @@ namespace KingdomGame.Building
                 var flag = NearestShelter(v.Position);
                 if (flag != null && v.StartShelter(flag)) return;
             }
+            if (FightFire(v)) return;
             if (CareFor(v)) return;
             if (v.Job == Job.Crafter && v.CarryAmount == 0)
             {

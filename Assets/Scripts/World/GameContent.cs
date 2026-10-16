@@ -48,6 +48,8 @@ namespace KingdomGame.World
         public VillagerConfig villager;
         [Tooltip("The storehouse your kingdom starts with.")]
         public BuildingConfig storehouse;
+        [Tooltip("How fires start, spread and are put out.")]
+        public FireConfig fire;
         [Tooltip("What you can build from the throne. Each goes on its category's tab of the build bar, in this order (keys 1-9).")]
         public BuildingConfig[] buildMenu = new BuildingConfig[0];
 

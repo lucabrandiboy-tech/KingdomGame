@@ -209,6 +209,9 @@ namespace KingdomGame.UI
                 int wolves = wild != null ? wild.WolvesOut : 0;
                 if (wolves > 0)
                     text.Append($"\n<color=#c8b8ff>Wolves about ({wolves}): they hunt anyone out in the dark, but keep out of firelight</color>");
+                // The factory's pollution (and, in survival, what it does to the hordes).
+                string smog = kingdom.Factory != null ? kingdom.Factory.PollutionText(waves != null) : null;
+                if (smog != null) text.Append('\n').Append(smog);
                 // Winter without firewood.
                 if (kingdom.Cold) text.Append("\n<color=#9fd0ff>Out of firewood: your villagers are cold and slow (they burn wood in winter)</color>");
                 // Going hungry with nothing to eat.

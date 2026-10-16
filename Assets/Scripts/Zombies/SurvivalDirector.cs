@@ -9,7 +9,9 @@ namespace KingdomGame.Zombies
     /// that never stops growing, with a short calm between waves when survivors
     /// come to join you (if you have beds for them). Each wave comes out of the
     /// dark from one or more sides of the map. It's over when the ruler falls.
-    /// N calls the next wave early.
+    /// N calls the next wave early. The factory's pollution makes the hordes bigger
+    /// (what's in the air now) and the zombies further on, tougher and of later kinds
+    /// (all it ever made: Building/Factory.cs WaveScale and Evolution).
     /// </summary>
     public sealed class SurvivalDirector : MonoBehaviour
     {
@@ -50,6 +52,8 @@ namespace KingdomGame.Zombies
         public string Announcement { get; private set; }
         /// <summary>Daytime with hordes only at night: the next one comes at nightfall (<see cref="TimeLeft"/> is the time till then).</summary>
         public bool WaitingForNight { get; private set; }
+        /// <summary>How many waves further on the zombies are for the kingdom's pollution (their kinds and toughness).</summary>
+        public int Evolution => kingdom != null && kingdom.Factory != null ? kingdom.Factory.Evolution : 0;
 
         public void Setup(SurvivalConfig survival, ZombieDirector director, Kingdom owner, World.DayNightCycle clock = null)
         {
@@ -160,6 +164,10 @@ namespace KingdomGame.Zombies
             Now = Phase.Fighting;
             TimeLeft = 0f;
             ToCome = WaveMath.Count(wave, config.firstWaveZombies, config.extraZombiesPerWave, config.growth);
+            // Pollution in the air: a bigger horde.
+            float scale = kingdom != null && kingdom.Factory != null ? kingdom.Factory.WaveScale : 1f;
+            ToCome = Mathf.RoundToInt(ToCome * scale);
+            string smog = scale > 1.01f ? $" (x{scale:0.0}: your pollution)" : "";
             // Every Boss Every waves, a boss comes too (two the next time, and so on).
             bossesToCome = config.boss != null && wave % Mathf.Max(1, config.bossEvery) == 0 ? wave / Mathf.Max(1, config.bossEvery) : 0;
             ToCome += bossesToCome;
@@ -172,8 +180,8 @@ namespace KingdomGame.Zombies
             for (int i = 0; i < sides; i++) entries.Add(Mathf.Repeat(first + i / (float)sides + Random.Range(-0.08f, 0.08f), 1f));
             if (bossesToCome > 0)
                 Announce($"Wave {wave}: {ToCome - bossesToCome} zombies and {(bossesToCome == 1 ? "a" : bossesToCome.ToString())} {config.boss.displayName.ToUpperInvariant()}{(bossesToCome == 1 ? "" : "S")} " +
-                         $"with a battering ram are coming from the {Sides()}! It goes for your throne, through your walls.", 8f);
-            else Announce($"Wave {wave}: {ToCome} zombies are coming from the {Sides()}!", 5f);
+                         $"with a battering ram are coming from the {Sides()}! It goes for your throne, through your walls.{smog}", 8f);
+            else Announce($"Wave {wave}: {ToCome} zombies are coming from the {Sides()}!{smog}", 5f);
             Audio.Sounds.PlayHere(Audio.Sound.Horn);
         }
 
@@ -234,12 +242,13 @@ namespace KingdomGame.Zombies
                 ToCome = 0;
                 return;
             }
-            float toughness = WaveMath.Toughness(Wave, config.toughnessPerWave);
+            int further = Evolution;   // (pollution: tougher, and later kinds sooner)
+            float toughness = WaveMath.Toughness(Wave + further, config.toughnessPerWave);
             while (spawnClock >= 1f && ToCome > 0 && zombies.Attacking < config.maxAlive)
             {
                 spawnClock -= 1f;
                 bool boss = bossesToCome > 0;
-                var kind = boss ? config.boss : PickKind(Wave);
+                var kind = boss ? config.boss : PickKind(Wave + further);
                 if (kind == null)
                 {
                     ToCome = 0;   // no zombies set up at all

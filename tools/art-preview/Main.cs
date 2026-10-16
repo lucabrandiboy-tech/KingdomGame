@@ -16,6 +16,7 @@
 //   ore.png, ore_close.png  drills on the start's iron field putting ore onto a belt; ore_fields.png  the map zoomed out
 //                   (the start's stone and copper fields); ore_coal.png  its coal field
 //   power.png, power_night.png  power poles and their wires, a generator, an accumulator, a solar panel, a substation
+//   craftables.png  the six Craftables (one for each age from the Bronze Age to World War 1) on a belt
 // The mock lights sprites the way URP's 2D lights do (color times light, normal
 // maps for point lights) and adds bloom, vignette and color grading like the game's
 // post-processing. It's an approximation: Unity's own result will differ a little.
@@ -123,6 +124,7 @@ static class Program
         Render(castle, Path.Combine(dir, "ore_coal.png"), 1920, 1080, new Vector2(8f, 36f), 6f, Time.Day);
         Render(castle, Path.Combine(dir, "power.png"), 1920, 1080, new Vector2(3.5f, -38.5f), 6f, Time.Day);
         Render(castle, Path.Combine(dir, "power_night.png"), 1920, 1080, new Vector2(3.5f, -38.5f), 6f, Time.Night);
+        Render(castle, Path.Combine(dir, "craftables.png"), 1920, 1080, new Vector2(3f, -44.5f), 1.6f, Time.Day);
         Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
         Render(world, Path.Combine(dir, "game_winter.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 2);
         Render(world, Path.Combine(dir, "ruins_village.png"), 1920, 1080, new Vector2(-20f, 30f), 8f, Time.Day);
@@ -551,6 +553,11 @@ static class Program
             Wires.Add((d, e));
             Wires.Add((e, f));
             for (int y = -43; y <= -35; y++) for (int x = -2; x <= 15; x++) used.Add((x, y));
+            // The six Craftables riding a fast belt (craftables.png).
+            for (int x = 0; x <= 6; x++) FactoryBelt(5, x, -45, 0, 0);
+            for (int i = 0; i < KingdomGame.Economy.ResourceText.Craftables; i++)
+                OnBelt(i, -45, 0, 0.5f, KingdomGame.Economy.ResourceText.FirstCraftable + i);
+            for (int x = -1; x <= 7; x++) used.Add((x, -45));
         }
 
         // A drill facing `dir` and its bit turned `bit` degrees, like Factory.MakeDrillLook.

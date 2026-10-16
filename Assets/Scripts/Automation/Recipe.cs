@@ -19,6 +19,8 @@ namespace KingdomGame.Automation
         public bool furnace;
         /// <summary>The age it can be made from (0 = Stone Age).</summary>
         public int age;
+        /// <summary>How much more than usual the machine making it pollutes (Craftables: a lot).</summary>
+        public float pollution = 1f;
 
         /// <summary>How many of <paramref name="type"/> one batch takes (0: none).</summary>
         public int Need(ResourceType type)
@@ -83,7 +85,24 @@ namespace KingdomGame.Automation
             Recipe.Make("Machine parts", ResourceType.MachineParts, 2, 6f, 5, false, In(ResourceType.Steel, 2), In(ResourceType.Gear, 1), In(ResourceType.Coal, 1)),
             Recipe.Make("Wire", ResourceType.Wire, 2, 0.5f, 5, false, In(ResourceType.Copper, 1)),
             Recipe.Make("Electronics", ResourceType.Electronics, 1, 1f, 6, false, In(ResourceType.Iron, 1), In(ResourceType.Wire, 3)),
+            // Craftables: what researching each next age takes. Slow, from several of the age's goods, and they pollute four times as much.
+            Craftable("Bronze craftables", ResourceType.BronzeCraftable, 10f, 1, In(ResourceType.BronzeBar, 2), In(ResourceType.Rope, 1), In(ResourceType.Copper, 1)),
+            Craftable("Iron craftables", ResourceType.IronCraftable, 12f, 2, In(ResourceType.Gear, 2), In(ResourceType.IronBar, 1), In(ResourceType.Coal, 2)),
+            Craftable("Medieval craftables", ResourceType.MedievalCraftable, 15f, 3, In(ResourceType.Steel, 2), In(ResourceType.Gear, 2), In(ResourceType.BronzeBar, 1)),
+            Craftable("Renaissance craftables", ResourceType.RenaissanceCraftable, 18f, 4, In(ResourceType.Gunpowder, 2), In(ResourceType.Steel, 1), In(ResourceType.Gear, 2), In(ResourceType.IronBar, 1)),
+            Craftable("Industrial craftables", ResourceType.IndustrialCraftable, 20f, 5, In(ResourceType.MachineParts, 2), In(ResourceType.Wire, 3), In(ResourceType.Steel, 1)),
+            Craftable("Modern craftables", ResourceType.ModernCraftable, 25f, 6, In(ResourceType.Electronics, 2), In(ResourceType.MachineParts, 1), In(ResourceType.Gunpowder, 2)),
         };
+
+        /// <summary>How much more a machine making a Craftable pollutes.</summary>
+        public const float CraftablePollution = 4f;
+
+        static Recipe Craftable(string name, ResourceType output, float seconds, int age, params ResourceAmount[] inputs)
+        {
+            var r = Recipe.Make(name, output, 1, seconds, age, false, inputs);
+            r.pollution = CraftablePollution;
+            return r;
+        }
 
         public static Fuel[] DefaultFuels() => new[] { new Fuel(ResourceType.Wood, 2f), new Fuel(ResourceType.Coal, 4f) };
     }

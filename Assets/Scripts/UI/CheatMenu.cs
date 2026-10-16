@@ -142,6 +142,21 @@ namespace KingdomGame.UI
             }
             if (GUILayout.Button("Where are the ore fields?", button)) Say(OreDirections(), 15f);
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            var smog = kingdom.Factory != null ? kingdom.Factory.Pollution : null;
+            GUI.enabled = smog != null && ruler != null;
+            if (GUILayout.Button("Pollution: +2,000 where you stand", button))
+            {
+                smog.Emit(ruler.transform.position.x, ruler.transform.position.y, 2000f);
+                Say("+2,000 pollution: it spreads from here (P shows it)");
+            }
+            if (GUILayout.Button("Clear the pollution", button))
+            {
+                smog.Clear();
+                Say("The air is clean (the zombies stay as far on as they were)");
+            }
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
 
             Ages();
 

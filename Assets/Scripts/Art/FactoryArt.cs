@@ -557,6 +557,27 @@ namespace KingdomGame.Art
                     Block(img, t, 0.12f, 0.13f, 0.22f, 0.21f, PixelImage.Rgb(30, 30, 32), 0.06f, 0.01f, Surface.Plain, s + 1u);
                     foreach (var (bx, by) in new[] { (0.08f, 0.1f), (0.26f, 0.1f), (0.08f, 0.24f), (0.26f, 0.24f) }) Stud(img, t, bx, by, 0.015f, PixelImage.Rgb(220, 180, 70), 0.05f);
                     break;
+                case ResourceType.BronzeCraftable:
+                case ResourceType.IronCraftable:
+                case ResourceType.MedievalCraftable:
+                case ResourceType.RenaissanceCraftable:
+                case ResourceType.IndustrialCraftable:
+                case ResourceType.ModernCraftable:
+                {
+                    // A corked flask of the age's colour (Factorio's science packs).
+                    Color32[] liquids =
+                    {
+                        Ore(214, 120, 50), Ore(120, 150, 196), Ore(204, 52, 52), Ore(156, 72, 196), Ore(64, 182, 84), Ore(60, 194, 214),
+                    };
+                    var liquid = liquids[(int)type - (int)ResourceType.BronzeCraftable];
+                    var glass = Ore(196, 206, 212);
+                    Round(img, t, c, c - 0.035f, 0.105f, glass, 0.08f, 0.04f, Surface.Wax, s);
+                    Round(img, t, c, c - 0.045f, 0.08f, liquid, 0.1f, 0.035f, Surface.Wax, s + 1u);
+                    Block(img, t, c - 0.032f, c + 0.04f, c + 0.032f, c + 0.13f, glass, 0.09f, 0.01f, Surface.Wax, s + 2u);
+                    Block(img, t, c - 0.042f, c + 0.11f, c + 0.042f, c + 0.155f, Ore(140, 100, 62), 0.11f, 0.01f, Surface.Wood, s + 3u);
+                    Stud(img, t, c - 0.04f, c - 0.01f, 0.018f, Ore(240, 240, 236), 0.14f);
+                    break;
+                }
                 case ResourceType.IronOre:
                 case ResourceType.CopperOre:
                 {

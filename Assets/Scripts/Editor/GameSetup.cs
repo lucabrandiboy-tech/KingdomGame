@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 30;
+        const int SettingsVersion = 31;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -108,6 +108,8 @@ namespace KingdomGame.EditorTools
             bool roomsUpdate = oldContent != null && oldContent.settingsVersion < 27;   // kinds of room: training dummies, medicine tables, tool benches
             // Electricity as a network (power poles): generators' MW and what lamps use. New settings get it too.
             bool powerUpdate = oldContent == null || oldContent.settingsVersion < 30;
+            // Craftables (each age's research into the next takes some) and pollution (generators make it). New settings get it too.
+            bool craftablesUpdate = oldContent == null || oldContent.settingsVersion < 31;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -298,6 +300,10 @@ namespace KingdomGame.EditorTools
                 foreach (var age in machinesByAge)
                     foreach (var b in age)
                         if (b != null && b.machine != null) PowerNumbers(b.machine);
+            if (craftablesUpdate)
+                foreach (var age in machinesByAge)
+                    foreach (var b in age)
+                        if (b != null && b.machine != null) PollutionNumbers(b.machine);
             for (int i = 0; i < machinesByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(machinesByAge[i]);
             // Each age's ten pieces of furniture (beds give homes; each kind boosts something once).
             var furnitureByAge = AgeFurniture();
@@ -429,6 +435,12 @@ namespace KingdomGame.EditorTools
             // The factory's recipes and fuels.
             if (content.factory == null)
                 content.factory = Asset<FactoryConfig>("Building/FactoryConfig", f => { f.recipes = Automation.RecipeBook.Defaults(); f.fuels = Automation.RecipeBook.DefaultFuels(); });
+            // Craftables: the factory makes them (new recipes join older settings), and each age's research into the next takes some.
+            if (craftablesUpdate)
+            {
+                AddMissingRecipes(content.factory);
+                CraftableCosts(content.progression);
+            }
             // What the crafting room makes (tools, bandages, cures).
             if (content.crafting == null) content.crafting = Asset<CraftingConfig>("Building/CraftingConfig", c => c.items = CraftItem.Defaults());
             // Armor for the ruler and soldiers (bought at an armory room): older settings get the defaults.
@@ -1304,6 +1316,59 @@ namespace KingdomGame.EditorTools
             m.powerOutput = output;
             m.powerUse = use;
             EditorUtility.SetDirty(m);
+        }
+
+        // Pollution generators make at full load, a minute (older settings had none).
+        static void PollutionNumbers(MachineConfig m)
+        {
+            float pollution = m.pollution;
+            switch (m.name)
+            {
+                case "Generator": pollution = 30f; break;
+                case "DieselGenerator": pollution = 40f; break;
+                case "PowerPlant": pollution = 50f; break;
+            }
+            if (Mathf.Approximately(pollution, m.pollution)) return;
+            m.pollution = pollution;
+            EditorUtility.SetDirty(m);
+        }
+
+        // The factory's default recipes that an older Factory Config doesn't have yet (by name).
+        static void AddMissingRecipes(FactoryConfig factory)
+        {
+            if (factory == null) return;
+            var list = new List<Automation.Recipe>(factory.recipes ?? new Automation.Recipe[0]);
+            bool added = false;
+            foreach (var r in Automation.RecipeBook.Defaults())
+            {
+                if (list.Exists(x => x != null && x.name == r.name)) continue;
+                list.Add(r);
+                added = true;
+            }
+            if (!added) return;
+            factory.recipes = list.ToArray();
+            EditorUtility.SetDirty(factory);
+        }
+
+        // How many of its own Craftables each age's research into the next age takes (Bronze Age to World War 1).
+        static readonly int[] CraftablesToAdvance = { 0, 10, 15, 20, 25, 30, 40 };
+
+        static void CraftableCosts(ProgressionConfig progression)
+        {
+            if (progression == null || progression.ages == null) return;
+            for (int age = 1; age < progression.ages.Length && age < CraftablesToAdvance.Length; age++)
+            {
+                var a = progression.ages[age];
+                if (a == null || a.techs == null || !ResourceText.CraftableOf(age, out var craftable)) continue;
+                foreach (var t in a.techs)
+                {
+                    if (t == null || !t.advancesAge) continue;
+                    var want = new[] { new ResourceAmount(craftable, CraftablesToAdvance[age]) };
+                    if (t.extraCosts != null && t.extraCosts.Length == 1 && t.extraCosts[0].type == want[0].type && t.extraCosts[0].amount == want[0].amount) continue;
+                    t.extraCosts = want;
+                    EditorUtility.SetDirty(t);
+                }
+            }
         }
 
         // Each age's machines (index = age: 0 Stone Age ... 7 World War 2).

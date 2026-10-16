@@ -51,6 +51,11 @@ static partial class Tests
         Run(nameof(GeneratorsShareTheLoad), GeneratorsShareTheLoad);
         Run(nameof(BrownoutsSlowMachines), BrownoutsSlowMachines);
         Run(nameof(AccumulatorsCarryTheNight), AccumulatorsCarryTheNight);
+        Run(nameof(PollutionCloudsSpreadAndSettle), PollutionCloudsSpreadAndSettle);
+        Run(nameof(PollutionSpreadsOnlyWhenThick), PollutionSpreadsOnlyWhenThick);
+        Run(nameof(TreesAndBasesTakePollution), TreesAndBasesTakePollution);
+        Run(nameof(PollutionIsSaved), PollutionIsSaved);
+        Run(nameof(PollutionMakesHordesHarder), PollutionMakesHordesHarder);
 
         Run(nameof(RanksComeWithExperience), RanksComeWithExperience);
         Run(nameof(SoldiersGetTougherAndFaster), SoldiersGetTougherAndFaster);

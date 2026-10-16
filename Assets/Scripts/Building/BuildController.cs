@@ -578,6 +578,9 @@ namespace KingdomGame.Building
                 if (rightClick) Say(kingdom.TearDown(cell));
                 return;
             }
+            // P: the pollution here.
+            if (kingdom.Factory != null && kingdom.Factory.ShowingPollution)
+                roomText = $"\nPollution here: {kingdom.Factory.Pollution.AtPosition(mouse.x, mouse.y):N0} (in this 32-tile square)" + roomText;
             // An ore field: what's in the ground here.
             var ores = Economy.OreMap.Current;
             if (ores != null && ores.At(cell.x, cell.y, out int oreLeft) is var oreKind && oreKind != Economy.OreKind.None)

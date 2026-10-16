@@ -29,6 +29,14 @@ namespace KingdomGame.Economy
         IronOre,
         /// <summary>Dug by drills from copper ore fields; a furnace smelts it into copper.</summary>
         CopperOre,
+        // Craftables (like Factorio's science packs): made in assemblers from each age's goods, hard to make, and making
+        // them pollutes a lot. Researching the way into the next age takes a pile of the age's own (Bronze Age to World War 1).
+        BronzeCraftable,
+        IronCraftable,
+        MedievalCraftable,
+        RenaissanceCraftable,
+        IndustrialCraftable,
+        ModernCraftable,
     }
 
     /// <summary>An amount of one resource (extra building costs: an age's parts).</summary>
@@ -55,6 +63,19 @@ namespace KingdomGame.Economy
         public static ResourceType PartOf(int age) => FirstPart + (age < 0 ? 0 : age >= Parts ? Parts - 1 : age);
         public static bool IsPart(ResourceType type) => type >= FirstPart && type < FirstPart + Parts;
 
+        /// <summary>The first Craftable (the Bronze Age's); age N's is FirstCraftable + N - 1, from the Bronze Age (1) to World War 1 (6).</summary>
+        public const ResourceType FirstCraftable = ResourceType.BronzeCraftable;
+        public const int Craftables = 6;
+
+        /// <summary>The Craftable made in age <paramref name="age"/> and needed to research the next age (none in the Stone Age or World War 2: false).</summary>
+        public static bool CraftableOf(int age, out ResourceType type)
+        {
+            type = FirstCraftable + Math.Max(0, Math.Min(Craftables - 1, age - 1));
+            return age >= 1 && age <= Craftables;
+        }
+
+        public static bool IsCraftable(ResourceType type) => type >= FirstCraftable && type < FirstCraftable + Craftables;
+
         /// <summary>How a resource is called in text, lower case ("wood", "bronze bars", "machine parts").</summary>
         public static string Name(ResourceType type)
         {
@@ -66,6 +87,12 @@ namespace KingdomGame.Economy
                 case ResourceType.MachineParts: return "machine parts";
                 case ResourceType.IronOre: return "iron ore";
                 case ResourceType.CopperOre: return "copper ore";
+                case ResourceType.BronzeCraftable: return "bronze craftables";
+                case ResourceType.IronCraftable: return "iron craftables";
+                case ResourceType.MedievalCraftable: return "medieval craftables";
+                case ResourceType.RenaissanceCraftable: return "renaissance craftables";
+                case ResourceType.IndustrialCraftable: return "industrial craftables";
+                case ResourceType.ModernCraftable: return "modern craftables";
                 default: return type.ToString().ToLowerInvariant();
             }
         }

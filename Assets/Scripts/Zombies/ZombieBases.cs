@@ -17,6 +17,8 @@ namespace KingdomGame.Zombies
         public Vector2 Center => transform.position;
         internal readonly List<Zombie> Campers = new List<Zombie>();
         internal float NextCamperAt;
+        /// <summary>Pollution it has breathed in and not yet sent zombies for.</summary>
+        internal float Breathed;
 
         public void Setup(Vector2 at, float health, Sprite look, Sprite shadow)
         {
@@ -37,7 +39,9 @@ namespace KingdomGame.Zombies
     /// Zombie bases in survival: every few days (at dawn) a new one appears, well away from the
     /// throne. Zombies camp round each. Some nights a base besieges the kingdom: a crowd camps just
     /// outside it, going for anyone who comes out (villagers stay at their shelter flag while
-    /// zombies are near), and goes home after a while. Destroying a base gives experience (XP).
+    /// zombies are near), and goes home after a while. Where the factory's pollution reaches a base,
+    /// it breathes it in and, day or night, sends zombies at the kingdom for it (Factorio's biters).
+    /// Destroying a base gives experience (XP).
     /// </summary>
     public sealed class ZombieBases : MonoBehaviour
     {
@@ -57,6 +61,7 @@ namespace KingdomGame.Zombies
         readonly List<Siege> sieges = new List<Siege>();
         int lastDay;
         bool wasNight;
+        float breatheAt;
 
         public IReadOnlyList<ZombieBase> Bases => bases;
 
@@ -91,6 +96,52 @@ namespace KingdomGame.Zombies
             }
             KeepCampers();
             EndSieges();
+            if (Time.time >= breatheAt)
+            {
+                breatheAt = Time.time + 1f;
+                Breathe(1f);
+            }
+        }
+
+        // ------------------------------------------------------------ pollution --
+
+        // Each base breathes in the pollution where it stands; enough of it, and it sends zombies at the kingdom.
+        void Breathe(float seconds)
+        {
+            var factory = kingdom.Factory;
+            var smog = factory != null ? factory.Pollution : null;
+            var numbers = factory != null ? factory.Config : null;
+            if (smog == null || numbers == null || smog.ChunkCount == 0) return;
+            foreach (var b in bases)
+            {
+                if (b == null || b.Health == null || b.Health.Dead) continue;
+                b.Breathed += smog.Take(Automation.PollutionMap.ChunkOf(b.Center.x), Automation.PollutionMap.ChunkOf(b.Center.y), numbers.baseBreathes * seconds);
+                int group = WaveMath.AttackGroup(b.Breathed, numbers.pollutionPerAttacker);
+                if (group < numbers.attackGroupLeast) continue;
+                group = Mathf.Min(group, numbers.attackGroupMost);
+                b.Breathed -= group * numbers.pollutionPerAttacker;
+                Attack(b, group);
+            }
+        }
+
+        // A group from a base comes for the kingdom (like a horde's zombies: through the walls if they must).
+        void Attack(ZombieBase from, int count)
+        {
+            int further = waves != null ? waves.Evolution : 0;
+            float toughness = WaveMath.Toughness((waves != null ? waves.Wave : 1) + further, config.toughnessPerWave);
+            int sent = 0;
+            for (int i = 0; i < count; i++)
+            {
+                var kind = PickKind();
+                if (kind == null) break;
+                if (director.Spawn(kind, from.Center + Random.insideUnitCircle * 3f, toughness) != null) sent++;
+            }
+            if (sent == 0) return;
+            var way = from.Center - kingdom.Throne.Center;
+            string[] compass = { "east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east" };
+            int point = Mathf.RoundToInt(Mathf.Repeat(Mathf.Atan2(way.y, way.x) * Mathf.Rad2Deg, 360f) / 45f) % 8;
+            kingdom.Report($"Your pollution reached a zombie base: {sent} zombies are coming from the {compass[point]}!");
+            Audio.Sounds.PlayHere(Audio.Sound.Horn);
         }
 
         // ------------------------------------------------------------ bases --
@@ -151,10 +202,10 @@ namespace KingdomGame.Zombies
             director.Rewindow();
         }
 
-        // A kind of zombie for a camp or a siege: the kinds the waves have got up to by now.
+        // A kind of zombie for a camp, a siege or an attack: the kinds the waves (and the pollution) have got up to by now.
         ZombieConfig PickKind()
         {
-            if (waves != null) return waves.PickKind(waves.Wave);
+            if (waves != null) return waves.PickKind(waves.Wave + waves.Evolution);
             var kinds = config.zombies;
             return kinds != null && kinds.Length > 0 ? kinds[0] : null;
         }

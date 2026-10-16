@@ -145,6 +145,14 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   `Factory.LegacyUser` setting `Machine.PowerShare`). Short networks give everyone the same share (brownout). Ticked in
   `Factory.Update` before the factory; a machine inside a house is on the grid at its door's cell. Wires and the blue supply
   areas (`Factory.ShowPowerAreas`, while placing something electric) are drawn by `Factory`; art in `Art/PowerArt.cs`.
+- **Craftables** (the user's name for them; Factorio's science packs): `ResourceType.BronzeCraftable`..`ModernCraftable`
+  (`ResourceText.CraftableOf(age)`), made by assemblers (`RecipeBook`, `Recipe.pollution` = 4), and each age's
+  research into the next takes 10-40 of its own (`TechConfig.extraCosts`, set by `GameSetup.CraftableCosts`).
+- **Pollution** (`Automation/PollutionMap.cs`, plain C#, `tools/tests/PollutionTests.cs`): 32-tile squares; machines emit
+  `MachineConfig.pollution` a minute while working (`Factory.Pollute`, at `Piece.Spot`); it spreads to neighbours above 15
+  and is absorbed (ground, and trees counted from the nature map: `Factory.TreesAbsorb`). Numbers in `FactoryConfig`.
+  Survival: hordes x`Factory.WaveScale` (air now) and `Factory.Evolution` waves further on (all ever made), and zombie bases
+  breathe it in and send attack groups (`ZombieBases.Breathe`); maths in `WaveMath`. P shows it; saved in `Factory.Saved`.
 - **Ore fields** (`Economy/OreMap.cs`, plain C#, checked by `tools/world-tests`): iron, copper, coal and stone patches
   worked out from the seed (`OreMap.Generate`, pure: four round the start, then at most one per 96-tile square, inside
   it), richer further out; only what drills took is kept (`OreMap.Save`, `SaveData.ore`). Ore tiles have no trees or
@@ -191,7 +199,7 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
   path finding (`Villagers/GridPathfinder.cs`), the zombies' flow field and
   waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`), room finding
   (`Building/RoomFinder.cs`), sounds (`Audio/SoundSynth.cs`), villagers' needs
-  (`Villagers/NeedsMath.cs`), soldiers' ranks (`Villagers/SoldierMath.cs`), the factory (`Automation/*.cs`) and the seasons and weather (`World/SeasonMath.cs`). Keep those files free of `UnityEngine` so the
+  (`Villagers/NeedsMath.cs`), soldiers' ranks (`Villagers/SoldierMath.cs`), the factory, electricity and pollution (`Automation/*.cs`) and the seasons and weather (`World/SeasonMath.cs`). Keep those files free of `UnityEngine` so the
   tests can compile them.
 - `dotnet run --project tools/world-tests/WorldTests.csproj`: the endless world outside
   Unity (`Economy/NatureMap.cs` with stand-ins in `tools/world-tests/Stubs.cs` and the art

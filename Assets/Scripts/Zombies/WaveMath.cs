@@ -22,6 +22,23 @@ namespace KingdomGame.Zombies
             return (int)Math.Min(int.MaxValue / 2, Math.Round(count));
         }
 
+        /// <summary>
+        /// How much bigger the hordes are with <paramref name="pollution"/> in the air: twice as big at <paramref name="perDouble"/>,
+        /// three times at twice that, and so on, up to <paramref name="most"/> times.
+        /// </summary>
+        public static float PollutionWaves(float pollution, float perDouble, float most) =>
+            1f + Math.Max(0f, Math.Min(Math.Max(1f, most) - 1f, Math.Max(0f, pollution) / Math.Max(1f, perDouble)));
+
+        /// <summary>
+        /// How many waves further on the zombies are (their kinds and toughness, Factorio's "evolution") for all the pollution ever
+        /// made: one more for each <paramref name="perWave"/>, up to <paramref name="most"/>.
+        /// </summary>
+        public static int Evolution(double produced, float perWave, int most) =>
+            (int)Math.Max(0.0, Math.Min(Math.Max(0, most), Math.Floor(Math.Max(0.0, produced) / Math.Max(1f, perWave))));
+
+        /// <summary>How many zombies a base sends for the pollution it has breathed in (one for each <paramref name="perZombie"/>).</summary>
+        public static int AttackGroup(float absorbed, float perZombie) => (int)Math.Floor(Math.Max(0f, absorbed) / Math.Max(1f, perZombie));
+
         /// <summary>Zombies' health multiplier in wave <paramref name="wave"/>: 1 in the first, plus <paramref name="perWave"/> each wave.</summary>
         public static float Toughness(int wave, float perWave) => 1f + Math.Max(0f, perWave) * (Math.Max(1, wave) - 1);
 

@@ -23,6 +23,8 @@ namespace KingdomGame.Progression
         [Min(0)] public int copperCost;
         [Min(0)] public int ironCost;
         [Min(0)] public int goldCost;
+        [Tooltip("Anything else it takes from storage: the age's Craftables, for the research into the next age.")]
+        public Economy.ResourceAmount[] extraCosts = new Economy.ResourceAmount[0];
         [Tooltip("The kingdom needs at least this many villagers before it can start (beds give homes to more).")]
         [Min(0)] public int minVillagers;
         [Tooltip("Researched first (in this age or an earlier one).")]
@@ -35,15 +37,17 @@ namespace KingdomGame.Progression
         /// <summary>What it costs of one resource.</summary>
         public int Cost(Economy.ResourceType type)
         {
+            int extra = 0;
+            if (extraCosts != null) foreach (var e in extraCosts) if (e.type == type) extra += e.amount;
             switch (type)
             {
-                case Economy.ResourceType.Wood: return woodCost;
-                case Economy.ResourceType.Stone: return stoneCost;
-                case Economy.ResourceType.Food: return foodCost;
-                case Economy.ResourceType.Copper: return copperCost;
-                case Economy.ResourceType.Iron: return ironCost;
-                case Economy.ResourceType.Gold: return goldCost;
-                default: return 0;
+                case Economy.ResourceType.Wood: return woodCost + extra;
+                case Economy.ResourceType.Stone: return stoneCost + extra;
+                case Economy.ResourceType.Food: return foodCost + extra;
+                case Economy.ResourceType.Copper: return copperCost + extra;
+                case Economy.ResourceType.Iron: return ironCost + extra;
+                case Economy.ResourceType.Gold: return goldCost + extra;
+                default: return extra;
             }
         }
     }

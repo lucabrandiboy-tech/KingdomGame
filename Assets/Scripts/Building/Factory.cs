@@ -13,7 +13,8 @@ namespace KingdomGame.Building
     /// move items between belts, chests, storehouses and machines, furnaces that smelt what's put in them,
     /// assemblers that make the recipe you choose, and drills that dig the ore fields (Economy/OreMap.cs) under them;
     /// and its electricity (Automation/PowerGrid.cs): generators, power poles wired together, accumulators and solar
-    /// panels, feeding the electric machines, lamps and older machines that need power.
+    /// panels, feeding the electric machines, lamps and older machines that need power; and the pollution its machines
+    /// make (Automation/PollutionMap.cs), which spreads round it, is absorbed by trees, and makes the hordes harder.
     /// The simulation is plain C# (Automation/FactoryWorld.cs and PowerGrid.cs, unit-tested);
     /// this runs it, keeps it in step with what's built (chests and storehouses are its ports, houses' belt holes link
     /// belts through their walls), draws the items, the arms and the wires, and saves it.
@@ -43,6 +44,7 @@ namespace KingdomGame.Building
             public Accumulator Accumulator;
             public SolarPanel Solar;
             public IPowerUser User;   // an electric arm, furnace, assembler or drill
+            public Vector2 Spot;      // where it is for power and pollution (a machine in a house: its door)
         }
 
         // A lamp or an older machine on the power grid: it wants its Power Use while it can work.
@@ -145,6 +147,10 @@ namespace KingdomGame.Building
         readonly List<SpriteRenderer> wirePool = new List<SpriteRenderer>();
         readonly List<SpriteRenderer> areaPool = new List<SpriteRenderer>();
         int shownWires = -1, areasFrame = -1;
+        float pollutionClock;
+        int recounts;   // squares whose trees may still be counted this second (so it never stalls a frame)
+        readonly Dictionary<long, (float At, int Trees)> treeCounts = new Dictionary<long, (float, int)>();
+        readonly List<SpriteRenderer> smogPool = new List<SpriteRenderer>();
         Sprite unit, disc;
         readonly Dictionary<Storage, StoragePort> storagePorts = new Dictionary<Storage, StoragePort>();
         readonly List<Recipe> furnaceRecipes = new List<Recipe>();
@@ -158,6 +164,17 @@ namespace KingdomGame.Building
         public FactoryWorld World { get; private set; }
         /// <summary>The kingdom's electricity: poles, generators, accumulators, solar panels and what they power.</summary>
         public PowerGrid Power { get; private set; }
+        /// <summary>The pollution in the air round the kingdom.</summary>
+        public PollutionMap Pollution { get; private set; }
+        /// <summary>P: the pollution is shown over the world (red squares).</summary>
+        public bool ShowingPollution { get; private set; }
+
+        /// <summary>Survival: how much bigger the hordes are for the pollution in the air.</summary>
+        public float WaveScale => Pollution == null || config == null ? 1f
+            : Zombies.WaveMath.PollutionWaves(Pollution.Total, config.pollutionPerDoubleWave, config.pollutionMostWaves);
+        /// <summary>Survival: how many waves further on the zombies are (kinds and toughness) for all the pollution ever made.</summary>
+        public int Evolution => Pollution == null || config == null ? 0
+            : Zombies.WaveMath.Evolution(Pollution.Produced, config.pollutionPerEvolution, config.pollutionMostEvolution);
         public FactoryConfig Config => config;
         /// <summary>Seconds between items an older machine puts out on a belt.</summary>
         public float OutputInterval => 1f / Mathf.Max(0.5f, config != null ? config.machineOutputRate : 4f);
@@ -178,6 +195,13 @@ namespace KingdomGame.Building
             var fuels = new FuelTable(config != null ? config.fuels : RecipeBook.DefaultFuels());
             World = new FactoryWorld(fuels);
             Power = new PowerGrid();
+            Pollution = new PollutionMap
+            {
+                SpreadShare = config != null ? config.pollutionSpread : 0.02f,
+                SpreadAbove = config != null ? config.pollutionSpreadAbove : 15f,
+                Absorb = config != null ? config.pollutionAbsorb : 0.05f,
+                ExtraAbsorb = TreesAbsorb,
+            };
             // Anything built before the factory was there.
             foreach (var f in kingdom.AllFurniture)
             {
@@ -228,6 +252,7 @@ namespace KingdomGame.Building
             var cells = furniture.Cells;
             var piece = new Piece { Machine = m, Config = cfg, Origin = SpotOf(cells.position) };
             var foot = PowerFootprint(m, cells);
+            piece.Spot = new Vector2(foot.CenterX, foot.CenterY);
             // Lamps and the older machines that need power: on the grid (and, below, maybe a port for their goods).
             if (m.UsesPower)
             {
@@ -530,6 +555,16 @@ namespace KingdomGame.Building
                 Power.Tick(step);
                 World.Tick(step);
             }
+            // Pollution: once a second, what the machines working now put out, then it spreads and is absorbed.
+            pollutionClock += Time.deltaTime;
+            if (pollutionClock >= 1f)
+            {
+                pollutionClock = Mathf.Min(pollutionClock - 1f, 1f);
+                Pollute(1f);
+                recounts = 24;
+                Pollution.Tick(1f);
+            }
+            if (GameInput.Pressed(KeyCode.P)) ShowingPollution = !ShowingPollution;
         }
 
         void LateUpdate()
@@ -537,6 +572,7 @@ namespace KingdomGame.Building
             if (World == null) return;
             DrawItems();
             DrawWires();
+            DrawPollution();
             if (areasFrame != Time.frameCount) HideAreas(0);
             foreach (var p in pieces.Values) DrawPiece(p);
         }
@@ -587,6 +623,90 @@ namespace KingdomGame.Building
                 furnaceRecipes.Clear();
                 foreach (var r in Recipes) if (r.furnace && Allowed(r)) furnaceRecipes.Add(r);
             }
+        }
+
+        // --------------------------------------------------------- pollution --
+
+        // What each machine working now puts out over <seconds> (its Pollution a minute; generators by how hard they work;
+        // assemblers making Craftables four times as much), where it stands (a machine in a house: at its door).
+        void Pollute(float seconds)
+        {
+            float perSecond = seconds / 60f;
+            foreach (var p in pieces.Values)
+            {
+                float rate = 0f;
+                if (p.Crafter != null && p.Crafter.Working) rate = p.Config.pollution * (p.Crafter.Recipe != null ? p.Crafter.Recipe.pollution : 1f);
+                else if (p.Drill != null && p.Drill.Working) rate = p.Config.pollution;
+                else if (p.Generator != null) rate = p.Config.pollution * p.Generator.Load;
+                if (rate > 0f) Pollution.Emit(p.Spot.x, p.Spot.y, rate * perSecond);
+            }
+        }
+
+        // What a square's trees absorb a second (counted from the nature map now and then: cut them down and it absorbs less).
+        float TreesAbsorb(int cx, int cy)
+        {
+            if (config == null || config.pollutionPerTree <= 0f) return 0f;
+            long key = ((long)cx << 32) | (uint)cy;
+            float now = Time.time;
+            bool counted = treeCounts.TryGetValue(key, out var known);
+            if (counted && (now - known.At < 60f || recounts <= 0)) return known.Trees * config.pollutionPerTree;
+            if (recounts <= 0) return 0f;   // (counted in a moment: a few squares a second)
+            recounts--;
+            int trees = 0;
+            var nature = NatureMap.Current;
+            if (nature != null)
+            {
+                int x0 = cx * PollutionMap.Chunk, y0 = cy * PollutionMap.Chunk;
+                for (int y = y0; y < y0 + PollutionMap.Chunk; y++)
+                    for (int x = x0; x < x0 + PollutionMap.Chunk; x++)
+                    {
+                        var kind = nature.KindAt(new Vector2Int(x, y));
+                        if (kind != null && kind.resource == ResourceType.Wood) trees++;
+                    }
+            }
+            if (treeCounts.Count > 4000) treeCounts.Clear();
+            treeCounts[key] = (now, trees);
+            return trees * config.pollutionPerTree;
+        }
+
+        static readonly Color Smog = new Color(0.85f, 0.22f, 0.12f, 1f);
+
+        // P: the pollution as red squares over the world (stronger where there's more), the ones in view.
+        void DrawPollution()
+        {
+            int used = 0;
+            var view = Camera.main;
+            if (ShowingPollution && view != null && view.orthographic)
+            {
+                Vector2 c = view.transform.position;
+                float halfH = view.orthographicSize + PollutionMap.Chunk, halfW = view.orthographicSize * view.aspect + PollutionMap.Chunk;
+                foreach (var (x, y, amount) in Pollution.Chunks())
+                {
+                    float mx = (x + 0.5f) * PollutionMap.Chunk, my = (y + 0.5f) * PollutionMap.Chunk;
+                    if (Mathf.Abs(mx - c.x) > halfW || Mathf.Abs(my - c.y) > halfH) continue;
+                    var r = Pooled(smogPool, used++, "Pollution", SortOrder.Markers - 3);
+                    r.sprite = Unit();
+                    r.color = new Color(Smog.r, Smog.g, Smog.b, 0.06f + 0.4f * Mathf.Clamp01(amount / 300f));
+                    r.transform.position = new Vector3(mx, my, 0f);
+                    r.transform.rotation = Quaternion.identity;
+                    r.transform.localScale = new Vector3(PollutionMap.Chunk, PollutionMap.Chunk, 1f);
+                }
+            }
+            for (int i = used; i < smogPool.Count; i++)
+                if (smogPool[i].enabled) smogPool[i].enabled = false;
+        }
+
+        /// <summary>A line about pollution for the screen (null: there's none to speak of).</summary>
+        public string PollutionText(bool survival)
+        {
+            if (Pollution == null || Pollution.Total < 1f) return null;
+            string text = $"Pollution: {Pollution.Total:N0} in the air  (P: {(ShowingPollution ? "hide" : "show")} it)";
+            if (!survival) return text;
+            float scale = WaveScale;
+            int further = Evolution;
+            if (scale > 1.01f || further > 0)
+                text += $"\n<color=#ff9a7a>Hordes x{scale:0.0}" + (further > 0 ? $", zombies {further} wave{(further == 1 ? "" : "s")} further on" : "") + " (your pollution)</color>";
+            return text;
         }
 
         // ---------------------------------------------------------- drawing --
@@ -885,6 +1005,11 @@ namespace KingdomGame.Building
             public List<HeldSave> held = new List<HeldSave>();
             public List<DrillSave> drills = new List<DrillSave>();
             public List<PowerSave> power = new List<PowerSave>();
+            // The pollution in the air (each square's x, y and amount), and all ever made.
+            public List<int> smogX = new List<int>();
+            public List<int> smogY = new List<int>();
+            public List<float> smog = new List<float>();
+            public double smogMade;
         }
 
         [Serializable]
@@ -987,6 +1112,7 @@ namespace KingdomGame.Building
                     var f = m.GetComponent<Furniture>();
                     if (f != null) s.held.Add(new HeldSave { x = f.Cells.x, y = f.Cells.y, held = m.Held });
                 }
+            Pollution.Save(s.smogX, s.smogY, s.smog, out s.smogMade);
             return s;
         }
 
@@ -994,6 +1120,7 @@ namespace KingdomGame.Building
         public void Load(Saved s)
         {
             if (s == null) return;
+            Pollution.Load(s.smogX, s.smogY, s.smog, s.smogMade);
             var at = new Dictionary<Spot, Piece>();
             foreach (var p in pieces.Values) at[p.Origin] = p;
             ResourceType Type(int i) => (ResourceType)Mathf.Clamp(i, 0, Inventory.TypeCount - 1);

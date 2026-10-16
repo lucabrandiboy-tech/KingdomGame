@@ -30,6 +30,16 @@ The kingdom now has a factory you build like the rest (builders build it from bl
   is wanted than the network gives, every machine on it works slower (a brownout). **Accumulators** store what's spare and
   give it back when it's short; **solar panels** give power by day only. While you place anything electric, blue areas show
   what's powered. Electric arms, furnaces, assemblers, drills, lamps and the older electric machines all run on it.
+- **Craftables** (like Factorio's science packs): from the Bronze Age, assemblers can make each age's Craftable (bronze,
+  iron, medieval, renaissance, industrial, modern craftables: corked flasks of the age's colour) from several of the age's
+  goods. The research into the next age takes a pile of them from storage (10 bronze craftables for the Iron Age, then 15,
+  20, 25, 30, 40), on top of its other costs. Making them pollutes four times as much as anything else.
+- **Pollution**: furnaces, drills, assemblers and generators put pollution in the air while they work. It spreads out
+  round the factory in 32-tile squares and is absorbed by the ground and, much more, by trees (cut the forest down and it
+  spreads further). **P** shows it as red squares. In survival it makes things much harder: the hordes get bigger with the
+  pollution in the air (twice as big at 2,000, up to four times), the zombies get tougher and their later kinds come sooner
+  with all the pollution ever made, and a zombie base the cloud reaches breathes it in and sends zombies at you, day or night.
+  The screen says how much there is and what it's doing.
 - The older machines (woodcutter's camps, quarries, steam and ore drills) put what they make out an item at a time onto
   a belt touching them, or into a chest touching them; arms can take it out of them too.
 - From the throne, point at any factory piece to see what it's doing or why it's stopped.
@@ -51,7 +61,9 @@ None of this has been run in Unity yet. The belts, arms, furnaces, assemblers, d
 the unit tests run (tools/tests/FactoryTests.cs: lines, packing, curves, side-loading, head-on belts, chests, loops, arms,
 assemblers, furnaces, burner fuel, drills digging onto a belt, waiting when blocked, feeding each other and a furnace;
 tools/tests/PowerTests.cs: poles wiring up, supply areas, generators sharing the load and burning for what's used,
-brownouts slowing machines, accumulators and solar panels through day and night); the ore fields
+brownouts slowing machines, accumulators and solar panels through day and night; tools/tests/PollutionTests.cs: clouds
+spreading and settling, trees and bases taking it in, saving, the hordes' sizes and toughness, the Craftables' recipes);
+the ore fields
 are checked by tools/world-tests (the same everywhere, one of each round the start, mining and saving, the ground showing
 ore exactly where it is); the pictures were checked in the art preview. Run **KingdomGame > Build Game Scenes** after
 `git pull` (the art changed, so it bakes again; the new drills join the build bar).
@@ -117,6 +129,34 @@ ore exactly where it is); the pictures were checked in the art preview. Run **Ki
 9. Lamps in a house are powered when the house's door is in a generator's reach or a pole's area.
 10. Save, load: the generators' fuel and the accumulators' charge are kept; the wires come back by themselves.
 
+## Craftables
+
+Survival (free build has every age open, so it doesn't need them):
+
+1. **F10**: **+10,000 of everything**, then get to the **Bronze Age** (F10 ages, or research it).
+2. **T**: the research into the Iron Age now also takes **10 bronze craftables**. It waits ("Waiting for ... 10 bronze
+   craftables in storage").
+3. Build a **workshop assembler**, **E**: choose **Bronze craftables** (2 bronze bars, 1 rope, 1 copper). Feed it with arms
+   from a storehouse (it has bronze bars, rope and copper from the cheat) and take the flasks out with an arm into a chest
+   or storehouse. Ten of them, and the research starts.
+4. Each later age's research takes more of its own Craftable (iron craftables need gears, iron bars and coal; medieval
+   ones steel, gears and bronze bars; renaissance ones gunpowder, steel, gears and iron bars; industrial ones machine
+   parts, wire and steel; modern ones electronics, machine parts and gunpowder).
+
+## Pollution
+
+1. Start a factory (a few drills and furnaces, or **F10, Pollution: +2,000 where you stand**). The screen's top right
+   says "Pollution: ... in the air".
+2. **P**: red squares show it, darker where there's more; it spreads out over a minute or two. Point at the ground from
+   the throne: "Pollution here: ...".
+3. Survival: the next horde's message says "(x1.5: your pollution)" and the screen says how much bigger the hordes are and
+   how many waves further on the zombies are.
+4. Pile pollution on (several **+2,000**) until the red reaches a zombie base: soon "Your pollution reached a zombie base:
+   ... zombies are coming from the ...!", and they come for your kingdom, even by day.
+5. A forest takes pollution in: the red stops short over woods, and spreads further where you've cut them down.
+6. **F10, Clear the pollution**: the air is clean (the zombies stay as far on as they were). Save, load: the pollution
+   is kept.
+
 Things that aren't done yet (honestly):
 
 - One lane of items per belt (Factorio has two).
@@ -125,4 +165,6 @@ Things that aren't done yet (honestly):
 - Other players online see your belts and machines but not the items moving on them.
 - Online, each player's computer keeps its own ore fields: what your drills dig isn't taken out of a friend's world.
 - Generators don't need water (Factorio's boilers and pumps are left out).
-- Craftables for the ages and pollution come next.
+- Pollution isn't shared online: each player's computer has its own cloud and its own bases.
+- In survival with Survival Ages By Waves on (off by default), ages still come every few waves and need no Craftables.
+- The older machines (smelter, charcoal kiln, kilns...) don't pollute; only the factory's machines and generators do.

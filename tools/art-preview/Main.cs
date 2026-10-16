@@ -13,6 +13,8 @@
 //   castle_close.png  inside it up close, by day
 //   horde_night.png   zombies at the castle gate at night
 //   game_autumn.png, game_winter.png  the normal view in autumn (orange leaves) and winter (bare snowy trees, snow lying)
+//   ore.png, ore_close.png  drills on the start's iron field putting ore onto a belt; ore_fields.png  the map zoomed out
+//                   (the start's stone and copper fields); ore_coal.png  its coal field
 // The mock lights sprites the way URP's 2D lights do (color times light, normal
 // maps for point lights) and adds bloom, vignette and color grading like the game's
 // post-processing. It's an approximation: Unity's own result will differ a little.
@@ -114,6 +116,10 @@ static class Program
         Render(castle, Path.Combine(dir, "soldiers.png"), 1920, 1080, new Vector2(0f, -23f), 4f, Time.Day);
         Render(castle, Path.Combine(dir, "factory.png"), 1920, 1080, new Vector2(19f, -6.5f), 4.5f, Time.Day);
         Render(castle, Path.Combine(dir, "factory_close.png"), 1920, 1080, new Vector2(15.5f, -4.5f), 2f, Time.Day);
+        Render(castle, Path.Combine(dir, "ore.png"), 1920, 1080, new Vector2(-12.5f, -37.5f), 6f, Time.Day);
+        Render(castle, Path.Combine(dir, "ore_close.png"), 1920, 1080, new Vector2(-15.5f, -37f), 2.5f, Time.Day);
+        Render(castle, Path.Combine(dir, "ore_fields.png"), 1920, 1080, new Vector2(0f, 0f), 26f, Time.Day);
+        Render(castle, Path.Combine(dir, "ore_coal.png"), 1920, 1080, new Vector2(8f, 36f), 6f, Time.Day);
         Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
         Render(world, Path.Combine(dir, "game_winter.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 2);
         Render(world, Path.Combine(dir, "ruins_village.png"), 1920, 1080, new Vector2(-20f, 30f), 8f, Time.Day);
@@ -282,6 +288,8 @@ static class Program
         public readonly byte[] DryMask = new byte[MapSize * MaskDetail * MapSize * MaskDetail];
         public readonly byte[] MudMask = new byte[MapSize * MaskDetail * MapSize * MaskDetail];
         public readonly Color32[] Tint = new Color32[MapSize * TintDetail * MapSize * TintDetail];
+        // The ore fields' masks (GroundStreamer: one per kind of ore, null where there's none), from the real ore map.
+        public readonly byte[][] OreMasks = new byte[4][];
 
         public MockWorld(uint seed, bool castle)
         {
@@ -294,6 +302,7 @@ static class Program
             TreeLine = sorted[(int)MathF.Round((1f - 0.35f) * (sorted.Length - 1))];
             BushLine = sorted[(int)MathF.Round((1f - 0.35f - 0.1f) * (sorted.Length - 1))];
             GroundArt.PatchMasks(MapSize, MaskDetail, seed, DryMask, MudMask);
+            GroundArt.OreMasksAt(-Half, -Half, MapSize, MaskDetail, seed, null, OreMasks);
             int tn = MapSize * TintDetail;
             for (int y = 0; y < tn; y++)
                 for (int x = 0; x < tn; x++)
@@ -479,6 +488,42 @@ static class Program
             Piece(FurnitureArt.ToolBench, 7, -26, 2, 1, 2, 0.45f);
             for (int y = -27; y < -19; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
             BuildFactory();
+            BuildMine();
+        }
+
+        // On the iron field south-west of the castle (ore.png, the start's iron field for this seed): a conveyor running
+        // east with drills on both sides of it putting their ore onto it, a digging frame, burner drills, electric drills
+        // and a big drill, as Building/Factory.cs draws them (Automation/Drill.OutputOf: each chute is on the belt).
+        void BuildMine()
+        {
+            const int conveyor = 4;
+            for (int x = -21; x <= -3; x++) FactoryBelt(conveyor, x, -37, 0, 0);
+            float along = 0.13f;
+            for (int x = -19; x <= -3; x++)
+            {
+                along = (along + 0.37f) % 1f;
+                if (x % 3 != 0) OnBelt(x, -37, 0, along, KingdomGame.Economy.ResourceType.IronOre);
+            }
+            // Above the belt, facing down (their chutes on the belt), and below it facing up.
+            FactoryDrill(0, -20, -36, 3, 20f);
+            FactoryDrill(1, -18, -36, 3, 70f);
+            FactoryDrill(1, -16, -36, 3, 140f);
+            FactoryDrill(2, -14, -36, 3, 10f);
+            FactoryDrill(1, -11, -36, 3, 200f);
+            FactoryDrill(1, -20, -39, 1, 300f);
+            FactoryDrill(3, -17, -40, 1, 45f);
+            FactoryDrill(2, -13, -40, 1, 100f);
+            FactoryDrill(1, -9, -39, 1, 250f);
+            for (int y = -41; y <= -33; y++) for (int x = -22; x <= -2; x++) used.Add((x, y));
+        }
+
+        // A drill facing `dir` and its bit turned `bit` degrees, like Factory.MakeDrillLook.
+        void FactoryDrill(int style, int x, int y, int dir, float bit)
+        {
+            int size = FurnitureArt.DrillSize(style);
+            string art = FurnitureArt.DrillArt(style);
+            FactoryPiece(ArtKeys.Turned(art, dir), x, y, size, size, size == 2 ? 0.6f : 0.8f);
+            Things.Add(new Inst { Key = ArtKeys.DrillHead(art), X = x + size / 2f, Y = y + size / 2f, Rot = bit, Order = 153 });
         }
 
         // East of the castle (factory.png): a small factory as Building/Factory.cs draws it. Iron ore rides a conveyor
@@ -659,6 +704,7 @@ static class Program
                     if (x * x + y * y < 49 || used.Contains((x, y))) continue;
                     if (!castle && x >= 3 && x <= 15 && y >= -6 && y <= 6) continue;
                     if (castle && x >= -9 && x <= 9 && y >= -10 && y <= 12) continue;
+                    if (KingdomGame.Economy.OreMap.Generate(seed, x, y, out _) != KingdomGame.Economy.OreKind.None) continue;   // ore fields are bare
                     float forest = Forest[(y + Half) * MapSize + (x + Half)];
                     float roll = Noise.Hash01(seed + 2u, x, y);
                     int v = (int)(KingdomGame.Destruction.DamageShape.Hash(seed + 5u, x, y) % NatureArt.Variants);
@@ -798,6 +844,9 @@ static class Program
                 bool mudHere = MockWorld.MaskAt(world.MudMask, wx, wy) > 0.5f;
                 bool dryHere = MockWorld.MaskAt(world.DryMask, wx, wy) > 0.5f;
                 var e = mudHere ? mud : dryHere ? dry : grass;
+                // Ore fields: their own layers over the others (stone on top: Ground+5..+8).
+                for (int k = 0; k < 4; k++)
+                    if (world.OreMasks[k] != null && MockWorld.MaskAt(world.OreMasks[k], wx, wy) > 0.5f) e = Bank[ArtKeys.GroundOre((KingdomGame.Economy.OreKind)(k + 1))];
                 float u = Mod(wx + MockWorld.Half, GroundArt.Tiles) * e.Ppt, v = Mod(wy + MockWorld.Half, GroundArt.Tiles) * e.Ppt;
                 float level = MathF.Log2(MathF.Max(1f, e.Ppt / ppt));
                 var c = Lin(Sample(e.Sheet.Albedo, u, v, level, true));

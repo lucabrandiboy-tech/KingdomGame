@@ -319,8 +319,11 @@ namespace KingdomGame.Networking
 
     public static class Protocol
     {
-        /// <summary>Goes up whenever messages change: a game and a server must have the same one.</summary>
-        public const int Version = 5;
+        /// <summary>
+        /// Goes up whenever messages change, or the world a seed makes (6: ore fields, bare of trees): a game and a server
+        /// must have the same one.
+        /// </summary>
+        public const int Version = 6;
         /// <summary>Biggest <see cref="Msg.Direct"/> message the server passes on (bytes after its header)...</summary>
         public const int MaxDirectBytes = 1100;
         /// <summary>...and the biggest sent unreliably (those can't be split up: one packet of the smallest size).</summary>

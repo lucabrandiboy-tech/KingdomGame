@@ -7,8 +7,8 @@ using UnityEngine;
 namespace KingdomGame.UI
 {
     /// <summary>
-    /// E at a factory machine (Building/Factory.cs): an assembler's recipe to choose, a furnace's state, or what an arm
-    /// moves (anything, or one item: a filter). It shows what's inside and why it's stopped. Esc or E closes it.
+    /// E at a factory machine (Building/Factory.cs): an assembler's recipe to choose, a furnace's or drill's state, or
+    /// what an arm moves (anything, or one item: a filter). It shows what's inside and why it's stopped. Esc or E closes it.
     /// </summary>
     public sealed class FactoryPanel : MonoBehaviour
     {
@@ -82,8 +82,35 @@ namespace KingdomGame.UI
 
             var crafter = factory.CrafterOf(machine);
             var arm = factory.ArmOf(machine);
+            var drill = factory.DrillOf(machine);
             if (crafter != null) DrawCrafter(crafter, x, ref y, inner, panel, font);
             else if (arm != null) DrawArm(arm, x, ref y, inner, panel, font);
+            else if (drill != null) DrawDrill(drill, x, ref y, inner, font);
+        }
+
+        void DrawDrill(Drill d, float x, ref float y, float inner, int font)
+        {
+            int left = d.OreLeft(out var most);
+            line.Clear();
+            line.Append(d.Working ? $"<color=#9be29b>Digging {Name(most)}: {Mathf.FloorToInt(d.Progress / Mathf.Max(0.05f, d.SecondsPerItem) * 100f)}%</color>"
+                : $"<color=#ffcc80>Stopped: {d.Problem ?? "starting"}</color>");
+            line.Append($"   {60f / Mathf.Max(0.05f, d.SecondsPerItem):0.#} a minute{(d.Burner ? ", burns wood or coal" : ", electric")}");
+            GUI.Label(new Rect(x, y, inner, font * 1.6f), line.ToString(), text);
+            y += font * 1.8f;
+            line.Clear();
+            line.Append(left > 0 ? $"Ore left to dig: {left:N0} {Name(most)}" : "<color=#ff8a80>No ore left to dig here: move it to another field</color>");
+            if (d.Holding) line.Append($".  Waiting to put out: 1 {Name(d.Held)}");
+            if (d.Burner) line.Append(d.FuelCount > 0 ? $".  Fuel: {d.FuelCount} {Name(d.FuelType)}" : d.Energy > 0f ? "" : ".  <color=#ff8a80>No fuel</color>");
+            GUI.Label(new Rect(x, y, inner, font * 2.6f), line.ToString(), small);
+            y += font * 2.8f;
+            int across = d.Size + d.Reach * 2;
+            GUI.Label(new Rect(x, y, inner, font * 6f),
+                $"It digs the ore field under it ({across} x {across} tiles{(d.Reach > 0 ? ", reaching past its sides" : "")}), a tile at a time in turn, " +
+                "and puts what it digs out of its chute (the side it faces, R when you place it): onto a belt, or into a chest, a storehouse, " +
+                "a furnace, or another burner drill (coal is its fuel)." +
+                (d.Burner ? " It burns wood or coal: an arm (or another drill) puts it in." : "") +
+                " Ore fields are bare patches of ore on the ground; point at one from the throne to see what's in it.", text);
+            y += font * 6.2f;
         }
 
         void DrawCrafter(Crafter c, float x, ref float y, float inner, Rect panel, int font)

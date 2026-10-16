@@ -322,6 +322,7 @@ namespace KingdomGame.World
             if (kingdom.Armory != null) data.armory = kingdom.Armory.Save();
             if (kingdom.Crafting != null) data.crafting = kingdom.Crafting.Save();
             if (kingdom.Factory != null) data.factory = kingdom.Factory.Save();
+            if (OreMap.Current != null) data.ore = OreMap.Current.Save();
             // The players who joined (their kingdoms and where they are). If hosting didn't start this time,
             // the ones from the save are kept as they were.
             data.others = Host != null && Host.Core != null ? OthersSave.From(Host.Core) : loadedOthers ?? new OthersSave();
@@ -428,6 +429,9 @@ namespace KingdomGame.World
                         Grown = n.grown, GrowSeconds = n.growSeconds, RegrowLeft = n.regrowLeft,
                     });
                 }
+
+            // What drills have dug out of the ore fields.
+            OreMap.Current?.Load(data.ore);
 
             // Walls (a stretch with pieces broken off comes back as the pieces that are left).
             foreach (var w in data.walls)

@@ -41,6 +41,11 @@ static partial class Tests
         Run(nameof(FurnacesSmeltWhatGoesIn), FurnacesSmeltWhatGoesIn);
         Run(nameof(BurnerArmsFuelThemselves), BurnerArmsFuelThemselves);
         Run(nameof(MachinesPushOntoBeltsGoingAway), MachinesPushOntoBeltsGoingAway);
+        Run(nameof(DrillChutesFaceTheirWay), DrillChutesFaceTheirWay);
+        Run(nameof(DrillsDigOntoABelt), DrillsDigOntoABelt);
+        Run(nameof(DrillsWaitWhenBlocked), DrillsWaitWhenBlocked);
+        Run(nameof(BurnerDrillsFeedEachOther), BurnerDrillsFeedEachOther);
+        Run(nameof(DrillsFeedAFurnace), DrillsFeedAFurnace);
 
         Run(nameof(RanksComeWithExperience), RanksComeWithExperience);
         Run(nameof(SoldiersGetTougherAndFaster), SoldiersGetTougherAndFaster);

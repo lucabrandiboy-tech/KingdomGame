@@ -11,7 +11,7 @@ namespace KingdomGame.UI
 {
     /// <summary>
     /// The cheat menu (F10), for testing: resources and XP, any age, any wave, any kind of zombie, the time
-    /// of day, game speed, no damage for the ruler, building and research finished at once. Only in games
+    /// of day, game speed, no damage for the ruler, building and research finished at once, where the ore fields are. Only in games
     /// played offline, and only while the Progression Config's Allow Cheats is on (turn it off for a
     /// finished game). The game keeps running while it's open.
     /// </summary>
@@ -67,10 +67,41 @@ namespace KingdomGame.UI
             if (Time.timeScale > 0f) Time.timeScale = 1f;
         }
 
-        void Say(string what)
+        void Say(string what, float seconds = 4f)
         {
             message = what;
-            messageUntil = Time.unscaledTime + 4f;
+            messageUntil = Time.unscaledTime + seconds;
+        }
+
+        // The nearest ore field of each kind (Economy/OreMap.cs), and which way it is from the ruler.
+        string OreDirections()
+        {
+            var map = OreMap.Current;
+            if (map == null) return "There are no ore fields in this world";
+            Vector2 from = ruler != null ? (Vector2)ruler.transform.position : Vector2.zero;
+            if (Mathf.Abs(from.x) >= OreMap.Limit || Mathf.Abs(from.y) >= OreMap.Limit)
+                from = kingdom.Throne != null ? kingdom.Throne.Center : Vector2.zero;   // (in a house or a mine: from the throne)
+            var fields = new List<OreMap.Field>();
+            int reach = OreMap.Region * 3;
+            OreMap.FieldsNear(map.Seed, Mathf.FloorToInt(from.x) - reach, Mathf.FloorToInt(from.y) - reach, Mathf.FloorToInt(from.x) + reach, Mathf.FloorToInt(from.y) + reach, fields);
+            var parts = new List<string>();
+            foreach (var kind in new[] { OreKind.Iron, OreKind.Copper, OreKind.Coal, OreKind.Stone })
+            {
+                float best = float.MaxValue;
+                var to = Vector2.zero;
+                foreach (var f in fields)
+                {
+                    if (f.Kind != kind) continue;
+                    float d = (new Vector2(f.X, f.Y) - from).sqrMagnitude;
+                    if (d < best) { best = d; to = new Vector2(f.X, f.Y); }
+                }
+                if (best == float.MaxValue) continue;
+                var way = to - from;
+                string[] compass = { "east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east" };
+                int point = Mathf.RoundToInt(Mathf.Repeat(Mathf.Atan2(way.y, way.x) * Mathf.Rad2Deg, 360f) / 45f) % 8;
+                parts.Add($"{OreMap.Name(kind)}: {Mathf.RoundToInt(way.magnitude)} tiles {compass[point]}");
+            }
+            return parts.Count == 0 ? "No ore fields near you" : "Nearest ore fields (their middles) - " + string.Join(", ", parts);
         }
 
         void OnGUI()
@@ -109,6 +140,7 @@ namespace KingdomGame.UI
                 foreach (var t in new[] { ResourceType.IronOre, ResourceType.CopperOre, ResourceType.Coal }) stored += kingdom.Store(t, 300, near);
                 Say(stored < 900 ? "The storehouses are full: build more storehouses to hold more." : "+300 iron ore, copper ore and coal (for furnaces)");
             }
+            if (GUILayout.Button("Where are the ore fields?", button)) Say(OreDirections(), 15f);
             GUILayout.EndHorizontal();
 
             Ages();

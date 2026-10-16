@@ -435,6 +435,13 @@ namespace KingdomGame.Building
 
             string cost = good > 1 ? $"{good} x {b.displayName}: {b.CostText(good)}" : $"{b.displayName}: {b.CostText()}";
             if (b.rotations > 1) cost += belt ? "   (R: turn it, or drag: it points the way you drag)" : "   (R: turn it)";
+            // A drill: the ore it would dig there.
+            if (b.machine != null && b.machine.kind == Economy.MachineKind.Drill && placements.Count > 0)
+            {
+                string ore = Factory.OreUnder(new RectInt(placements[0], size), b.machine.mineReach);
+                cost += ore != null ? $"\nIt would dig {ore}   (what it digs comes out of its chute: R turns it)"
+                    : "\n<color=#ff8a80>No ore here: drills go on ore fields (bare patches of ore on the ground)</color>";
+            }
             Hover = firstProblem != null ? $"{cost}\n<color=#ff8a80>{firstProblem}</color>" : cost;
 
             if (dragging && (GameInput.FireReleased || !GameInput.FireHeld))
@@ -568,6 +575,10 @@ namespace KingdomGame.Building
                 if (rightClick) Say(kingdom.TearDown(cell));
                 return;
             }
+            // An ore field: what's in the ground here.
+            var ores = Economy.OreMap.Current;
+            if (ores != null && ores.At(cell.x, cell.y, out int oreLeft) is var oreKind && oreKind != Economy.OreKind.None)
+                roomText = $"\nOre field: {oreLeft:N0} {Economy.OreMap.Name(oreKind)} in this tile (a drill on it digs it)" + roomText;
             Hover = roomText.Length > 0 ? roomText.TrimStart('\n') : null;
         }
 

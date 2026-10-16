@@ -4,7 +4,7 @@ using System.Linq;
 using KingdomGame.Automation;
 using KingdomGame.Economy;
 
-// Tests for the factory: belts, arms, furnaces and assemblers (Assets/Scripts/Automation).
+// Tests for the factory: belts, arms, furnaces, assemblers and drills (Assets/Scripts/Automation).
 static partial class Tests
 {
     // A chest for the tests: holds anything, up to a limit.
@@ -311,5 +311,157 @@ static partial class Tests
         Check(w.BeltAt(new Spot(2, 0)).Items.Count == 1 && w.BeltAt(new Spot(-1, 0)).Items.Count == 0, "not on the belt pointing into it");
         Check(w.BeltAt(new Spot(2, 0)).Items[0].Pos < 0.01f, "onto the start of the belt");
         Check(!w.PushOut(0, 0, 2, 2, ResourceType.Wood, ref turn), "no room right at the start: it waits");
+    }
+
+    // Ore in the ground for the drill tests: a few tiles, each with its item and how much is left.
+    sealed class TestGround : IOreGround
+    {
+        public readonly Dictionary<Spot, (ResourceType Item, int Left)> Tiles = new Dictionary<Spot, (ResourceType, int)>();
+        public int Mined;
+        public void Fill(int x0, int y0, int w, int h, ResourceType item, int each)
+        {
+            for (int y = y0; y < y0 + h; y++)
+                for (int x = x0; x < x0 + w; x++)
+                    Tiles[new Spot(x, y)] = (item, each);
+        }
+        public int Left => Tiles.Values.Sum(t => t.Left);
+        public bool OreAt(int x, int y, out ResourceType item, out int left)
+        {
+            item = default;
+            left = 0;
+            if (!Tiles.TryGetValue(new Spot(x, y), out var t) || t.Left <= 0) return false;
+            item = t.Item;
+            left = t.Left;
+            return true;
+        }
+        public bool Mine(int x, int y, out ResourceType item)
+        {
+            if (!OreAt(x, y, out item, out int left)) return false;
+            Tiles[new Spot(x, y)] = (item, left - 1);
+            Mined++;
+            return true;
+        }
+    }
+
+    // The chute is just outside the drill, on the side it faces, and goes round with it.
+    static void DrillChutesFaceTheirWay()
+    {
+        foreach (int size in new[] { 1, 2, 3 })
+            for (int dir = 0; dir < 4; dir++)
+            {
+                var o = Drill.OutputOf(new Spot(10, 20), size, dir);
+                int lx = o.X - 10, ly = o.Y - 20;
+                bool beside = dir == 0 ? lx == size && ly >= 0 && ly < size
+                    : dir == 1 ? ly == size && lx >= 0 && lx < size
+                    : dir == 2 ? lx == -1 && ly >= 0 && ly < size
+                    : ly == -1 && lx >= 0 && lx < size;
+                Check(beside, $"a {size}x{size} drill facing {dir}: its chute's cell ({lx}, {ly}) is just outside the side it faces");
+                // Half a turn round the middle is the cell opposite.
+                var back = Drill.OutputOf(new Spot(10, 20), size, dir + 2);
+                Check(o.X - 10 + back.X - 10 == size - 1 && o.Y - 20 + back.Y - 20 == size - 1, $"a {size}x{size} drill: facing {dir} and {dir + 2} are opposite");
+            }
+        Check(Drill.OutputOf(new Spot(0, 0), 3, 0) == new Spot(3, 1), "a 3x3 one facing right puts out at the middle of its right side");
+        Check(Drill.OutputOf(new Spot(0, 0), 2, 0) == new Spot(2, 0), "a 2x2 one facing right: the lower of its right side's two cells");
+    }
+
+    // A drill digs the tiles under it in turn and its ore rides a belt into a chest, until there's none left.
+    static void DrillsDigOntoABelt()
+    {
+        var w = NewFactory();
+        var ground = new TestGround();
+        ground.Fill(0, 0, 2, 2, ResourceType.IronOre, 3);
+        ground.Fill(5, 5, 1, 1, ResourceType.Coal, 50);   // (out of its reach)
+        var drill = new Drill(w, ground, new Spot(0, 0), 2, 0, 0) { SecondsPerItem = 0.5f, Burner = false, Power = 1f };
+        Check(drill.Area.Count == 4, "a 2x2 drill with no reach digs its own 4 tiles");
+        w.SetPort(new Spot(0, 0), drill, false);
+        w.Add(drill);
+        for (int x = 2; x <= 6; x++) w.AddBelt(new Spot(x, 0), 0, 2f);
+        var chest = new TestChest();
+        w.SetPort(new Spot(7, 0), chest, true);
+        Run(w, 2.05f);
+        Check(ground.Mined == 4, $"4 dug in 2 s at half a second each (got {ground.Mined})");
+        foreach (var t in new[] { new Spot(0, 0), new Spot(1, 0), new Spot(0, 1), new Spot(1, 1) })
+            Check(ground.Tiles[t].Left == 2, "one from each tile in turn: they go down evenly");
+        Run(w, 10f);
+        Check(chest.Count[(int)ResourceType.IronOre] == 12, $"all 12 iron ore went down the belt into the chest (got {chest.Count[(int)ResourceType.IronOre]})");
+        Check(ground.Tiles[new Spot(5, 5)].Left == 50, "nothing out of its reach was touched");
+        Check(drill.Problem != null && !drill.Working, "with nothing left under it, it stops and says why");
+        Check(drill.OreLeft(out _) == 0, "it knows there's none left");
+    }
+
+    // With nowhere to put what it dug, a drill holds it and waits (it doesn't dig on and lose any).
+    static void DrillsWaitWhenBlocked()
+    {
+        var w = NewFactory();
+        var ground = new TestGround();
+        ground.Fill(0, 0, 3, 3, ResourceType.CopperOre, 10);
+        var drill = new Drill(w, ground, new Spot(0, 0), 3, 1, 0) { SecondsPerItem = 0.25f };
+        w.Add(drill);
+        Run(w, 3f);
+        Check(ground.Mined == 1 && drill.Holding && drill.Held == ResourceType.CopperOre, "it dug one and holds it");
+        Check(drill.Problem != null, "and says why it stopped");
+        var chest = new TestChest();
+        w.SetPort(drill.Output, chest, true);   // (a chest put in front of its chute: Output is above it, it faces up)
+        Check(drill.Output == new Spot(1, 3), "facing up, a 3x3 drill's chute is above its middle");
+        Run(w, 1.05f);
+        Check(chest.Count[(int)ResourceType.CopperOre] == ground.Mined - (drill.Holding ? 1 : 0), "once there's room, all it dug goes in");
+        Check(chest.Count[(int)ResourceType.CopperOre] >= 4, "and it digs on");
+    }
+
+    // A bigger drill reaches round itself; a burner one burns fuel as it digs, and two on coal facing each other keep
+    // each other going (Factorio's trick).
+    static void BurnerDrillsFeedEachOther()
+    {
+        var w = NewFactory();
+        var ground = new TestGround();
+        ground.Fill(0, 0, 4, 2, ResourceType.Coal, 100);
+        var a = new Drill(w, ground, new Spot(0, 0), 2, 0, 0) { SecondsPerItem = 4f, Burner = true, EnergyUse = 0.15f };
+        var b = new Drill(w, ground, new Spot(2, 0), 2, 2, 0) { SecondsPerItem = 4f, Burner = true, EnergyUse = 0.15f };
+        Check(a.Output == new Spot(2, 0) && b.Output == new Spot(1, 1), "each one's chute is in the other");
+        foreach (var d in new[] { a, b })
+        {
+            for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) w.SetPort(new Spot(d.At.X + x, d.At.Y + y), d, false);
+            w.Add(d);
+        }
+        Check(a.Insert(ResourceType.Coal), "a coal put in the first one to start it");
+        Check(!a.Accepts(ResourceType.Stone) && !a.Accepts(ResourceType.Wood), "it only takes more of the fuel it has (and no stone)");
+        Run(w, 10f);
+        Check(b.FuelCount > 0 || b.Energy > 0f, "the first one's coal went into the second as fuel");
+        Run(w, 290f);
+        // Each dug coal feeds the other far faster than it burns, so both fill up (as in Factorio) and wait, full.
+        Check(a.FuelCount == Drill.MaxFuel && b.FuelCount == Drill.MaxFuel, "both end up full of coal");
+        Check(a.Holding && b.Holding && a.Problem != null && b.Problem != null, "and wait, each holding a coal the other has no room for");
+        // Nothing lost or made: what was dug (and the one put in) is in them, held, or burnt; and what burnt matches the digging.
+        int burnt = ground.Mined + 1 - a.FuelCount - b.FuelCount - 2;
+        float used = burnt * 4f - a.Energy - b.Energy;   // MJ
+        Check(burnt >= 1, "some coal was burnt");
+        Check(Math.Abs(used - ground.Mined * 0.6f) < 0.2f, $"burnt as much as the digging takes: 0.15 MW for 4 s an item ({used:0.00} MJ for {ground.Mined})");
+        // A 3x3 drill reaching one tile round itself finds ore at its far corner.
+        var w2 = NewFactory();
+        var corner = new TestGround();
+        corner.Fill(-1, -1, 1, 1, ResourceType.Stone, 2);
+        var big = new Drill(w2, corner, new Spot(0, 0), 3, 0, 1) { SecondsPerItem = 0.1f };
+        Check(big.Area.Count == 25, "a 3x3 drill reaching 1 round digs 5x5 tiles");
+        var box = new TestChest();
+        w2.SetPort(big.Output, box, true);
+        w2.Add(big);
+        Run(w2, 1f);
+        Check(box.Count[(int)ResourceType.Stone] == 2, "it dug the stone at its corner");
+    }
+
+    // A drill can put straight into a furnace, which smelts what it digs.
+    static void DrillsFeedAFurnace()
+    {
+        var w = NewFactory();
+        var ground = new TestGround();
+        ground.Fill(0, 0, 2, 2, ResourceType.IronOre, 100);
+        var drill = new Drill(w, ground, new Spot(0, 0), 2, 0, 0) { SecondsPerItem = 1f };
+        w.Add(drill);
+        var furnace = new Crafter(true, w.Fuels) { Burner = true, FurnaceRecipes = RecipeBook.Defaults().Where(r => r.furnace).ToList() };
+        for (int y = 0; y < 2; y++) for (int x = 2; x < 4; x++) w.SetPort(new Spot(x, y), furnace, false);
+        w.Add(furnace);
+        for (int i = 0; i < 5; i++) furnace.Insert(ResourceType.Coal);
+        Run(w, 20f);
+        Check(furnace.Output > 0 && furnace.OutputType == ResourceType.Iron, $"the furnace smelted the drill's ore into iron (made {furnace.Output})");
     }
 }

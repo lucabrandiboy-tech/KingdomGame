@@ -380,11 +380,11 @@ namespace KingdomGame.Character
         // Wounds heal once the ruler hasn't been hurt for a while.
         float bandageReady;
 
-        // An arm, furnace or assembler (its screen opens with E).
+        // An arm, furnace, assembler or drill (its screen opens with E).
         static bool IsWorks(Furniture f)
         {
             var m = f.Config.machine;
-            return m != null && (m.kind == MachineKind.Arm || m.kind == MachineKind.Furnace || m.kind == MachineKind.Assembler);
+            return m != null && (m.kind == MachineKind.Arm || m.kind == MachineKind.Furnace || m.kind == MachineKind.Assembler || m.kind == MachineKind.Drill);
         }
 
         // C: a bandage from the crafting room's supplies heals you (not at full health).

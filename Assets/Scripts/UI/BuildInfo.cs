@@ -95,12 +95,30 @@ namespace KingdomGame.UI
                 case MachineKind.Workbench:
                     text.Append($"Crafting table: a Crafter makes {ResourceText.Name(m.makes)} here ({m.output} a batch{Inputs(m)})\n");
                     break;
+                case MachineKind.Arm:
+                    text.Append($"Arm: picks things up behind it and puts them down in front, a swing every {m.swingSeconds * 2f:0.##} s; E beside it: choose what it moves\n");
+                    text.Append(m.burner ? "Burns wood or coal (it takes its own from where it picks up)\n" : "Electric\n");
+                    break;
+                case MachineKind.Furnace:
+                    text.Append($"Furnace: smelts what arms put in it (iron ore into iron, copper ore into copper, iron into steel) at {m.craftSpeed:0.##}x speed\n");
+                    text.Append(m.burner ? "Burns wood or coal that arms put in it\n" : "Electric\n");
+                    break;
+                case MachineKind.Assembler:
+                    text.Append($"Assembler: makes the recipe you choose (E beside it) from what arms put in it, at {m.craftSpeed:0.##}x speed\n");
+                    text.Append(m.burner ? "Burns wood or coal that arms put in it\n" : "Electric\n");
+                    break;
+                case MachineKind.Drill:
+                    text.Append($"Drill: digs the ore field under it{(m.mineReach > 0 ? $" and {m.mineReach} tile{(m.mineReach == 1 ? "" : "s")} round it" : "")}, " +
+                                $"{60f / Mathf.Max(0.05f, m.mineSeconds):0.#} a minute, out of its chute onto a belt or into a chest or furnace\n");
+                    text.Append(m.burner ? "Burns wood or coal that arms (or another drill) put in it\n" : "Electric\n");
+                    break;
                 default:
                     text.Append($"Makes {m.output} {ResourceText.Name(m.makes)} every {m.workSeconds:0.#} s by itself{Inputs(m)}\n");
                     break;
             }
             // (only these kinds look for power: see Machine.Work)
-            bool usesPower = m.kind == MachineKind.Producer || m.kind == MachineKind.Sawmill || m.kind == MachineKind.Quarry || m.kind == MachineKind.Lamp;
+            bool usesPower = m.kind == MachineKind.Producer || m.kind == MachineKind.Sawmill || m.kind == MachineKind.Quarry || m.kind == MachineKind.Lamp
+                || (!m.burner && (m.kind == MachineKind.Arm || m.kind == MachineKind.Furnace || m.kind == MachineKind.Assembler || m.kind == MachineKind.Drill));
             if (m.needsPower && usesPower) text.Append("Needs power (a generator nearby)\n");
         }
 

@@ -71,10 +71,14 @@ namespace KingdomGame.Art
         public static string Item(Economy.ResourceType type) => $"Item/{type}";
         /// <summary>An arm's swinging part (its base is the building's own picture, <paramref name="art"/>).</summary>
         public static string ArmSwing(string art) => $"{art}/Swing";
+        /// <summary>A drill's turning bit (its body is the building's own picture, <paramref name="art"/>).</summary>
+        public static string DrillHead(string art) => $"{art}/Head";
         public static string Wall(string material, int variant) => $"Wall/{material}/{variant}";
         public const string GroundGrass = "Ground/Grass";
         public const string GroundDry = "Ground/Dry";
         public const string GroundMud = "Ground/Mud";
+        /// <summary>An ore field's ground (Economy/OreMap.cs).</summary>
+        public static string GroundOre(Economy.OreKind kind) => $"Ground/Ore/{kind}";
 
         /// <summary>A piece of furniture (or a chest) facing direction <paramref name="rotation"/> (0..3).</summary>
         public static string Turned(string art, int rotation) => $"{art}/{rotation}";
@@ -116,7 +120,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 23;
+        public const int Version = 24;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -292,6 +296,18 @@ namespace KingdomGame.Art
                 Add(items, key, "Factory", p => FurnitureArt.AssemblerPiece(p, st), true, factory);
                 Shadow(items, key, "FurnitureShadows", 0.03f);
             }
+            for (int style = 0; style < FurnitureArt.DrillStyles; style++)
+            {
+                int st = style;
+                string art = FurnitureArt.DrillArt(style);
+                for (int r = 0; r < 4; r++)
+                {
+                    int rot = r;
+                    Add(items, ArtKeys.Turned(art, r), "Factory", p => FurnitureArt.DrillPiece(p, st, rot), true, factory);
+                    Shadow(items, ArtKeys.Turned(art, r), "FurnitureShadows", 0.03f);
+                }
+                Add(items, ArtKeys.DrillHead(art), "Factory", p => FurnitureArt.DrillBitPiece(p, st), true, factory);
+            }
             foreach (Economy.ResourceType type in System.Enum.GetValues(typeof(Economy.ResourceType)))
             {
                 var t = type;
@@ -380,6 +396,12 @@ namespace KingdomGame.Art
             items.Add(new ArtItem { Key = ArtKeys.GroundGrass, Sheet = "Ground-Grass", Draw = p => GroundArt.Grass(p, 101u), NormalMap = true, Repeats = true });
             items.Add(new ArtItem { Key = ArtKeys.GroundDry, Sheet = "Ground-Dry", Draw = p => GroundArt.DryGrass(p, 202u), NormalMap = true, Repeats = true });
             items.Add(new ArtItem { Key = ArtKeys.GroundMud, Sheet = "Ground-Mud", Draw = p => GroundArt.Mud(p, 303u), NormalMap = true, Repeats = true });
+            // Ore fields' ground: chunky, so a quarter of the detail is plenty (and saves video memory).
+            foreach (var kind in new[] { Economy.OreKind.Iron, Economy.OreKind.Copper, Economy.OreKind.Coal, Economy.OreKind.Stone })
+            {
+                var k = kind;
+                items.Add(new ArtItem { Key = ArtKeys.GroundOre(k), Sheet = "Ground-Ore" + k, Draw = p => GroundArt.Ore(p, k, 404u + (uint)k), NormalMap = true, Repeats = true, Detail = 0.25f });
+            }
             return items;
         }
 

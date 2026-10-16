@@ -16,12 +16,15 @@ namespace KingdomGame.World
         public CanopyFader Canopies;
         /// <summary>The ground round the camera (null on a server with no screen).</summary>
         public GroundStreamer Ground;
+        /// <summary>The ore fields (worked out from the seed; what drills have taken is kept).</summary>
+        public OreMap Ore;
     }
 
     /// <summary>
     /// Makes an endless world from a seed: dark grass with big patches of dry grass and mud,
-    /// a soft tint over it (darker under forests), and trees, rocks and berry bushes placed
-    /// with noise so they form forests and clearings. Nothing is made up front: what's at any
+    /// a soft tint over it (darker under forests), trees, rocks and berry bushes placed
+    /// with noise so they form forests and clearings, and ore fields (<see cref="OreMap"/>:
+    /// iron, copper, coal and stone, bare of trees and rocks) for drills to dig. Nothing is made up front: what's at any
     /// spot is worked out from the seed and the spot when it's needed (<see cref="NatureMap"/>
     /// for trees, <see cref="GroundStreamer"/> for the ground), so the same seed always makes
     /// the same world on every computer (a host sends its seed to the players, who make the
@@ -57,11 +60,14 @@ namespace KingdomGame.World
             var bush = content.bush;
             var rock = content.rock;
             float treeDensity = config.treeDensity, bushChance = config.bushChance, rockChance = config.rockChance;
+            var ore = new OreMap(s);
+            OreMap.Current = ore;
             ResourceNodeConfig At(int x, int y, out int variant)
             {
                 variant = 0;
                 if (x * x + y * y < clear2) return null;
                 if (outpost && x >= 3 && x <= 15 && y >= -6 && y <= 6) return null;   // keep the outpost clear
+                if (OreMap.Generate(s, x, y, out _) != OreKind.None) return null;     // ore fields are bare (drills go on them)
                 float here = forest(x, y);
                 float roll = Noise.Hash01(s + 2u, x, y);
                 ResourceNodeConfig kind = null;
@@ -85,10 +91,10 @@ namespace KingdomGame.World
             {
                 ground = new GameObject("Ground").AddComponent<GroundStreamer>();
                 ground.transform.SetParent(parent, false);
-                ground.Setup(Camera.main, s, forest, treeLine, bushLine);
+                ground.Setup(Camera.main, s, forest, treeLine, bushLine, ore);
             }
             MakeEdges(parent, NatureMap.Limit);
-            return new WorldParts { Nature = map, Streamer = streamer, Canopies = fader, Ground = ground };
+            return new WorldParts { Nature = map, Streamer = streamer, Canopies = fader, Ground = ground, Ore = ore };
         }
 
         static float Percentile(float[] sorted, float fraction) =>

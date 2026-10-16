@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using KingdomGame.Economy;
 using UnityEngine;
 
 namespace KingdomGame.Art
@@ -151,6 +153,131 @@ namespace KingdomGame.Art
             return img;
         }
 
+        /// <summary>
+        /// An ore field's ground (Economy/OreMap.cs), repeating like the others: dark gravelly earth with angular chunks of
+        /// the ore in clumps, lit from the top-left. Iron: blue-grey rocks with rust on them; copper: orange-brown rocks with
+        /// green patina; coal: glossy black lumps; stone: pale cobbles.
+        /// </summary>
+        public static PixelImage Ore(int ppu, OreKind kind, uint seed)
+        {
+            int n = Tiles * ppu;
+            float k = ppu / 512f;
+            var img = new PixelImage(n, n) { Pivot = Vector2.zero, Bumpiness = 0.8f };
+            var heights = img.EnsureHeights();
+            var dice = new Dice(seed);
+            Color32 soil, rock, fleck;
+            float fleckShare;
+            switch (kind)
+            {
+                case OreKind.Copper: soil = PixelImage.Rgb(56, 44, 34); rock = PixelImage.Rgb(170, 96, 54); fleck = PixelImage.Rgb(66, 148, 126); fleckShare = 0.45f; break;
+                case OreKind.Coal: soil = PixelImage.Rgb(54, 44, 36); rock = PixelImage.Rgb(50, 50, 58); fleck = PixelImage.Rgb(120, 120, 134); fleckShare = 0.35f; break;
+                case OreKind.Stone: soil = PixelImage.Rgb(66, 60, 52); rock = PixelImage.Rgb(150, 142, 128); fleck = PixelImage.Rgb(112, 104, 94); fleckShare = 0.3f; break;
+                default: soil = PixelImage.Rgb(50, 46, 46); rock = PixelImage.Rgb(108, 124, 152); fleck = PixelImage.Rgb(150, 82, 54); fleckShare = 0.5f; break;
+            }
+
+            // Lumpy, gravelly earth.
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float lumps = Field(x, y, n, Tiles * 18, seed + 1u, 3);
+                    float grain = Field(x, y, n, Tiles * 90, seed + 2u, 1);
+                    heights[y * n + x] = lumps * 8f * k + grain * 2f * k;
+                    img.Pixels[y * n + x] = PixelImage.Mix(PixelImage.Scale(soil, 0.7f), soil, lumps * 0.8f + grain * 0.3f);
+                }
+            int gravel = Tiles * Tiles * 160;
+            for (int i = 0; i < gravel; i++)
+            {
+                float r = dice.Range(3f, 8f) * k;
+                Pebble(img, dice.Range(0f, n), dice.Range(0f, n), r, r * dice.Range(0.6f, 1f), PixelImage.Scale(PixelImage.Mix(soil, PixelImage.Rgb(96, 90, 82), 0.5f), dice.Range(0.7f, 1.2f)), true);
+            }
+
+            // The ore: broken, angular chunks of every size (more small than big), gathered in clumps with earth between
+            // them, some with flecks of colour on them (rust, patina, a glint on coal).
+            int lumpCount = Tiles * Tiles * 520;
+            for (int i = 0; i < lumpCount; i++)
+            {
+                float x = dice.Range(0f, n), y = dice.Range(0f, n);
+                float clump = Field(PixelImage.Wrap((int)x, n), PixelImage.Wrap((int)y, n), n, Tiles * 2, seed + 3u, 2);
+                if (dice.Next() > 0.3f + PixelImage.Smooth(0.36f, 0.62f, clump) * 0.7f) continue;
+                float r = dice.Range(14f, dice.Chance(0.12f) ? 64f : 32f) * k;
+                var c = PixelImage.Scale(PixelImage.Mix(rock, soil, dice.Range(0f, 0.25f)), dice.Range(0.75f, 1.2f));
+                Chunk(img, dice, x, y, r, c);
+                if (!dice.Chance(fleckShare)) continue;
+                int flecks = dice.Range(1, 4);
+                for (int f = 0; f < flecks; f++)
+                {
+                    float fr = r * dice.Range(0.12f, 0.26f);
+                    Pebble(img, x + dice.Range(-0.45f, 0.45f) * r, y + dice.Range(-0.45f, 0.45f) * r, fr, fr * dice.Range(0.5f, 0.9f),
+                        PixelImage.Scale(fleck, dice.Range(0.8f, 1.15f)), true);
+                }
+            }
+            img.BakeLight(0.7f, 0.55f, Mathf.Max(1, Mathf.RoundToInt(5f * k)), wrap: true);
+            return img;
+        }
+
+        /// <summary>
+        /// The masks that show the ore fields over one square of an endless world (like <see cref="PatchMasksAt"/>), one for each
+        /// kind of ore (<c>masks[(int)kind - 1]</c>), made only for the kinds there (the others are left null). A field shows
+        /// inside its wobbly edge (the same edge that says which tiles have ore), thinning out into clumps near it; a tile
+        /// shows sparser, in clumps, as it's mined, and a mined-out one is bare ground. <paramref name="taken"/>: what's been taken from the tiles round the square,
+        /// (tiles + 2) across from (originX - 1, originY - 1) (OreMap.TakenIn), or null for nothing. False: no field touches it.
+        /// Plain maths: safe on another thread.
+        /// </summary>
+        public static bool OreMasksAt(int originX, int originY, int tiles, int detail, uint seed, int[] taken, byte[][] masks)
+        {
+            for (int i = 0; i < masks.Length; i++) masks[i] = null;
+            var fields = new List<OreMap.Field>();
+            OreMap.FieldsNear(seed, originX - 1, originY - 1, originX + tiles, originY + tiles, fields);
+            if (fields.Count == 0) return false;
+
+            // How full each tile looks (0..1), with one more all round so the square's edge blends into its neighbours'.
+            int m = tiles + 2;
+            var full = new float[m * m];
+            for (int y = 0; y < m; y++)
+                for (int x = 0; x < m; x++)
+                {
+                    if (OreMap.Generate(seed, originX - 1 + x, originY - 1 + y, out int amount) == OreKind.None) continue;
+                    full[y * m + x] = OreMap.Level(amount, taken != null ? taken[y * m + x] : 0) / 4f;
+                }
+
+            int n = tiles * detail;
+            foreach (var f in fields)
+            {
+                int kind = (int)f.Kind - 1;
+                if (kind < 0 || kind >= masks.Length) continue;
+                var mask = masks[kind] ??= new byte[n * n];
+                int px0 = Mathf.Max(0, (f.MinX - originX) * detail), px1 = Mathf.Min(n, (f.MaxX + 1 - originX) * detail);
+                int py0 = Mathf.Max(0, (f.MinY - originY) * detail), py1 = Mathf.Min(n, (f.MaxY + 1 - originY) * detail);
+                for (int y = py0; y < py1; y++)
+                {
+                    float wy = originY + (y + 0.5f) / detail;
+                    for (int x = px0; x < px1; x++)
+                    {
+                        float wx = originX + (x + 0.5f) / detail;
+                        // Roughly how many tiles in from the field's edge.
+                        float inside = OreMap.Inside(f, wx, wy) * f.Radius;
+                        if (inside < -0.3f) continue;
+                        // How full it is here: the tiles' levels blended between their middles.
+                        float gx = wx - 0.5f - (originX - 1), gy = wy - 0.5f - (originY - 1);
+                        int ix = Mathf.Clamp(Mathf.FloorToInt(gx), 0, m - 2), iy = Mathf.Clamp(Mathf.FloorToInt(gy), 0, m - 2);
+                        float fx = Mathf.Clamp01(gx - ix), fy = Mathf.Clamp01(gy - iy);
+                        int i = iy * m + ix;
+                        float level = Mathf.Lerp(Mathf.Lerp(full[i], full[i + 1], fx), Mathf.Lerp(full[i + m], full[i + m + 1], fx), fy);
+                        if (level <= 0f) continue;
+                        // Clumps a third of a tile across: an emptier tile shows only the low ones, and so does the
+                        // last tile and a half in from the edge, so a field thins out into scattered clumps.
+                        level *= Mathf.Clamp01(0.3f + inside * 0.5f);
+                        float clump = OreMap.Smooth(wx * 3f, wy * 3f, seed + 911u) * 0.7f + OreMap.Smooth(wx * 7f, wy * 7f, seed + 912u) * 0.3f;
+                        float v = Mathf.Min(inside * 2.5f + 0.5f, (level - clump * 0.9f) * 6f + 0.5f);
+                        byte a = (byte)Mathf.RoundToInt(Mathf.Clamp01(v) * 255f);
+                        int p = y * n + x;
+                        if (a > mask[p]) mask[p] = a;
+                    }
+                }
+            }
+            return true;
+        }
+
         // A grass blade of the dark-grass palette; tone 0..1 = dark to light.
         static void Blade(PixelImage img, float x, float y, float angle, float length, float rootWidth, float tipWidth, float tone, float height, bool yellow)
         {
@@ -173,6 +300,61 @@ namespace KingdomGame.Art
             float h = height * length;
             img.Capsule(x, y, mx, my, rootWidth, midWidth, root, mid, 0f, h * 0.6f, wrap);
             img.Capsule(mx, my, ex, ey, midWidth, tipWidth, mid, tip, h * 0.6f, h, wrap);
+        }
+
+        // A broken chunk of rock seen from above (wrapping round the picture's edges): an uneven polygon of 5 to 8 sides,
+        // each sloping down from a flat top to its edge, every face lit by the sun on its own, with a shadow under it.
+        static void Chunk(PixelImage img, Dice dice, float x, float y, float r, Color32 stone)
+        {
+            var heights = img.EnsureHeights();
+            var light = ArtLight.Sun;
+            int sides = dice.Range(5, 9);
+            var cx = new float[sides];
+            var cy = new float[sides];
+            float spin = dice.Range(0f, Mathf.PI * 2f), squash = dice.Range(0.65f, 1f);
+            for (int i = 0; i < sides; i++)
+            {
+                float a = spin + (i + dice.Range(-0.3f, 0.3f)) * Mathf.PI * 2f / sides;
+                float d = r * dice.Range(0.7f, 1f);
+                cx[i] = Mathf.Cos(a) * d;
+                cy[i] = Mathf.Sin(a) * d * squash;
+            }
+            float top = r * dice.Range(0.3f, 0.5f);                    // how far in from the edge the flat top starts
+            float tall = r * dice.Range(0.45f, 0.7f);
+            var tilt = new Vector2(dice.Range(-0.15f, 0.15f), dice.Range(-0.15f, 0.15f));   // the top isn't quite flat
+            img.EllipseWrapped(x + r * 0.22f, y - r * 0.28f, r * 1.05f, r * squash * 1.05f, PixelImage.Rgb(10, 8, 6, 120));
+            float reach = r + 2f;
+            for (int py = Mathf.FloorToInt(y - reach); py <= y + reach; py++)
+                for (int px = Mathf.FloorToInt(x - reach); px <= x + reach; px++)
+                {
+                    float lx = px + 0.5f - x, ly = py + 0.5f - y;
+                    // The nearest edge (the polygon is convex round its middle): how far inside it, and which way it faces.
+                    float inside = float.MaxValue;
+                    Vector2 outward = Vector2.zero;
+                    for (int i = 0; i < sides; i++)
+                    {
+                        int j = (i + 1) % sides;
+                        float ex = cx[j] - cx[i], ey = cy[j] - cy[i];
+                        float len = Mathf.Sqrt(ex * ex + ey * ey);
+                        if (len < 1e-4f) continue;
+                        var nrm = new Vector2(ey / len, -ex / len);   // (the vertices go anticlockwise: this points out)
+                        float dist = -((lx - cx[i]) * nrm.x + (ly - cy[i]) * nrm.y);
+                        if (dist < inside) { inside = dist; outward = nrm; }
+                    }
+                    float coverage = Mathf.Clamp01(inside + 0.5f);
+                    if (coverage <= 0f) continue;
+                    // A sloping face near the edge, the flat (slightly tilted) top further in.
+                    Vector3 normal = inside < top
+                        ? new Vector3(outward.x * 0.85f, outward.y * 0.85f, 1f).normalized
+                        : new Vector3(tilt.x, tilt.y, 1f).normalized;
+                    float lit = Mathf.Max(0f, normal.x * light.x + normal.y * light.y + normal.z * light.z);
+                    var c = PixelImage.Scale(stone, 0.45f + lit * 0.75f);
+                    int tx = PixelImage.Wrap(px, img.Width), ty = PixelImage.Wrap(py, img.Height);
+                    img.Blend(tx, ty, c, coverage);
+                    int k = ty * img.Width + tx;
+                    float h = tall * Mathf.Clamp01(inside / Mathf.Max(1f, top));
+                    heights[k] = Mathf.Max(heights[k], h * coverage);
+                }
         }
 
         static void Pebble(PixelImage img, float x, float y, float rx, float ry, Color32 stone, bool wrap)

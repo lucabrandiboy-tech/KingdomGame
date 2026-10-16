@@ -5,7 +5,7 @@ using KingdomGame.Economy;
 using UnityEngine;
 
 // Plain asserts, like tools/tests.
-static class Tests
+static partial class Tests
 {
     static int failed;
 
@@ -24,6 +24,13 @@ static class Tests
         Run(nameof(AGroundSquareIsQuickToMake), AGroundSquareIsQuickToMake);
         Run(nameof(RuinsAreTheSameEveryTime), RuinsAreTheSameEveryTime);
         Run(nameof(RuinsStayInTheirSquare), RuinsStayInTheirSquare);
+        Run(nameof(OreIsTheSameEverywhere), OreIsTheSameEverywhere);
+        Run(nameof(TheStartHasOneFieldOfEach), TheStartHasOneFieldOfEach);
+        Run(nameof(OreFieldsStayInTheirSquare), OreFieldsStayInTheirSquare);
+        Run(nameof(FieldsNearFindsEveryField), FieldsNearFindsEveryField);
+        Run(nameof(MiningEmptiesTilesAndIsSaved), MiningEmptiesTilesAndIsSaved);
+        Run(nameof(OreShowsWhereTheOreIs), OreShowsWhereTheOreIs);
+        Run(nameof(OreMasksJoinUp), OreMasksJoinUp);
         Console.WriteLine(failed == 0 ? "All world tests passed." : $"{failed} world test(s) FAILED.");
         return failed == 0 ? 0 : 1;
     }
@@ -359,5 +366,14 @@ static class Tests
         double ms = watch.Elapsed.TotalMilliseconds / 4;
         Console.WriteLine($"        (one ground square takes {ms:0} ms)");
         Check(ms < 400, $"one ground square takes {ms:0} ms");
+        // A square with ore fields in it (all four round the start touch the squares round the middle) takes a little more.
+        var masks = new byte[4][];
+        watch.Restart();
+        int withOre = 0;
+        foreach (var (x, y) in new[] { (-64, -64), (0, -64), (-64, 0), (0, 0) })
+            if (GroundArt.OreMasksAt(x, y, 64, 8, 5u, null, masks)) withOre++;
+        double oreMs = watch.Elapsed.TotalMilliseconds / 4;
+        Console.WriteLine($"        (and its ore {oreMs:0} ms more)");
+        Check(withOre >= 2 && oreMs < 150, $"the ore of a square takes {oreMs:0} ms");
     }
 }

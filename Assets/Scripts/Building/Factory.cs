@@ -10,8 +10,9 @@ namespace KingdomGame.Building
 {
     /// <summary>
     /// A kingdom's factory, Factorio-style: belts that carry items in their direction (you see each one ride), arms that
-    /// move items between belts, chests, storehouses and machines, furnaces that smelt what's put in them and
-    /// assemblers that make the recipe you choose. The simulation is plain C# (Automation/FactoryWorld.cs, unit-tested);
+    /// move items between belts, chests, storehouses and machines, furnaces that smelt what's put in them,
+    /// assemblers that make the recipe you choose, and drills that dig the ore fields (Economy/OreMap.cs) under them.
+    /// The simulation is plain C# (Automation/FactoryWorld.cs, unit-tested);
     /// this runs it, keeps it in step with what's built (chests and storehouses are its ports, houses' belt holes link
     /// belts through their walls), draws the items and the arms, and saves it.
     /// </summary>
@@ -32,7 +33,37 @@ namespace KingdomGame.Building
             public SpriteRenderer Icon;
             public Recipe ShownRecipe;
             public bool ShownWorking = true;
+            public Drill Drill;
+            public Transform Head;
+            public float HeadAngle;
         }
+
+        // The ore in the ground (Economy/OreMap.cs), as drills see it.
+        sealed class OreGround : IOreGround
+        {
+            public bool OreAt(int x, int y, out ResourceType item, out int left)
+            {
+                item = default;
+                left = 0;
+                var map = OreMap.Current;
+                if (map == null) return false;
+                var kind = map.At(x, y, out left);
+                if (kind == OreKind.None) return false;
+                item = OreMap.Item(kind);
+                return true;
+            }
+
+            public bool Mine(int x, int y, out ResourceType item)
+            {
+                item = default;
+                var map = OreMap.Current;
+                if (map == null || !map.Mine(x, y, out var kind)) return false;
+                item = OreMap.Item(kind);
+                return true;
+            }
+        }
+
+        static readonly OreGround ground = new OreGround();
 
         // A chest or storehouse, as the factory sees it (arms take from and put into its stock).
         sealed class StoragePort : IItemPort
@@ -156,6 +187,18 @@ namespace KingdomGame.Building
                     if (cfg.kind == MachineKind.Assembler) MakeIcon(piece, furniture);
                     break;
                 }
+                case MachineKind.Drill:
+                {
+                    var d = new Drill(World, ground, piece.Origin, Mathf.Max(cells.width, cells.height), furniture.Rotation, cfg.mineReach)
+                    {
+                        SecondsPerItem = cfg.mineSeconds, Burner = cfg.burner, EnergyUse = cfg.energyUse, Power = cfg.burner ? 1f : 0f,
+                    };
+                    piece.Drill = d;
+                    foreach (var cell in cells.allPositionsWithin) World.SetPort(SpotOf(cell), d, false);
+                    World.Add(d);
+                    MakeDrillLook(piece, furniture);
+                    break;
+                }
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
                 case MachineKind.Producer when cfg.toBelts:
@@ -194,6 +237,12 @@ namespace KingdomGame.Building
                 piece.Crafter.TakeAll(spill, true);
                 World.Remove(piece.Crafter);
                 if (furniture != null) foreach (var cell in furniture.Cells.allPositionsWithin) World.ClearPort(SpotOf(cell), piece.Crafter);
+            }
+            if (piece.Drill != null)
+            {
+                piece.Drill.TakeAll(spill);
+                World.Remove(piece.Drill);
+                if (furniture != null) foreach (var cell in furniture.Cells.allPositionsWithin) World.ClearPort(SpotOf(cell), piece.Drill);
             }
             foreach (var t in list) spill[(int)t]++;
             GiveBack(spill, m.transform.position);
@@ -239,7 +288,37 @@ namespace KingdomGame.Building
             if (p.Crafter != null)
                 return (p.Crafter.Working ? $"Making {p.Crafter.Recipe.name.ToLowerInvariant()}" : $"<color=#ffcc80>{p.Crafter.Problem}</color>") +
                        (p.Crafter.Output > 0 ? $", {p.Crafter.Output} made" : "") + (p.Crafter.Furnace ? "" : "   E beside it: choose what it makes");
+            if (p.Drill != null)
+            {
+                int left = p.Drill.OreLeft(out var most);
+                return (p.Drill.Working ? $"Digging {ResourceText.Name(most)}" : $"<color=#ffcc80>{p.Drill.Problem ?? "starting"}</color>") +
+                       (left > 0 ? $"  ({left:N0} {ResourceText.Name(most)} left to dig)" : "") + "   E beside it: see what it's doing";
+            }
             return null;
+        }
+
+        public Drill DrillOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Drill : null;
+
+        /// <summary>
+        /// The ore a drill would dig on <paramref name="cells"/> (and <paramref name="reach"/> tiles round them), like
+        /// "2,400 iron ore and 600 coal"; null if there's none.
+        /// </summary>
+        public static string OreUnder(RectInt cells, int reach)
+        {
+            var map = OreMap.Current;
+            if (map == null) return null;
+            var total = new int[5];
+            for (int y = cells.yMin - reach; y < cells.yMax + reach; y++)
+                for (int x = cells.xMin - reach; x < cells.xMax + reach; x++)
+                {
+                    var kind = map.At(x, y, out int left);
+                    if (kind != OreKind.None) total[(int)kind] += left;
+                }
+            var parts = new List<string>();
+            for (int k = 1; k < total.Length; k++)
+                if (total[k] > 0) parts.Add($"{total[k]:N0} {OreMap.Name((OreKind)k)}");
+            if (parts.Count == 0) return null;
+            return parts.Count == 1 ? parts[0] : string.Join(", ", parts.GetRange(0, parts.Count - 1)) + " and " + parts[parts.Count - 1];
         }
         public Arm ArmOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Arm : null;
 
@@ -331,6 +410,7 @@ namespace KingdomGame.Building
                 float power = p.Config.needsPower ? (Machine.PoweredAt(p.Machine.PowerSpot) ? 1f : 0f) : 1f;
                 if (p.Arm != null) p.Arm.Power = power;
                 if (p.Crafter != null) p.Crafter.Power = power;
+                if (p.Drill != null) p.Drill.Power = power;
             }
         }
 
@@ -407,6 +487,19 @@ namespace KingdomGame.Building
         /// <summary>How far an arm's hand reaches from its middle, in tiles (to the middle of the next tile, nearly).</summary>
         public const float ArmReach = FurnitureArt.ArmReach;
 
+        // A drill's bit, turning while it digs (in the middle of its picture).
+        void MakeDrillLook(Piece p, Furniture furniture)
+        {
+            var sprite = ArtSprites.Get(ArtKeys.DrillHead(furniture.Config.art));
+            if (sprite == null) return;
+            var go = new GameObject("Drill bit");
+            go.transform.SetParent(furniture.transform, false);
+            var r = go.AddComponent<SpriteRenderer>();
+            r.sprite = sprite;
+            r.sortingOrder = SortOrder.Furniture + 3;
+            p.Head = go.transform;
+        }
+
         void MakeIcon(Piece p, Furniture furniture)
         {
             var go = new GameObject("Recipe");
@@ -450,6 +543,21 @@ namespace KingdomGame.Building
                 if (holding) p.Hand.sprite = ItemSprite(p.Arm.Held);
                 return;
             }
+            if (p.Drill != null)
+            {
+                bool digging = p.Drill.Working;
+                if (digging != p.ShownWorking && p.Machine.Look != null)
+                {
+                    p.ShownWorking = digging;
+                    p.Machine.Look.color = digging ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
+                }
+                if (digging && p.Head != null)
+                {
+                    p.HeadAngle = Mathf.Repeat(p.HeadAngle - Time.deltaTime * 240f, 360f);
+                    p.Head.localRotation = Quaternion.Euler(0f, 0f, p.HeadAngle);
+                }
+                return;
+            }
             if (p.Crafter != null)
             {
                 bool working = p.Crafter.Working;
@@ -469,7 +577,7 @@ namespace KingdomGame.Building
 
         // ------------------------------------------------------------ saving --
 
-        /// <summary>What a save needs to put the factory back: items on belts, arms mid-swing, what's in the machines.</summary>
+        /// <summary>What a save needs to put the factory back: items on belts, arms mid-swing, what's in the machines and drills.</summary>
         [Serializable]
         public sealed class Saved
         {
@@ -477,6 +585,7 @@ namespace KingdomGame.Building
             public List<ArmSave> arms = new List<ArmSave>();
             public List<CrafterSave> crafters = new List<CrafterSave>();
             public List<HeldSave> held = new List<HeldSave>();
+            public List<DrillSave> drills = new List<DrillSave>();
         }
 
         [Serializable]
@@ -511,6 +620,14 @@ namespace KingdomGame.Building
             public int x, y, held;
         }
 
+        [Serializable]
+        public sealed class DrillSave
+        {
+            public int x, y, held, fuelType, fuelCount;
+            public bool holding;
+            public float progress, energy;
+        }
+
         public Saved Save()
         {
             var s = new Saved();
@@ -542,6 +659,15 @@ namespace KingdomGame.Building
                         x = p.Origin.X, y = p.Origin.Y, recipe = c.Recipe != null ? c.Recipe.name : null, inputs = inputs,
                         outputType = (int)c.OutputType, output = c.Output, crafting = c.Crafting, progress = c.Progress,
                         fuelType = (int)c.FuelType, fuelCount = c.FuelCount, energy = c.Energy,
+                    });
+                }
+                if (p.Drill != null)
+                {
+                    var d = p.Drill;
+                    s.drills.Add(new DrillSave
+                    {
+                        x = p.Origin.X, y = p.Origin.Y, holding = d.Holding, held = (int)d.Held, progress = d.Progress,
+                        fuelType = (int)d.FuelType, fuelCount = d.FuelCount, energy = d.Energy,
                     });
                 }
             }
@@ -587,6 +713,12 @@ namespace KingdomGame.Building
                 {
                     if (c == null || !at.TryGetValue(new Spot(c.x, c.y), out var p) || p.Crafter == null) continue;
                     p.Crafter.Restore(Named(c.recipe), c.inputs, Type(c.outputType), c.output, c.crafting, c.progress, Type(c.fuelType), c.fuelCount, c.energy);
+                }
+            if (s.drills != null)
+                foreach (var d in s.drills)
+                {
+                    if (d == null || !at.TryGetValue(new Spot(d.x, d.y), out var p) || p.Drill == null) continue;
+                    p.Drill.Restore(d.holding, Type(d.held), d.progress, Type(d.fuelType), d.fuelCount, d.energy);
                 }
             if (s.held != null)
                 foreach (var h in s.held)

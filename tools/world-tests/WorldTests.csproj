@@ -27,5 +27,6 @@
     <Compile Include="../../Assets/Scripts/Economy/NatureClock.cs" />
     <Compile Include="../../Assets/Scripts/Economy/ResourceNodeConfig.cs" />
     <Compile Include="../../Assets/Scripts/Economy/Inventory.cs" />
+    <Compile Include="../../Assets/Scripts/Economy/OreMap.cs" />
   </ItemGroup>
 </Project>

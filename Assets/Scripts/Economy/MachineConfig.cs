@@ -28,6 +28,8 @@ namespace KingdomGame.Economy
         Furnace,
         /// <summary>An assembler: makes the recipe you choose from what arms put in it.</summary>
         Assembler,
+        /// <summary>A mining drill: digs the ore field under it and puts the ore out of its chute (Automation/Drill.cs).</summary>
+        Drill,
     }
 
     /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
@@ -72,11 +74,17 @@ namespace KingdomGame.Economy
         [Min(0.05f)] public float swingSeconds = 0.6f;
         [Tooltip("Furnaces and assemblers: crafting speed (1 = a recipe's own time).")]
         [Min(0.05f)] public float craftSpeed = 1f;
-        [Tooltip("Arms, furnaces and assemblers: burns wood or coal put in it (an arm takes its own) instead of needing power.")]
+        [Tooltip("Arms, furnaces, assemblers and drills: burns wood or coal put in it (an arm takes its own) instead of needing power.")]
         public bool burner = true;
         [Tooltip("MW used while working: how fast a burner eats its fuel (wood holds 2 MJ, coal 4).")]
         [Min(0f)] public float energyUse = 0.1f;
         [Tooltip("Pollution made each minute while working.")]
         [Min(0f)] public float pollution;
+
+        [Header("Factory: drills")]
+        [Tooltip("Drills: seconds to dig each item of ore at full power.")]
+        [Min(0.05f)] public float mineSeconds = 4f;
+        [Tooltip("Drills: how many tiles round itself it digs as well as those under it (0 = only under it).")]
+        [Min(0)] public int mineReach;
     }
 }

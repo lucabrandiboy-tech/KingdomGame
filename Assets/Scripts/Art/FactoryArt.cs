@@ -4,7 +4,8 @@ using UnityEngine;
 namespace KingdomGame.Art
 {
     // The factory's pictures (Building/Factory.cs): belts for each age (straight and turning left or right, for each
-    // way they can face), arms (a base, and the part that swings round), furnaces, assemblers, and the items they move.
+    // way they can face), arms (a base, and the part that swings round), furnaces, assemblers, drills (and their bits),
+    // and the items they move.
     public static partial class FurnitureArt
     {
         // ------------------------------------------------------------- belts --
@@ -320,6 +321,162 @@ namespace KingdomGame.Art
                         Stud(img, t, ex, ey, 0.05f, Iron, 0.82f);
                     }
                     Stud(img, t, 2.65f, 2.65f, 0.08f, PixelImage.Rgb(90, 220, 110), 0.7f);
+                    break;
+                }
+            }
+            return Finish(img, t, 0);
+        }
+
+        // ------------------------------------------------------------ drills --
+
+        /// <summary>The drill kinds: digging frame (2x2, burner), burner drill (2x2), electric mining drill (3x3), big mining drill (3x3).</summary>
+        public const int DrillStyles = 4;
+        public static string DrillArt(int style) => $"Factory/Drill{style}";
+        /// <summary>How many tiles across a drill of each kind is.</summary>
+        public static int DrillSize(int style) => style <= 1 ? 2 : 3;
+        static float DrillBitRadius(int style) => style == 0 ? 0.42f : style == 1 ? 0.4f : style == 2 ? 0.72f : 0.86f;
+
+        /// <summary>
+        /// A drill seen from above with its chute facing right (on its right side, in the middle row: the lower one on a 2x2,
+        /// where Automation/Drill.OutputOf puts what it digs), turned to <paramref name="rotation"/>. Its bit turns in the hole
+        /// in its middle (a picture of its own, <see cref="DrillBitPiece"/>).
+        /// </summary>
+        public static PixelImage DrillPiece(int ppu, int style, int rotation)
+        {
+            float t = ppu;
+            int size = DrillSize(style);
+            var img = Canvas(size, size, t);
+            uint s = 5100u + (uint)style * 17u;
+            float c = size / 2f, chute = size == 2 ? 0.5f : 1.5f, bit = DrillBitRadius(style);
+            var glow = PixelImage.Rgb(236, 128, 44);
+            switch (style)
+            {
+                case 0:
+                {
+                    // A timber frame round a pit, a little fire at the back to drive it, a plank chute at the front.
+                    Block(img, t, 0.12f, 0.12f, 1.88f, 1.88f, PixelImage.Rgb(74, 60, 44), 0.04f, 0.02f, Surface.Stone, s);
+                    foreach (var (x0, y0, x1, y1) in new[] { (0.2f, 0.2f, 1.8f, 0.2f), (0.2f, 1.8f, 1.8f, 1.8f), (0.2f, 0.2f, 0.2f, 1.8f), (1.8f, 0.2f, 1.8f, 1.8f) })
+                        Rod(img, t, x0, y0, x1, y1, 0.075f, Oak, 0.18f, 0.18f);
+                    foreach (var (bx, by) in new[] { (0.2f, 0.2f), (1.8f, 0.2f), (0.2f, 1.8f), (1.8f, 1.8f) })
+                        Round(img, t, bx, by, 0.13f, DarkWood, 0.32f, 0.03f, Surface.Wood, s + 1u);
+                    Block(img, t, 0.3f, 1.28f, 0.7f, 1.68f, Granite, 0.22f, 0.04f, Surface.Stone, s + 2u);
+                    Block(img, t, 0.38f, 1.38f, 0.62f, 1.58f, glow, 0.23f, 0.01f, Surface.Plain, s + 3u);
+                    Block(img, t, 1.5f, chute - 0.2f, 2f, chute + 0.2f, Oak, 0.2f, 0.02f, Surface.Wood, s + 4u, true, 0.1f);
+                    Block(img, t, 1.55f, chute - 0.12f, 1.98f, chute + 0.12f, PixelImage.Scale(Oak, 0.7f), 0.21f, 0.01f, Surface.Wood, s + 5u);
+                    break;
+                }
+                case 1:
+                {
+                    // A riveted iron box, its firebox glowing at the back, a stubby chimney, an iron chute at the front.
+                    var plate = PixelImage.Rgb(86, 84, 82);
+                    Block(img, t, 0.08f, 0.08f, 1.92f, 1.92f, plate, 0.42f, 0.05f, Surface.Metal, s);
+                    for (int i = 0; i < 7; i++)
+                    {
+                        float a = 0.2f + i * 0.267f;
+                        foreach (var (bx, by) in new[] { (a, 0.17f), (a, 1.83f), (0.17f, a), (1.83f, a) }) Stud(img, t, bx, by, 0.022f, Iron, 0.45f);
+                    }
+                    Block(img, t, 0.2f, 0.62f, 0.5f, 1.38f, PixelImage.Rgb(46, 42, 40), 0.44f, 0.02f, Surface.Metal, s + 1u);
+                    Block(img, t, 0.24f, 0.78f, 0.4f, 1.22f, glow, 0.445f, 0.01f, Surface.Plain, s + 2u);
+                    Round(img, t, 0.45f, 1.55f, 0.15f, PixelImage.Rgb(60, 56, 54), 0.62f, 0f, Surface.Metal, s + 3u);
+                    Round(img, t, 0.45f, 1.55f, 0.09f, PixelImage.Rgb(16, 14, 14), 0.6f, 0f, Surface.Plain, s + 4u);
+                    Block(img, t, 1.5f, chute - 0.22f, 2f, chute + 0.22f, PixelImage.Rgb(70, 70, 74), 0.32f, 0.03f, Surface.Metal, s + 5u);
+                    Block(img, t, 1.55f, chute - 0.13f, 1.98f, chute + 0.13f, PixelImage.Rgb(40, 40, 44), 0.33f, 0.01f, Surface.Metal, s + 6u);
+                    break;
+                }
+                case 2:
+                {
+                    // A grey steel housing on four feet, a motor with cooling fins at the back, yellow and black stripes, a chute.
+                    var steel = PixelImage.Rgb(112, 116, 122);
+                    foreach (var (bx, by) in new[] { (0.22f, 0.22f), (2.78f, 0.22f), (0.22f, 2.78f), (2.78f, 2.78f) })
+                        Block(img, t, bx - 0.18f, by - 0.18f, bx + 0.18f, by + 0.18f, PixelImage.Rgb(70, 72, 76), 0.3f, 0.03f, Surface.Metal, s + 1u);
+                    Block(img, t, 0.16f, 0.16f, 2.84f, 2.84f, steel, 0.55f, 0.08f, Surface.Metal, s);
+                    for (int i = 0; i < 10; i++)
+                    {
+                        float x = 0.3f + i * 0.24f;
+                        Block(img, t, x, 0.2f, x + 0.12f, 0.32f, PixelImage.Rgb(220, 180, 40), 0.56f, 0.005f, Surface.Plain, s + 2u);
+                    }
+                    Block(img, t, 0.3f, 2.1f, 1.1f, 2.7f, PixelImage.Rgb(58, 62, 70), 0.75f, 0.05f, Surface.Metal, s + 3u);
+                    for (int i = 0; i < 6; i++) Rod(img, t, 0.38f + i * 0.13f, 2.16f, 0.38f + i * 0.13f, 2.64f, 0.018f, PixelImage.Rgb(96, 100, 108), 0.79f, 0.79f);
+                    Block(img, t, 2.4f, chute - 0.3f, 3f, chute + 0.3f, PixelImage.Rgb(80, 84, 90), 0.42f, 0.04f, Surface.Metal, s + 4u);
+                    Block(img, t, 2.46f, chute - 0.18f, 2.98f, chute + 0.18f, PixelImage.Rgb(36, 36, 40), 0.43f, 0.01f, Surface.Metal, s + 5u);
+                    Stud(img, t, 2.6f, 2.6f, 0.06f, PixelImage.Rgb(90, 220, 110), 0.6f);
+                    break;
+                }
+                default:
+                {
+                    // A big olive-green machine: heavy frame, hazard stripes all round, twin motors, a wide chute.
+                    var olive = PixelImage.Rgb(84, 96, 74);
+                    Block(img, t, 0.04f, 0.04f, 2.96f, 2.96f, PixelImage.Rgb(52, 56, 50), 0.4f, 0.05f, Surface.Metal, s);
+                    Block(img, t, 0.2f, 0.2f, 2.8f, 2.8f, olive, 0.62f, 0.08f, Surface.Metal, s + 1u);
+                    for (int i = 0; i < 12; i++)
+                    {
+                        float a = 0.12f + i * 0.235f;
+                        Block(img, t, a, 0.06f, a + 0.11f, 0.17f, PixelImage.Rgb(222, 184, 44), 0.42f, 0.005f, Surface.Plain, s + 2u);
+                        Block(img, t, a, 2.83f, a + 0.11f, 2.94f, PixelImage.Rgb(222, 184, 44), 0.42f, 0.005f, Surface.Plain, s + 2u);
+                    }
+                    foreach (float my in new[] { 0.55f, 2.45f })
+                    {
+                        Round(img, t, 0.55f, my, 0.26f, PixelImage.Rgb(60, 64, 60), 0.82f, 0.04f, Surface.Metal, s + 3u);
+                        Ring(img, t, 0.55f, my, 0.12f, 0.2f, PixelImage.Rgb(110, 116, 106), 0.88f, Surface.Metal, s + 4u);
+                    }
+                    Block(img, t, 2.3f, chute - 0.42f, 3f, chute + 0.42f, PixelImage.Rgb(70, 76, 66), 0.5f, 0.05f, Surface.Metal, s + 5u);
+                    Block(img, t, 2.38f, chute - 0.28f, 2.98f, chute + 0.28f, PixelImage.Rgb(30, 32, 30), 0.51f, 0.01f, Surface.Metal, s + 6u);
+                    Stud(img, t, 2.6f, 0.45f, 0.06f, PixelImage.Rgb(240, 90, 60), 0.7f);
+                    break;
+                }
+            }
+            // The hole its bit turns in, with a collar round it.
+            Round(img, t, c, c, bit + 0.05f, PixelImage.Rgb(26, 22, 20), 0.05f, 0f, Surface.Stone, s + 9u);
+            Ring(img, t, c, c, bit + 0.04f, bit + 0.12f, style == 0 ? DarkWood : PixelImage.Rgb(72, 74, 78), style == 0 ? 0.24f : 0.6f, style == 0 ? Surface.Wood : Surface.Metal, s + 10u);
+            return Finish(img, t, rotation);
+        }
+
+        /// <summary>A drill's bit seen from above, centred: it turns while the drill digs (Building/Factory.cs).</summary>
+        public static PixelImage DrillBitPiece(int ppu, int style)
+        {
+            float t = ppu;
+            float r = DrillBitRadius(style);
+            var img = Canvas(r * 2f + 0.04f, r * 2f + 0.04f, t);
+            float c = r + 0.02f;
+            uint s = 5300u + (uint)style * 7u;
+            switch (style)
+            {
+                case 0:
+                    // A wooden cross with stone-tipped blades.
+                    Round(img, t, c, c, r * 0.3f, Oak, 0.3f, 0.04f, Surface.Wood, s);
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float a = i * Mathf.PI * 0.5f;
+                        float ex = c + Mathf.Cos(a) * r * 0.82f, ey = c + Mathf.Sin(a) * r * 0.82f;
+                        Rod(img, t, c, c, ex, ey, 0.05f, Oak, 0.28f, 0.24f);
+                        Round(img, t, ex, ey, 0.08f, Granite, 0.26f, 0.03f, Surface.Stone, s + (uint)i);
+                    }
+                    Stud(img, t, c, c, 0.06f, Iron, 0.34f);
+                    break;
+                default:
+                {
+                    // A steel cutting head: a disc with curved blades and teeth round the edge.
+                    var metal = style == 1 ? PixelImage.Rgb(96, 96, 100) : style == 2 ? PixelImage.Rgb(150, 154, 160) : PixelImage.Rgb(130, 136, 128);
+                    Round(img, t, c, c, r * 0.92f, PixelImage.Scale(metal, 0.7f), 0.2f, 0.02f, Surface.Metal, s);
+                    int blades = style == 1 ? 3 : 4;
+                    for (int b = 0; b < blades; b++)
+                    {
+                        float a0 = b * Mathf.PI * 2f / blades;
+                        for (int k = 0; k < 6; k++)
+                        {
+                            float f0 = k / 6f, f1 = (k + 1) / 6f;
+                            float r0 = r * (0.2f + 0.7f * f0), r1 = r * (0.2f + 0.7f * f1);
+                            float b0 = a0 + f0 * 1.1f, b1 = a0 + f1 * 1.1f;
+                            Rod(img, t, c + Mathf.Cos(b0) * r0, c + Mathf.Sin(b0) * r0, c + Mathf.Cos(b1) * r1, c + Mathf.Sin(b1) * r1, r * 0.07f, metal, 0.3f, 0.3f);
+                        }
+                    }
+                    int teeth = style == 1 ? 8 : 12;
+                    for (int i = 0; i < teeth; i++)
+                    {
+                        float a = i * Mathf.PI * 2f / teeth;
+                        Stud(img, t, c + Mathf.Cos(a) * r * 0.86f, c + Mathf.Sin(a) * r * 0.86f, r * 0.07f, PixelImage.Rgb(200, 196, 180), 0.32f);
+                    }
+                    Round(img, t, c, c, r * 0.22f, PixelImage.Scale(metal, 1.1f), 0.36f, 0.04f, Surface.Metal, s + 1u);
                     break;
                 }
             }

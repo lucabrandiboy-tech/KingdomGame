@@ -130,13 +130,19 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
 - **Factory** (Factorio-style, the user's wish: "really close to Factorio"). The simulation is plain C# in
   `Assets/Scripts/Automation` (`FactoryWorld`: belts carrying `BeltItem`s one way, one lane, curves and side-loading,
   `Arm`s (inserters), ports (`IItemPort`: chests, machines); `Crafter`: furnaces and assemblers with `Recipe`s and
-  burner fuel), unit-tested in `tools/tests/FactoryTests.cs`. `Building/Factory.cs` runs it per kingdom
-  (`Kingdom.Factory`): registers machines (`MachineKind.Conveyor/Arm/Furnace/Assembler`, from `Machine.Setup`), makes
+  burner fuel; `Drill`: digs the ore under it (`IOreGround`) out of its chute, `Drill.OutputOf`), unit-tested in
+  `tools/tests/FactoryTests.cs`. `Building/Factory.cs` runs it per kingdom
+  (`Kingdom.Factory`): registers machines (`MachineKind.Conveyor/Arm/Furnace/Assembler/Drill`, from `Machine.Setup`), makes
   storages ports and houses' belt holes links, draws items and arms, saves (`Factory.Saved`). Numbers in `FactoryConfig`
   (recipes, fuels) and `MachineConfig` (swing, craft speed, burner, energy, pollution). Older machines push their goods onto
-  touching belts (`Machine.PushOut`). E at an arm/furnace/assembler: `UI/FactoryPanel.cs`. Art in `Art/FactoryArt.cs`
-  (belts per facing with left/right curves, arms, furnaces, assemblers, `ArtKeys.Item` icons). Belts point the way they're
-  dragged (`BuildController.Placing`); nothing may sit on a belt (`Kingdom.CanPlace`).
+  touching belts (`Machine.PushOut`). E at an arm/furnace/assembler/drill: `UI/FactoryPanel.cs`. Art in `Art/FactoryArt.cs`
+  (belts per facing with left/right curves, arms, furnaces, assemblers, drills and their bits, `ArtKeys.Item` icons). Belts
+  point the way they're dragged (`BuildController.Placing`); nothing may sit on a belt (`Kingdom.CanPlace`).
+- **Ore fields** (`Economy/OreMap.cs`, plain C#, checked by `tools/world-tests`): iron, copper, coal and stone patches
+  worked out from the seed (`OreMap.Generate`, pure: four round the start, then at most one per 96-tile square, inside
+  it), richer further out; only what drills took is kept (`OreMap.Save`, `SaveData.ore`). Ore tiles have no trees or
+  rocks (`WorldGenerator`). `GroundStreamer` draws them as four more masked ground layers (`GroundArt.Ore`,
+  `GroundArt.OreMasksAt`, Ground+5..+8) and makes a square again when a tile is a quarter emptier (`OreMap.Changed`).
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.
@@ -182,7 +188,8 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
   tests can compile them.
 - `dotnet run --project tools/world-tests/WorldTests.csproj`: the endless world outside
   Unity (`Economy/NatureMap.cs` with stand-ins in `tools/world-tests/Stubs.cs` and the art
-  preview's `Shim.cs`; `GroundArt.PatchMasksAt`/`TintAt` squares joining up).
+  preview's `Shim.cs`; `GroundArt.PatchMasksAt`/`TintAt` squares joining up; the ore fields, `Economy/OreMap.cs`, and their
+  masks, `GroundArt.OreMasksAt`).
 - `dotnet run --project tools/net-tests/NetTests.csproj`: the online code that
   doesn't need Unity (`Assets/Scripts/Networking/Core`, plain C#: keep `UnityEngine`
   out of it) with LiteNetLib, run as a real server and real players over UDP.

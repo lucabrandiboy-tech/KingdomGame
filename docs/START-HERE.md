@@ -100,5 +100,5 @@ and others' walls can't be damaged; that's the next online step.
 | `SAVE-TEST.md` | saving and loading |
 | `ENDLESS-WORLD-TEST.md`, `WORLD-CHANGES-TEST.md` | the endless world |
 | `ONLINE-TEST.md` | hosting, joining, everyone's kingdoms |
-| `FACTORY-TEST.md` | the factory (Factorio-style): belts that carry items one way, arms, furnaces, assemblers with recipes |
+| `FACTORY-TEST.md` | the factory (Factorio-style): belts that carry items one way, arms, furnaces, assemblers with recipes, ore fields on the map and drills that dig them |
 | `GAMEPLAY-TEST.md` | the newest gameplay: food and sleep, seasons and weather, fire, deer and wolves, the Warlord boss, survivors at the gate, ruins, goals for each age, trading and defending friends online, kinds of room (I), soldiers and armor, the crafting room |

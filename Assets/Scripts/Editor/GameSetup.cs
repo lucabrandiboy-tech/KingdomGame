@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 28;
+        const int SettingsVersion = 29;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -1341,6 +1341,18 @@ namespace KingdomGame.EditorTools
             BuildingConfig Assembler(string file, string displayName, int style, int wood, int stone, int steel, float speed, bool burner, float energy, float pollution) =>
                 Factory(file, displayName, FurnitureArt.AssemblerArt(style), 3, 1, wood, stone, steel, 16f, 500f, 0.7f,
                     Works(file, MachineKind.Assembler, 0.5f, speed, burner, energy, pollution));
+            // Drills dig the ore fields (Economy/OreMap.cs) under them: `seconds` for each item, `reach` tiles past their sides.
+            BuildingConfig Drill(string file, string displayName, int style, int wood, int stone, int steel, float seconds, int reach, bool burner, float energy, float pollution)
+            {
+                bool small = FurnitureArt.DrillSize(style) == 2;
+                return Factory(file, displayName, FurnitureArt.DrillArt(style), FurnitureArt.DrillSize(style), 4, wood, stone, steel,
+                    small ? 10f : 16f, small ? 400f : 600f, small ? 0.6f : 0.8f,
+                    Asset<MachineConfig>("Economy/Machines/" + file, m =>
+                    {
+                        m.kind = MachineKind.Drill; m.mineSeconds = seconds; m.mineReach = reach; m.burner = burner; m.energyUse = energy;
+                        m.pollution = pollution; m.needsPower = !burner; m.holds = 60; m.workSeconds = 1f; m.reach = 1f;
+                    }));
+            }
 
             // Stone Age: crude, slow, no power.
             var stone = new List<BuildingConfig>
@@ -1352,6 +1364,7 @@ namespace KingdomGame.EditorTools
                     Machine("SaplingBed", MachineKind.TreeFarm, 20f, 6, 3f, 0, 0, false, 2f, plantedTree, 240f)),
                 Arm("WoodenArm", "Wooden arm", 0, 12, 4, 0, 0.75f, true, 0.1f),
                 Furnace("StoneFurnace", "Stone furnace", 0, 0, 30, 0, 1f, true, 0.09f, 2f),
+                Drill("DiggingFrame", "Digging frame", 0, 30, 20, 0, 6f, 0, true, 0.1f, 6f),
                 Belt(Item("LogChute", "Log chute", A("LogChute"), 1, 3, 0, 0, 2f, 60f, 0.05f, true, Machine("LogChute", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 0.6f)), 0),
             };
             // Bronze Age: a tree farm that keeps trees planted round it (they grow back when cut, so a sawmill or woodcutters never run out).
@@ -1374,6 +1387,7 @@ namespace KingdomGame.EditorTools
                 Item("BogIronPit", "Bog iron pit", A("BogIronPit"), 2, 80, 80, 0, 22f, 400f, 0.5f, false, Producer("BogIronPit", ResourceType.Iron, 1, 45f, false)),
                 Item("GranaryFarm", "Granary farm", A("GranaryFarm"), 2, 140, 40, 0, 22f, 300f, 0.4f, false, Producer("GranaryFarm", ResourceType.Food, 4, 30f, false)),
                 Arm("IronArm", "Iron arm", 1, 10, 10, 0, 0.5f, true, 0.12f),
+                Drill("BurnerDrill", "Burner drill", 1, 10, 40, 0, 4f, 0, true, 0.15f, 8f),
             };
             var medieval = new List<BuildingConfig>
             {
@@ -1404,6 +1418,7 @@ namespace KingdomGame.EditorTools
                 Item("SteamDrill", "Steam drill", A("SteamDrill"), 2, 60, 80, 40, 34f, 900f, 1.1f, false, Producer("SteamDrill", ResourceType.Coal, 2, 20f, true, true)),
                 Arm("ElectricArm", "Electric arm", 2, 0, 2, 2, 0.42f, false, 0.013f),
                 Assembler("AssemblingMachine", "Assembling machine", 2, 0, 40, 30, 1f, false, 0.15f, 4f),
+                Drill("ElectricDrill", "Electric mining drill", 2, 0, 30, 20, 2f, 1, false, 0.09f, 6f),
                 // Electric lights (Lights tab): they only shine while a generator's power reaches them.
                 Lamp(Item("ElectricLamp", "Electric lamp", FurnitureArt.ElectricLamp, 1, 5, 5, 3, 6f, 150f, 1.4f, false, Machine("ElectricLamp", MachineKind.Lamp, 1f, 0, 1.3f, 0, 0))),
                 Lamp(Item("Floodlight", "Floodlight", FurnitureArt.Floodlight, 1, 0, 10, 8, 10f, 250f, 1.5f, false, Machine("Floodlight", MachineKind.Lamp, 1f, 0, 2.6f, 0, 0))),
@@ -1428,6 +1443,7 @@ namespace KingdomGame.EditorTools
                 Item("Excavator", "Excavator", A("Excavator"), 2, 40, 160, 100, 44f, 1200f, 1.2f, false, Machine("Excavator", MachineKind.Quarry, 10f, 8, 1f, 0, 0)),
                 Item("MechanizedFarm", "Mechanized farm", A("MechanizedFarm"), 2, 120, 120, 60, 40f, 900f, 0.9f, false, Producer("MechanizedFarm", ResourceType.Food, 15, 20f, true)),
                 Assembler("AssemblyRobot", "Assembly robot", 3, 0, 40, 80, 1.5f, false, 0.3f, 3f),
+                Drill("BigDrill", "Big mining drill", 3, 0, 60, 60, 1f, 2, false, 0.3f, 10f),
                 Belt(Item("ExpressBelt", "Express belt", A("ExpressBelt"), 1, 0, 2, 3, 2f, 220f, 0.05f, true, Machine("ExpressBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 4f)), 6),
             };
             return new[] { stone, bronze, iron, medieval, renaissance, industrial, ww1, ww2 };

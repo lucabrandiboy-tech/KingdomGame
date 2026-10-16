@@ -11,7 +11,7 @@ namespace KingdomGame.Building
     /// the sawmills and quarries within its reach. Those put what they make out, an item at a
     /// time, onto the conveyor belts touching them (Building/Factory.cs carries it along) or
     /// into a storehouse or chest touching them; with nowhere to put it they fill up and stop.
-    /// Belts, arms, furnaces and assemblers are run by the kingdom's <see cref="Factory"/>.
+    /// Belts, arms, furnaces, assemblers and drills are run by the kingdom's <see cref="Factory"/>.
     /// A machine that isn't working is drawn darker. An electric lamp shines only while a
     /// burning generator's power reaches it.
     /// </summary>
@@ -46,9 +46,9 @@ namespace KingdomGame.Building
         /// <summary>Puts back what it held (a saved game).</summary>
         public void SetHeld(int amount) => held = Mathf.Clamp(amount, 0, config != null ? config.holds : 60);
 
-        /// <summary>Run by the factory (belts, arms, furnaces, assemblers), not by itself.</summary>
+        /// <summary>Run by the factory (belts, arms, furnaces, assemblers, drills), not by itself.</summary>
         public bool InFactory => config != null && (config.kind == MachineKind.Conveyor || config.kind == MachineKind.Arm
-            || config.kind == MachineKind.Furnace || config.kind == MachineKind.Assembler);
+            || config.kind == MachineKind.Furnace || config.kind == MachineKind.Assembler || config.kind == MachineKind.Drill);
         float progress, lastWorked = -99f;
 
         /// <summary>A crafting table that needs a crafter: storage is short of what it makes and the ingredients are there.</summary>

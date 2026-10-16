@@ -145,6 +145,7 @@ namespace KingdomGame.UI
             DrawStatus();
             DrawPlayer(font);
             DrawAnnouncement(font);
+            DrawBossBar(font);
 
             if (throne) DrawBuildBar(font);
             else
@@ -308,6 +309,25 @@ namespace KingdomGame.UI
             for (int i = 0; i < 4; i++)
                 GUI.Label(new Rect(rect.x + (i % 2 == 0 ? -2 : 2), rect.y + (i < 2 ? -2 : 2), rect.width, rect.height), plain, announceShadow);
             GUI.Label(rect, $"<b><color=#f0d08a>{message}</color></b>", announce);
+        }
+
+        // A boss's health, big across the top of the screen while it's alive.
+        void DrawBossBar(int font)
+        {
+            var director = Zombies.ZombieDirector.Current;
+            var boss = director != null ? director.Boss : null;
+            if (boss == null) return;
+            var health = boss.Health;
+            float width = Mathf.Min(Screen.width - font * 4f, font * 30f), height = font * 1.5f;
+            var rect = new Rect((Screen.width - width) / 2f, Screen.height * 0.075f, width, height);
+            GUI.Box(rect, GUIContent.none);
+            GUI.Box(rect, GUIContent.none);
+            float fill = Mathf.Clamp01(health.Fraction);
+            var old = GUI.color;
+            GUI.color = new Color(0.62f, 0.1f, 0.08f);
+            GUI.DrawTexture(new Rect(rect.x + 3, rect.y + 3, (rect.width - 6) * fill, rect.height - 6), Texture2D.whiteTexture);
+            GUI.color = old;
+            GUI.Label(rect, $"<b>{boss.Config.displayName.ToUpperInvariant()}   {Mathf.CeilToInt(health.Current)} / {Mathf.CeilToInt(health.Max)}</b>", barLabel);
         }
 
         void DrawFlash()

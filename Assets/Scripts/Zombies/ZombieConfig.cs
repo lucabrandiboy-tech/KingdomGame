@@ -4,7 +4,7 @@ using UnityEngine;
 namespace KingdomGame.Zombies
 {
     /// <summary>What a kind of zombie can do besides clawing (see <see cref="ZombieConfig.ability"/>).</summary>
-    public enum ZombieAbility { None, Spit, Burst, Scream, Burn }
+    public enum ZombieAbility { None, Spit, Burst, Scream, Burn, Ram }
 
     /// <summary>
     /// One kind of zombie: how it looks, how tough and fast it is, how hard it
@@ -14,7 +14,7 @@ namespace KingdomGame.Zombies
     public sealed class ZombieConfig : ScriptableObject
     {
         public string displayName = "Walker";
-        [Tooltip("Which pictures it uses: Walker, Runner, Brute, Crawler, Spitter, Bloater, Screamer, Armored or Giant (see CharacterArt.ZombieKinds).")]
+        [Tooltip("Which pictures it uses: Walker, Runner, Brute, Crawler, Spitter, Bloater, Screamer, Armored, Giant or Warlord (see CharacterArt.ZombieKinds).")]
         public string art = "Walker";
 
         [Header("Body")]
@@ -45,7 +45,8 @@ namespace KingdomGame.Zombies
         [Tooltip("Spit: spits acid at people up to Ability Range away (it lands where they stood, so they can dodge), even at guards up on walls and towers. " +
                  "Burst: blows up when it reaches a wall, door or person, or when it's killed. " +
                  "Scream: when it sees someone, it screams and the zombies round it speed up. " +
-                 "Burn: it's on fire: its blows set wooden things alight, and so does it when it falls.")]
+                 "Burn: it's on fire: its blows set wooden things alight, and so does it when it falls. " +
+                 "Ram: it makes straight for the throne, smashing through walls, doors and anything else in the way instead of going round.")]
         public ZombieAbility ability;
         [Tooltip("Spit: how far it spits. Scream: how far away it sees someone to scream at.")]
         [Min(0)] public float abilityRange = 6f;
@@ -63,6 +64,11 @@ namespace KingdomGame.Zombies
         [Min(1)] public float screamSpeed = 1.5f;
         [Tooltip("...for this many seconds.")]
         [Min(0)] public float screamSeconds = 5f;
+
+        [Header("Boss")]
+        [Tooltip("A boss: it doesn't come with the waves by itself (the Survival Config's Boss comes every Boss Every waves), has a health bar across the top of the screen, " +
+                 "and drops the Survival Config's boss loot.")]
+        public bool boss;
 
         [Header("Waves (survival)")]
         [Tooltip("The first wave it comes in.")]

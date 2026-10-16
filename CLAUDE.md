@@ -98,6 +98,9 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   go out of sight round the ruler (not saved, not shared online). Animals are `Team.Wild`: shots (`Health.RaycastFoes`)
   and blows hit them, zombies ignore them. Wolves keep out of `FireLight.All`. Hunters (`Job.Hunter`) shoot with
   `VillagerConfig.huntWeapon` and fetch meat bags (`LootBag.Take`); towers shoot wolves when no zombie is in range.
+- **Boss** (`SurvivalConfig.boss`, a `ZombieConfig` with `boss` and `ZombieAbility.Ram`): every `bossEvery` waves;
+  rams straight for the throne through walls (`ZombieDirector.RamGoal/SmashAhead`), health bar in `GameHud.DrawBossBar`,
+  loot in `ZombieDirector.BossLoot`.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.

@@ -59,6 +59,17 @@ namespace KingdomGame.Zombies
         [Tooltip("Zombies come from a ring round your kingdom (just outside its outermost walls), at least this many tiles from you, your villagers and your throne.")]
         [Min(4)] public float spawnDistance = 24f;
 
+        [Header("Boss")]
+        [Tooltip("The boss (a Warlord with a battering ram): every Boss Every waves it comes with the wave (two on the wave after that, and so on).")]
+        public ZombieConfig boss;
+        [Min(1)] public int bossEvery = 10;
+        [Tooltip("What a dead boss leaves: a chest of this much wood, stone and food each...")]
+        [Min(0)] public int bossLoot = 300;
+        [Tooltip("...and this much of each ore (copper, iron, gold, coal)...")]
+        [Min(0)] public int bossOre = 60;
+        [Tooltip("...and experience for the kingdom (villager upgrades: V).")]
+        [Min(0)] public int bossXp = 150;
+
         [Header("Night")]
         [Tooltip("At night zombies are this many times as fast...")]
         [Min(0.1f)] public float nightSpeed = 1.2f;

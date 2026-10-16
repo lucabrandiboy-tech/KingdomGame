@@ -33,7 +33,7 @@ namespace KingdomGame.Zombies
         int[] firstWaves = new int[0];
         float[] weights = new float[0];
         float spawnClock, announceUntil;
-        int spawned;
+        int spawned, bossesToCome;
 
         public Phase Now { get; private set; }
         /// <summary>The current wave (or the last one, between waves). 0 before the first.</summary>
@@ -66,6 +66,11 @@ namespace KingdomGame.Zombies
                 weights[i] = kinds[i] != null ? kinds[i].weight : 0f;
             }
             if (kinds.Length == 0) Debug.LogError("The Survival Config has no zombies. Run KingdomGame > Build Game Scenes again.", config);
+            if (zombies != null) zombies.ZombieDied += z =>
+            {
+                if (z != null && z.Config.boss && Now != Phase.Over)
+                    Announce($"The {z.Config.displayName} has fallen! It left a chest of loot where it fell.", 6f);
+            };
             Now = Phase.Preparing;
             TimeLeft = config.prepSeconds;
             Announce(config.hordesAtNight && dayNight != null ? "Build your defences! The dead come at nightfall."
@@ -155,6 +160,9 @@ namespace KingdomGame.Zombies
             Now = Phase.Fighting;
             TimeLeft = 0f;
             ToCome = WaveMath.Count(wave, config.firstWaveZombies, config.extraZombiesPerWave, config.growth);
+            // Every Boss Every waves, a boss comes too (two the next time, and so on).
+            bossesToCome = config.boss != null && wave % Mathf.Max(1, config.bossEvery) == 0 ? wave / Mathf.Max(1, config.bossEvery) : 0;
+            ToCome += bossesToCome;
             spawned = 0;
             spawnClock = 1f;   // the first one straight away
             // Bigger waves come from more sides at once.
@@ -162,7 +170,10 @@ namespace KingdomGame.Zombies
             int sides = Mathf.Clamp(1 + (wave - 1) / 3, 1, 4);
             float first = Random.value;
             for (int i = 0; i < sides; i++) entries.Add(Mathf.Repeat(first + i / (float)sides + Random.Range(-0.08f, 0.08f), 1f));
-            Announce($"Wave {wave}: {ToCome} zombies are coming from the {Sides()}!", 5f);
+            if (bossesToCome > 0)
+                Announce($"Wave {wave}: {ToCome - bossesToCome} zombies and {(bossesToCome == 1 ? "a" : bossesToCome.ToString())} {config.boss.displayName.ToUpperInvariant()}{(bossesToCome == 1 ? "" : "S")} " +
+                         $"with a battering ram are coming from the {Sides()}! It goes for your throne, through your walls.", 8f);
+            else Announce($"Wave {wave}: {ToCome} zombies are coming from the {Sides()}!", 5f);
             Audio.Sounds.PlayHere(Audio.Sound.Horn);
         }
 
@@ -218,7 +229,8 @@ namespace KingdomGame.Zombies
             while (spawnClock >= 1f && ToCome > 0 && zombies.Attacking < config.maxAlive)
             {
                 spawnClock -= 1f;
-                var kind = PickKind(Wave);
+                bool boss = bossesToCome > 0;
+                var kind = boss ? config.boss : PickKind(Wave);
                 if (kind == null)
                 {
                     ToCome = 0;   // no zombies set up at all
@@ -228,6 +240,7 @@ namespace KingdomGame.Zombies
                 if (!zombies.FindSpawnPoint(along + Random.Range(-0.012f, 0.012f), config.spawnDistance, out var at))
                     break;   // nowhere to come from right now: try again next frame
                 zombies.Spawn(kind, at, toughness);
+                if (boss) bossesToCome--;
                 spawned++;
                 ToCome--;
             }

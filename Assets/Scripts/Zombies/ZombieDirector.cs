@@ -391,6 +391,7 @@ namespace KingdomGame.Zombies
             }
             Kills++;
             Audio.Sounds.Play(Audio.Sound.ZombieDie, at);
+            if (c.boss) BossLoot(at, c);
             // A burning zombie falls in flames: wood next to it may catch.
             var fires = Fires.Current;
             if (c.ability == ZombieAbility.Burn && fires != null && fires.Config != null) fires.IgniteNear(at, 1.2f, fires.Config.burningBlowIgnites);
@@ -411,6 +412,18 @@ namespace KingdomGame.Zombies
                 LootBag.Drop(at, wood, stone, c.lootAmount - wood - stone);
             }
             ZombieDied?.Invoke(z);
+        }
+
+        // A boss leaves a big chest: wood, stone, food and every ore, and experience for the kingdom.
+        void BossLoot(Vector2 at, ZombieConfig c)
+        {
+            var counts = new int[Inventory.TypeCount];
+            counts[(int)ResourceType.Wood] = counts[(int)ResourceType.Stone] = counts[(int)ResourceType.Food] = config.bossLoot;
+            foreach (var ore in new[] { ResourceType.Copper, ResourceType.Iron, ResourceType.Gold, ResourceType.Coal }) counts[(int)ore] = config.bossOre;
+            var chest = LootBag.Drop(at, counts);
+            if (chest != null) chest.transform.localScale = Vector3.one * 1.6f;
+            if (kingdom != null && config.bossXp > 0) kingdom.AddXp(config.bossXp, $"The {c.displayName} is dead");
+            Audio.Sounds.PlayHere(Audio.Sound.Chime);
         }
 
         /// <summary>A zombie that can't reach anyone wanders off into the dark (not a kill).</summary>
@@ -692,6 +705,54 @@ namespace KingdomGame.Zombies
             return best;
         }
 
+        /// <summary>The boss of the Survival Config (it comes every Boss Every waves), or null.</summary>
+        public ZombieConfig BossKind => config != null ? config.boss : null;
+
+        /// <summary>A boss that's alive (for its health bar), or null.</summary>
+        public Zombie Boss
+        {
+            get
+            {
+                foreach (var z in zombies) if (z != null && z.Config.boss && z.Health != null && !z.Health.Dead) return z;
+                return null;
+            }
+        }
+
+        /// <summary>Where a rammer heads: the throne. False once it's there (or with no throne): then it goes for people like the rest.</summary>
+        public bool RamGoal(Vector2 from, out Vector2 goal)
+        {
+            goal = default;
+            if (kingdom == null || kingdom.Throne == null) return false;
+            goal = kingdom.Throne.Center;
+            return (goal - from).sqrMagnitude > 2.5f * 2.5f;
+        }
+
+        /// <summary>
+        /// What a rammer at <paramref name="from"/> going <paramref name="direction"/> (its body <paramref name="half"/> tiles
+        /// from its middle) runs into next: true and its cell if it's something to smash (a wall, door, furniture, a
+        /// storehouse); <paramref name="stopped"/> if it's something it can't (a tree, a rock, a house, the throne).
+        /// </summary>
+        public bool SmashAhead(Vector2 from, Vector2 direction, float half, out Vector2Int cell, out bool stopped)
+        {
+            stopped = false;
+            cell = default;
+            var side = new Vector2(-direction.y, direction.x);
+            var front = from + direction * (half + 0.35f);
+            foreach (float across in new[] { 0f, -half, half })
+            {
+                var c = CellOf(front + side * across);
+                if (Walkable(c)) continue;
+                var chunk = world != null ? world.ChunkAt(c) : null;
+                if ((chunk != null && chunk.Owner != null && !chunk.Owner.Remote) || BreakableThing(c))
+                {
+                    cell = c;
+                    return true;
+                }
+                stopped = true;
+            }
+            return false;
+        }
+
         /// <summary>Whether a cell holds something built that zombies can break (furniture, a door, a chest...), not a wall.</summary>
         public bool BreakableThing(Vector2Int cell)
         {
@@ -712,6 +773,12 @@ namespace KingdomGame.Zombies
         public void HitCell(Vector2Int cell, Zombie z, float blow = -1f)
         {
             if (blow < 0f) Audio.Sounds.Play(Audio.Sound.ZombieHit, (Vector2)cell + new Vector2(0.5f, 0.5f));
+            if (z.Config.ability == ZombieAbility.Ram)
+            {
+                // A battering ram: a boom, and dust and splinters flying.
+                Audio.Sounds.Play(Audio.Sound.ExplosionSmall, (Vector2)cell + new Vector2(0.5f, 0.5f), 0.6f);
+                if (world != null) world.Burst((Vector2)cell + new Vector2(0.5f, 0.5f), new Color32(120, 104, 84, 255), 24, 3.5f);
+            }
             // A burning zombie's blows set wood alight.
             var fires = Fires.Current;
             if (z.Config.ability == ZombieAbility.Burn && fires != null && fires.Config != null)

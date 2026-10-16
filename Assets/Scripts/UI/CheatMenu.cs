@@ -243,6 +243,8 @@ namespace KingdomGame.UI
             GUILayout.Label($"Alive: {zombies.Alive}. Sent ones come from the edge of the dark, like a wave.", text);
             if (GUILayout.Button("Remove all zombies (no kills, no bursts)", button))
                 foreach (var z in new List<Zombie>(zombies.Zombies)) zombies.Vanish(z);
+            var boss = zombies.BossKind;
+            if (boss != null && GUILayout.Button($"+1 {boss.displayName} (the boss)", button)) Send(boss, 1);
             for (int i = 0; i < kinds.Length; i += 3)
             {
                 GUILayout.BeginHorizontal();

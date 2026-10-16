@@ -425,7 +425,7 @@ static class Program
             // with a spitter's acid and a screamer's scream.
             for (int i = 0; i < CharacterArt.ZombieKinds.Length; i++)
             {
-                float x = -7.2f + i * 1.8f;
+                float x = -7.9f + i * 1.72f;
                 Zombie(CharacterArt.ZombieKinds[i], x, -14.3f, 90f, 1);
                 Zombie(CharacterArt.ZombieKinds[i], x, -16.6f, 90f, 5);
             }

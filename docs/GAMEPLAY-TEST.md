@@ -154,3 +154,27 @@ Try it:
    to the throne, and a hunter turn and shoot.
 
 Tell me if deer are too hard or too easy to hunt, and if wolves are too much.
+
+## 5. The boss: a Warlord every 10 waves
+
+Every 10th wave (10, 20, 30...) a **Warlord** comes with the horde (two on wave 20, three
+on wave 30): a huge zombie in rusty armor and a horned helmet, carrying a **battering ram**.
+
+- It doesn't walk round your walls: it makes **straight for your throne** and rams through
+  whatever is in the way. Two blows break a stone wall tile, one a wooden door. Each blow
+  booms and throws up dust. Trees, rocks and houses it walks round.
+- It's slow but very tough (2,000 health, more in later waves, and armor that takes 8 off
+  every hit: small quick shots barely hurt it). Its health bar is across the top of the
+  screen, and its eyes glow red.
+- Killed, it leaves a big **chest**: 300 wood, stone and food, and 60 of each ore (copper,
+  iron, gold, coal), plus 150 XP (V to spend).
+
+Try it:
+
+1. Survival. **F10 > Waves > Start wave 10 now.** The message says a Warlord is coming.
+2. Watch it come at a wall: it rams through instead of going round to a gate.
+3. Fight it (towers, traps, F10 > No damage if you like). Its bar goes down; when it falls,
+   walk over the chest.
+4. Free build: **F10 > Zombies > +1 Warlord** sends one at you.
+
+Tell me if it's too strong or too weak for wave 10.

@@ -157,7 +157,7 @@ namespace KingdomGame.Zombies
                 var eyeRenderer = eyes.gameObject.AddComponent<SpriteRenderer>();
                 eyeRenderer.sprite = sprites.Eyes;
                 eyeRenderer.sortingOrder = SortOrder.Characters;
-                eyeRenderer.color = new Color(1f, 1f, 1f, 0.85f);
+                eyeRenderer.color = config.boss ? new Color(1f, 0.42f, 0.32f, 1f) : new Color(1f, 1f, 1f, 0.85f);   // a boss's burn red
                 Look.MakeGlow(eyeRenderer);
             }
             if (config.ability == ZombieAbility.Burn)
@@ -236,6 +236,21 @@ namespace KingdomGame.Zombies
                         return;
                     }
                 }
+            }
+            else if (Config.ability == ZombieAbility.Ram && Time.time >= chaseBlockedUntil && !Camping && director.RamGoal(position, out var goal))
+            {
+                // A rammer: straight for the throne, smashing whatever is in the way (a tree or a house: round it, for a moment).
+                want = goal - position;
+                if (director.SmashAhead(position, want.normalized, Radius * 0.8f, out var wall, out bool stopped))
+                {
+                    if (DistanceTo(wall) - Radius <= Config.reach)
+                    {
+                        StartAttack(null, wall);
+                        Show(Vector2.zero, dt);
+                        return;
+                    }
+                }
+                else if (stopped) chaseBlockedUntil = Time.time + 2.5f;
             }
             else if (Camping)
             {

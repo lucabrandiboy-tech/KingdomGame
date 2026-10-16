@@ -21,7 +21,7 @@ namespace KingdomGame.Art
         /// <summary>The fallen are drawn for this many directions (turned the rest of the way like the living).</summary>
         public const int DeadDirections = 4;
         /// <summary>The kinds of zombie (each has its own pictures; ArtKeys.Zombie).</summary>
-        public static readonly string[] ZombieKinds = { "Walker", "Runner", "Brute", "Crawler", "Spitter", "Bloater", "Screamer", "Armored", "Giant" };
+        public static readonly string[] ZombieKinds = { "Walker", "Runner", "Brute", "Crawler", "Spitter", "Bloater", "Screamer", "Armored", "Giant", "Warlord" };
         /// <summary>Share of the art detail a kind's pictures are drawn at: the first three at half, the newer ones at a quarter (video memory).</summary>
         public static float ZombieDetail(string kind) => kind == "Walker" || kind == "Runner" || kind == "Brute" ? 0.5f : 0.25f;
         /// <summary>Picture width of the ruler and a villager, in tiles.</summary>
@@ -186,11 +186,12 @@ namespace KingdomGame.Art
                     b.Skin = PixelImage.Rgb(122, 128, 104); b.Cloth = PixelImage.Rgb(74, 58, 44); b.Size = 0.92f; b.Hunch = 0.08f; b.Stride = 0.1f;
                     break;
                 case "Brute":
-                case "Giant":   // a brute twice over
-                    bool giant = kind == "Giant";
-                    b.Skin = giant ? PixelImage.Rgb(92, 84, 96) : PixelImage.Rgb(104, 98, 112);
-                    b.Cloth = giant ? PixelImage.Rgb(40, 34, 30) : PixelImage.Rgb(48, 40, 36);
-                    b.Size = giant ? 2.1f : 1.32f;
+                case "Giant":     // a brute twice over
+                case "Warlord":   // the boss: bigger still, in rusty armor, with a battering ram
+                    bool giant = kind == "Giant", warlord = kind == "Warlord";
+                    b.Skin = warlord ? PixelImage.Rgb(84, 78, 88) : giant ? PixelImage.Rgb(92, 84, 96) : PixelImage.Rgb(104, 98, 112);
+                    b.Cloth = warlord ? PixelImage.Rgb(46, 30, 26) : giant ? PixelImage.Rgb(40, 34, 30) : PixelImage.Rgb(48, 40, 36);
+                    b.Size = warlord ? 2.4f : giant ? 2.1f : 1.32f;
                     b.Hunch = 0.03f; b.HeadR = 0.062f; b.BodyX = 0.12f; b.BodyY = 0.2f; b.Shoulder = 0.19f; b.Arm = 0.055f; b.Hand = 0.045f;
                     break;
                 case "Crawler":   // low on the ground (drawn by Crawler)
@@ -222,7 +223,8 @@ namespace KingdomGame.Art
             var skin = b.Skin;
             var cloth = b.Cloth;
             float k = b.Size;
-            bool big = kind == "Brute" || kind == "Giant";
+            bool big = kind == "Brute" || kind == "Giant" || kind == "Warlord";
+            if (kind == "Warlord") return Warlord(ppu, light, b, frame);
             float step = frame < WalkFrames ? Stride(frame) : 0f;
             float hunch = b.Hunch + (frame == 5 ? 0.05f : 0f);
             float stride = b.Stride;
@@ -314,6 +316,69 @@ namespace KingdomGame.Art
             }
             // The arms reach far out in front when it strikes, so the picture reaches further forward than back.
             return Figure(ppu, 0.17f * k, 0.62f * k, 0.3f * k, light, parts);
+        }
+
+        // The Warlord (the boss): a giant in rusty plates and an iron helmet, carrying a battering ram (a log with an
+        // iron head and bands) under its right arm, steadied by its left hand. Frame 4 draws the ram back, 5 drives it home.
+        static PixelImage Warlord(int ppu, Vector3 light, ZombieShape b, int frame)
+        {
+            float k = b.Size;
+            float step = frame < WalkFrames ? Stride(frame) : 0f;
+            float hunch = b.Hunch + (frame == 5 ? 0.05f : 0f);
+            float shove = frame == 4 ? -0.12f : frame == 5 ? 0.18f : step * 0.02f;   // the ram, back or forward
+            var skin = b.Skin;
+            var plate = PixelImage.Rgb(70, 62, 60);   // dark iron, rusting
+            var iron = PixelImage.Rgb(54, 52, 56);
+            var log = PixelImage.Rgb(74, 54, 38);
+            var horn = PixelImage.Rgb(170, 158, 132);
+            var parts = new System.Collections.Generic.List<Part>();
+            var boot = PixelImage.Rgb(36, 30, 26);
+            parts.Add(Limb((0.02f + step * b.Stride) * k, 0.065f * k, 0.05f, (0.1f + step * b.Stride) * k, 0.072f * k, 0.05f, 0.03f * k, Mat.Boot, boot));
+            parts.Add(Limb((0.02f - step * b.Stride) * k, -0.065f * k, 0.05f, (0.1f - step * b.Stride) * k, -0.06f * k, 0.05f, 0.03f * k, Mat.Boot, boot));
+            // Body in rags under rusty plates, with iron on the shoulders.
+            parts.Add(Body(hunch * k, 0f, 1.17f, b.BodyX * k, b.BodyY * k, 0.19f, Mat.Rag, b.Cloth));
+            parts.Add(Body((hunch + 0.01f) * k, 0f, 1.19f, (b.BodyX - 0.01f) * k, (b.BodyY - 0.05f) * k, 0.19f, Mat.Steel, plate));
+            for (int side = -1; side <= 1; side += 2)
+                parts.Add(Body(hunch * k, side * b.Shoulder * k, 1.3f, 0.05f * k, 0.042f * k, 0.07f, Mat.Steel, plate));
+            parts.Add(Ball((hunch - 0.02f) * k, 0.1f * k, 1.33f, 0.03f * k, Mat.Wound, PixelImage.Rgb(86, 20, 18)));
+            // The ram: a log carried low on its right side, an iron head on the front, two iron bands.
+            float ramY = -0.15f * k, ramZ = 1.12f, ramR = 0.052f * k;
+            float back = (-0.12f + shove) * k, front = (0.5f + shove) * k;
+            parts.Add(Limb(back, ramY, ramZ, front, ramY, ramZ, ramR, Mat.Hide, log));
+            parts.Add(Limb(front - 0.01f * k, ramY, ramZ, front + 0.1f * k, ramY, ramZ, ramR * 1.2f, Mat.Steel, iron));
+            parts.Add(Ball(front + 0.1f * k, ramY, ramZ, ramR * 1.2f, Mat.Steel, iron));
+            foreach (float band in new[] { 0.05f, 0.3f })
+            {
+                float bx = (band + shove) * k;
+                parts.Add(Limb(bx, ramY, ramZ, bx + 0.025f * k, ramY, ramZ, ramR * 1.1f, Mat.Steel, iron));
+            }
+            // Right hand under the back of the ram, left hand reaching across to steady it further up.
+            float arm = b.Arm * k, hand = b.Hand * k;
+            var gripBack = new Vector3((0.0f + shove) * k, ramY - 0.02f * k, ramZ + 0.05f);
+            var gripFront = new Vector3((0.26f + shove) * k, ramY + 0.03f * k, ramZ + 0.06f);
+            var rightShoulder = new Vector3(hunch * k, -b.Shoulder * k, 1.29f);
+            var leftShoulder = new Vector3(hunch * k, b.Shoulder * k, 1.29f);
+            var rightElbow = new Vector3((hunch - 0.06f + shove * 0.4f) * k, -0.22f * k, 1.2f);
+            var leftElbow = new Vector3((hunch + 0.14f + shove * 0.6f) * k, 0.06f * k, 1.24f);
+            parts.Add(Limb(rightShoulder.x, rightShoulder.y, rightShoulder.z, rightElbow.x, rightElbow.y, rightElbow.z, arm, Mat.Rag, b.Cloth));
+            parts.Add(Limb(rightElbow.x, rightElbow.y, rightElbow.z, gripBack.x, gripBack.y, gripBack.z, arm * 0.85f, Mat.Rot, skin));
+            parts.Add(Ball(gripBack.x, gripBack.y, gripBack.z, hand, Mat.Rot, skin));
+            parts.Add(Limb(leftShoulder.x, leftShoulder.y, leftShoulder.z, leftElbow.x, leftElbow.y, leftElbow.z, arm, Mat.Rag, b.Cloth));
+            parts.Add(Limb(leftElbow.x, leftElbow.y, leftElbow.z, gripFront.x, gripFront.y, gripFront.z, arm * 0.85f, Mat.Rot, skin));
+            parts.Add(Ball(gripFront.x, gripFront.y, gripFront.z, hand, Mat.Rot, skin));
+            // The head under an iron helmet with a nose guard.
+            float headR = b.HeadR * k;
+            float headX = (hunch + b.HeadForward) * k;
+            parts.Add(Ball(headX, 0f, 1.47f, headR, Mat.Rot, skin));
+            parts.Add(Ball(headX - 0.012f * k, 0f, 1.5f, headR * 1.12f, Mat.Steel, iron));
+            parts.Add(Limb(headX + headR * 0.7f, 0f, 1.52f, headX + headR * 1.05f, 0f, 1.47f, 0.012f * k, Mat.Steel, iron));
+            // Two horns on the helmet, sweeping out and back.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                parts.Add(Limb(headX - 0.02f * k, side * headR * 0.8f, 1.53f, headX - 0.05f * k, side * (headR + 0.05f * k), 1.55f, 0.016f * k, Mat.Boot, horn));
+                parts.Add(Limb(headX - 0.05f * k, side * (headR + 0.05f * k), 1.55f, headX - 0.11f * k, side * (headR + 0.065f * k), 1.6f, 0.009f * k, Mat.Boot, horn));
+            }
+            return Figure(ppu, 0.32f * k, 0.8f * k, 0.3f * k, light, parts);
         }
 
         // A crawler: legs dragging behind (one gone at the knee), pulling itself along the ground on its arms.

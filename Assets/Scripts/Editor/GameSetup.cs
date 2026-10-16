@@ -391,6 +391,14 @@ namespace KingdomGame.EditorTools
                 z.firstWave = 8; z.weight = 0.3f; z.lootChance = 0.25f; z.lootAmount = 8;
             });
             var allZombies = new[] { walker, runner, brute, crawler, screamer, spitter, bloater, armored, giant, burning };
+            // The boss, every 10th wave: a Warlord with a battering ram, straight for the throne through the walls.
+            var warlord = Asset<ZombieConfig>("Zombies/Warlord", z =>
+            {
+                z.displayName = "Warlord"; z.art = "Warlord"; z.health = 2000f; z.moveSpeed = 0.7f; z.radius = 0.55f;
+                z.damage = 40f; z.attackSeconds = 2.2f; z.reach = 0.55f; z.structureDamage = 500f; z.wallDamage = 330f; z.wallScratch = smash;
+                z.armor = 8f; z.ability = ZombieAbility.Ram; z.boss = true;
+                z.firstWave = 10; z.weight = 0f; z.lootChance = 0f; z.lootAmount = 0;
+            });
             var survival = Asset<SurvivalConfig>("Zombies/SurvivalConfig", s => s.zombies = allZombies);
 
             var content = Asset<GameContent>("GameContent", c =>
@@ -580,6 +588,11 @@ namespace KingdomGame.EditorTools
                 }
             }
             if (fireUpdate) Burnable(content);
+            if (content.survival != null && content.survival.boss == null)
+            {
+                content.survival.boss = warlord;
+                EditorUtility.SetDirty(content.survival);
+            }
             HunterBow(content.villager);
 
             if (villagerNeeds && content.kingdom != null && content.kingdom.startFood < 60)

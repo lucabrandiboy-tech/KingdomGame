@@ -19,6 +19,7 @@ namespace KingdomGame.Building
         Kitchen,
         Workshop,
         Storeroom,
+        Crafting,
     }
 
     /// <summary>
@@ -31,7 +32,7 @@ namespace KingdomGame.Building
         public static readonly RoomType[] Guide =
         {
             RoomType.Throne, RoomType.Infirmary, RoomType.Barracks, RoomType.Cottage, RoomType.Bedroom, RoomType.GreatHall, RoomType.DiningHall,
-            RoomType.Armory, RoomType.Training, RoomType.Library, RoomType.Kitchen, RoomType.Workshop, RoomType.Storeroom,
+            RoomType.Armory, RoomType.Training, RoomType.Library, RoomType.Crafting, RoomType.Kitchen, RoomType.Workshop, RoomType.Storeroom,
         };
 
         /// <summary>
@@ -49,6 +50,7 @@ namespace KingdomGame.Building
             if (count(RoomTag.Weapons) > 0) return RoomType.Armory;
             if (count(RoomTag.Training) > 0) return RoomType.Training;
             if (count(RoomTag.Books) > 0) return RoomType.Library;
+            if (count(RoomTag.Crafting) > 0) return RoomType.Crafting;
             if (count(RoomTag.Cooking) > 0) return RoomType.Kitchen;
             if (count(RoomTag.Workshop) > 0) return RoomType.Workshop;
             if (count(RoomTag.Storage) > 0) return RoomType.Storeroom;
@@ -69,6 +71,7 @@ namespace KingdomGame.Building
                 case RoomType.Armory: return "Armory";
                 case RoomType.Training: return "Training room";
                 case RoomType.Library: return "Library";
+                case RoomType.Crafting: return "Crafting room";
                 case RoomType.Kitchen: return "Kitchen";
                 case RoomType.Workshop: return "Workshop";
                 case RoomType.Storeroom: return "Storeroom";
@@ -92,6 +95,7 @@ namespace KingdomGame.Building
                 case RoomType.Armory: return "a weapon rack or an armor stand";
                 case RoomType.Training: return "a training dummy (no weapon racks: they make it an armory)";
                 case RoomType.Library: return "a bookshelf";
+                case RoomType.Crafting: return "a tool bench";
                 case RoomType.Kitchen: return "a cauldron, hearth, oven or stove";
                 case RoomType.Workshop: return "an anvil or a crafting table";
                 case RoomType.Storeroom: return "chests, barrels or crates";
@@ -117,6 +121,9 @@ namespace KingdomGame.Building
                 case RoomType.Training: return "soldiers with nothing to fight train at its dummies and go up in rank.";
                 case RoomType.Library: return $"research goes {Percent(k != null ? k.libraryResearch : 0.1f)} faster.";
                 case RoomType.Kitchen: return "cooked meals: each meal takes less food.";
+                case RoomType.Crafting:
+                    return "E at its tool bench: order better tools (villagers gather and build faster) and supplies (bandages, cures for bites); " +
+                           $"crafters make them there, and work {Percent(k != null ? k.workshopCrafting : 0.15f)} faster (like a workshop).";
                 case RoomType.Workshop: return $"crafters work {Percent(k != null ? k.workshopCrafting : 0.15f)} faster.";
                 case RoomType.Storeroom: return "somewhere tidy to keep things.";
                 default: return "";

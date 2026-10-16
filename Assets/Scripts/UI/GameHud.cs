@@ -242,6 +242,13 @@ namespace KingdomGame.UI
                     GUI.Box(new Rect(x, y, width, height), $"In hand: <b>{ruler.WeaponName}</b>   <color=#b8ad98>(Q / 1-9)</color>", box);
                     y += height + 6f;
                 }
+                // Bandages from the crafting room (C uses one).
+                var supplies = kingdom != null ? kingdom.Crafting : null;
+                if (supplies != null && supplies.Bandages > 0)
+                {
+                    GUI.Box(new Rect(x, y, width, height), $"Bandages: <b>{supplies.Bandages}</b>   <color=#b8ad98>(C heals {Mathf.RoundToInt(supplies.BandageHeal)})</color>", box);
+                    y += height + 6f;
+                }
             }
             // The age, and what's being researched (T opens the research screen).
             var research = Progression.Research.Current;

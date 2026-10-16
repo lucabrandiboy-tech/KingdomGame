@@ -123,6 +123,10 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   `Combat.ArmorItem` (`ArmoryConfig.armor`, defaults in `ArmorItem.Defaults`) and copies of the kingdom's weapons, bought in
   `UI/GearPanel.cs` (E at a weapon rack or armor stand in an armory room); the ruler's armor is `Armory.RulerArmor`
   (`RulerController.WearArmor`). Soldier pictures: `CharacterArt.SoldierFrame`, one look per armor `look`.
+- **Crafting room** (a tool bench, `RoomTag.Crafting`): E opens `UI/CraftingPanel.cs`; orders in `Building/Crafting.cs`
+  (`Kingdom.Crafting`, items in `CraftingConfig`, defaults `CraftItem.Defaults`), made by crafters at a tool bench in a
+  crafting room (`Villager.toolBench`). Tools add to `Kingdom.Boost(Gathering)`/`BuildBoost`; bandages (C heals the ruler,
+  soldiers use one instead of retreating) and cures (a bitten villager's, before turning) are kept as supplies. Saved.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.

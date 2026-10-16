@@ -42,6 +42,8 @@ namespace KingdomGame.World
         public RulerSave ruler = new RulerSave();
         public Progression.Research.Saved research = new Progression.Research.Saved();
         public Combat.Armory.Saved armory = new Combat.Armory.Saved();
+        /// <summary>The crafting room: tools made, supplies, orders (older saves: none).</summary>
+        public Building.Crafting.Saved crafting;
         public bool hasSurvival;
         public SurvivalSave survival = new SurvivalSave();
         /// <summary>A hosted game: the players who joined it (their kingdoms, and where they were).</summary>

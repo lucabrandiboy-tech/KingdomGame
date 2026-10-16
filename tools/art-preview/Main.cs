@@ -473,6 +473,8 @@ static class Program
             Soldier(1, WeaponArt.Club, -5.3f, -24.5f, 0f, 0);
             Piece(FurnitureArt.MedicineTable, 1, -25, 2, 1, 0, 0.35f);
             Piece(FurnitureArt.MedicineTable, 5, -25, 2, 1, 1, 0.35f);
+            Piece(FurnitureArt.ToolBench, -1, -26, 2, 1, 0, 0.45f);
+            Piece(FurnitureArt.ToolBench, 7, -26, 2, 1, 2, 0.45f);
             for (int y = -27; y < -19; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
         }
 

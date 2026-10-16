@@ -1519,10 +1519,11 @@ namespace KingdomGame.Building
         /// <summary>How much faster villagers are at it: 1 + 5% a level, plus what furniture adds.</summary>
         public float Boost(Upgrade u) => 1f + PerLevel * Level(u)
             + FurnitureBoost(u == Upgrade.Speed ? BoostKind.Speed : u == Upgrade.Gathering ? BoostKind.Gathering : BoostKind.Crafting)
-            + (u == Upgrade.Crafting && CountRooms(RoomType.Workshop) > 0 ? config.workshopCrafting : 0f);   // (a workshop)
+            + (u == Upgrade.Crafting && (CountRooms(RoomType.Workshop) > 0 || CountRooms(RoomType.Crafting) > 0) ? config.workshopCrafting : 0f)   // (a workshop)
+            + (u == Upgrade.Gathering && Crafting != null ? Crafting.Gathering : 0f);   // (tools from the crafting room)
 
         /// <summary>Builders' work speed (furniture that helps).</summary>
-        public float BuildBoost => 1f + FurnitureBoost(BoostKind.Building);
+        public float BuildBoost => 1f + FurnitureBoost(BoostKind.Building) + (Crafting != null ? Crafting.Building : 0f);
         /// <summary>Research speed (furniture that helps).</summary>
         public float ResearchBoost => 1f + FurnitureBoost(BoostKind.Research) + (CountRooms(RoomType.Library) > 0 ? config.libraryResearch : 0f);
 
@@ -1911,6 +1912,23 @@ namespace KingdomGame.Building
 
         /// <summary>The ruler's weapons and the order book crafters work on (null if there's no armory).</summary>
         public Combat.Armory Armory { get; set; }
+        /// <summary>The crafting room's order book (tools and supplies) and the supplies made (null if there's none).</summary>
+        public Crafting Crafting { get; set; }
+
+        /// <summary>The nearest tool bench in a crafting room, where crafters make tools and supplies, or null.</summary>
+        Furniture NearestToolBench(Vector2 from)
+        {
+            if (CountRooms(RoomType.Crafting) == 0) return null;
+            Furniture best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var f in furniture)
+            {
+                if (f == null || f.Config.roomTag != RoomTag.Crafting || !InRoom(f, RoomType.Crafting)) continue;
+                float d = Travel(from, f.Cells.center);
+                if (d < bestDistance) { bestDistance = d; best = f; }
+            }
+            return best;
+        }
 
         /// <summary>The nearest crafting table that wants a crafter (short of its part, ingredients there), or null.</summary>
         Furniture NearestWorkbench(Vector2 from)
@@ -1947,8 +1965,10 @@ namespace KingdomGame.Building
         {
             var from = Throne != null ? Throne.Center : Vector2.zero;
             if (Armory != null && Armory.HasWork && NearestAnvil(from) != null) return null;
+            if (Crafting != null && Crafting.HasWork && NearestToolBench(from) != null) return null;
             if (NearestWorkbench(from) != null) return null;
             if (Armory != null && Armory.HasWork) return "weapons are ordered but there's no anvil: build one (Furniture tab)";
+            if (Crafting != null && Crafting.HasWork) return "tools or supplies are ordered but there's no tool bench in a crafting room (I)";
             return "nothing to make: order weapons at an anvil, or build a crafting table (Industry tab; it needs its ingredients in storage)";
         }
 
@@ -1999,11 +2019,17 @@ namespace KingdomGame.Building
             }
             if (v.Job == Job.Crafter && v.CarryAmount == 0)
             {
-                // Weapons on order first (at an anvil), then whichever crafting table is short of its part.
+                // Weapons on order first (at an anvil), then tools and supplies (a tool bench), then whichever crafting table is short of its part.
                 if (Armory != null && Armory.HasWork)
                 {
                     var anvil = NearestAnvil(v.Position);
                     if (anvil != null && v.StartCraft(anvil)) return;
+                }
+                // Then tools and supplies, at a tool bench in a crafting room.
+                if (Crafting != null && Crafting.HasWork)
+                {
+                    var bench = NearestToolBench(v.Position);
+                    if (bench != null && v.StartCraft(bench)) return;
                 }
                 var table = NearestWorkbench(v.Position);
                 if (table != null) v.StartCraft(table);

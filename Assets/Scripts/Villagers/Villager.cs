@@ -69,7 +69,8 @@ namespace KingdomGame.Villagers
         ResourceNode node;       // what it's gathering from
         Defenses.Defense post;   // the tower it guards
         MineLevel mine;          // the mine it's digging in
-        Furniture bench;         // the anvil it's making weapons at (or the crafting table it's making parts at)
+        Furniture bench;         // the anvil it's making weapons at (or the crafting table it's making parts at, or the tool bench)
+        bool toolBench;          // it's a crafting room's tool bench: tools and supplies
         Machine benchMachine;    // the crafting table's machine (null at an anvil)
         Furniture shelter;       // the shelter flag it's going to or waiting at
         Vector2Int digCell;
@@ -246,7 +247,9 @@ namespace KingdomGame.Villagers
                     case Task.MakeRoom: return "making room";
                     case Task.Flee: return "running from zombies";
                     case Task.Dig: return "digging";
-                    case Task.Craft: return benchMachine != null ? $"making {ResourceText.Name(benchMachine.Config.makes)}" : "making weapons";
+                    case Task.Craft: return benchMachine != null ? $"making {ResourceText.Name(benchMachine.Config.makes)}"
+                        : toolBench ? $"making {(kingdom.Crafting != null && kingdom.Crafting.Making != null ? kingdom.Crafting.Making.displayName.ToLowerInvariant() : "tools")}"
+                        : "making weapons";
                     case Task.Shelter: return "sheltering from the zombies";
                     case Task.Eat: return "eating";
                     case Task.Water: return "fetching water for a fire";
@@ -555,6 +558,7 @@ namespace KingdomGame.Villagers
             if (anvil == null) return false;
             bench = anvil;
             benchMachine = anvil.Config.machine != null && anvil.Config.machine.kind == MachineKind.Workbench ? anvil.GetComponent<Machine>() : null;
+            toolBench = anvil.Config.roomTag == RoomTag.Crafting;
             task = Task.Craft;
             if (Walk(anvil.Cells, true)) return true;
             Idle();
@@ -573,6 +577,11 @@ namespace KingdomGame.Villagers
             Idle();
             return false;
         }
+
+        // Whether there's still something to make at the bench it's at.
+        bool BenchHasWork => benchMachine != null ? benchMachine.WantsWork
+            : toolBench ? kingdom.Crafting != null && kingdom.Crafting.HasWork
+            : kingdom.Armory != null && kingdom.Armory.HasWork;
 
         /// <summary>Whether it's up on <paramref name="tower"/>, working it.</summary>
         public bool OnPost(Defenses.Defense tower) => onPost && post == tower && Health != null && !Health.Dead;
@@ -755,7 +764,14 @@ namespace KingdomGame.Villagers
         void Update()
         {
             if (config == null || Health == null || Health.Dead) return;
-            // Bitten: it turns (out on the map: not inside a house or mine, where zombies can't be).
+            // Bitten: a cure from the crafting room saves it once it starts to show (its last half minute)...
+            if (turnAt >= 0f && turnAt - Time.time <= 30f && kingdom.Crafting != null && kingdom.Crafting.UseCure())
+            {
+                turnAt = -1f;
+                bodyRenderer.color = Color.white;
+                kingdom.Report($"{(string.IsNullOrEmpty(Name) ? "A villager" : Name)} was bitten, and turning pale: a cure from your crafting room saved them.");
+            }
+            // ...otherwise it turns (out on the map: not inside a house or mine, where zombies can't be).
             if (turnAt >= 0f && Time.time >= turnAt && space == null)
             {
                 Turn();
@@ -845,7 +861,7 @@ namespace KingdomGame.Villagers
                 Idle();   // the mark was taken off, or the mine is gone
                 thinkAt = Time.time;
             }
-            else if (task == Task.Craft && (bench == null || (benchMachine != null ? !benchMachine.WantsWork : kingdom.Armory == null || !kingdom.Armory.HasWork)))
+            else if (task == Task.Craft && (bench == null || !BenchHasWork))
             {
                 Idle();   // the anvil went, or there's nothing left to make
                 thinkAt = Time.time;
@@ -1016,6 +1032,7 @@ namespace KingdomGame.Villagers
                     if (toBench.sqrMagnitude > 0.0001f) facing = toBench.normalized;
                     float work = Time.deltaTime * config.workRate * kingdom.Boost(Kingdom.Upgrade.Crafting) * Pace;
                     if (benchMachine != null) benchMachine.Work(work);   // a crafting table: the age's part
+                    else if (toolBench) kingdom.Crafting.Work(work);      // a tool bench: tools and supplies
                     else kingdom.Armory.Work(work);                       // an anvil: weapons
                     return;
                 }
@@ -1172,7 +1189,10 @@ namespace KingdomGame.Villagers
             if (Health.Fraction < config.soldierRetreatBelow && task != Task.Sleep && Time.time >= retreatCheckAt)
             {
                 retreatCheckAt = Time.time + 2f;
-                if (kingdom.Recover(this)) return;
+                // A bandage from the crafting room's supplies keeps it in the fight; otherwise off to a bed.
+                var supplies = kingdom.Crafting;
+                if (supplies != null && supplies.BandageHeal > 0f && supplies.UseBandage()) Health.Heal(supplies.BandageHeal);
+                else if (kingdom.Recover(this)) return;
             }
             var target = FindFoe();
             if (target == null || (target == ignored && Time.time < ignoreUntil)) return;

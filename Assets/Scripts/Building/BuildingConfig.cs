@@ -66,6 +66,8 @@ namespace KingdomGame.Building
         Training,
         /// <summary>A medicine table: with a bed, the room is an infirmary.</summary>
         Medicine,
+        /// <summary>A tool bench: the room is a crafting room (tools and supplies are made there).</summary>
+        Crafting,
     }
 
     /// <summary>

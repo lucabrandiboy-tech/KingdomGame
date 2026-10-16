@@ -65,6 +65,8 @@ namespace KingdomGame.World
 
         [Tooltip("The ruler's weapons through the ages, made at an anvil by crafters.")]
         public Combat.ArmoryConfig armory;
+        [Tooltip("What the crafting room makes: tools for each age, bandages, cures for bites.")]
+        public CraftingConfig crafting;
 
         [Header("Online")]
         [Tooltip("Hosting and joining games: port, players, how far apart kingdoms are.")]

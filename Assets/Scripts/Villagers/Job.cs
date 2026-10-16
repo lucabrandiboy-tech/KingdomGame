@@ -71,7 +71,7 @@ namespace KingdomGame.Villagers
                 case Job.Miner: return "break rocks for stone";
                 case Job.Forager: return "pick berries for food";
                 case Job.Guard: return "man the towers (archer tower, ballista, cannon)";
-                case Job.Crafter: return "make the weapons you order at an anvil (E at one), and each age's parts at its crafting table";
+                case Job.Crafter: return "make weapons at an anvil, tools and supplies at a crafting room's tool bench (E there), and each age's parts at its crafting table";
                 case Job.Hunter: return "shoot deer with a bow and bring the meat home (and shoot wolves)";
                 case Job.Soldier: return "fight zombies and wolves (arm them at an armory room), train at dummies and rank up";
                 default: return "";

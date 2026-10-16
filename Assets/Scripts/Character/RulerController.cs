@@ -83,6 +83,8 @@ namespace KingdomGame.Character
         public System.Action OpenArmory { get; set; }
         /// <summary>Opens the gear screen (E at a weapon rack or armor stand in an armory room).</summary>
         public System.Action OpenGear { get; set; }
+        /// <summary>Opens the crafting screen (E at a tool bench in a crafting room).</summary>
+        public System.Action OpenCrafting { get; set; }
         /// <summary>Opens a storehouse or chest to put things in or take them out (E at one).</summary>
         public System.Action<Storage> OpenStorage { get; set; }
         /// <summary>The weapon in hand, for the HUD.</summary>
@@ -227,6 +229,7 @@ namespace KingdomGame.Character
                 explosiveReady = now + thrown.cooldown;
             }
 
+            UseBandage(now);
             PickUpLoot();
             if (Inside != null && Kingdom.Current != null && InsideKeys(Kingdom.Current)) return;
             Interact(now);
@@ -373,6 +376,21 @@ namespace KingdomGame.Character
         // ------------------------------------------------------------ health --
 
         // Wounds heal once the ruler hasn't been hurt for a while.
+        float bandageReady;
+
+        // C: a bandage from the crafting room's supplies heals you (not at full health).
+        void UseBandage(float now)
+        {
+            if (!GameInput.Pressed(KeyCode.C) || now < bandageReady) return;
+            var supplies = Kingdom.Current != null ? Kingdom.Current.Crafting : null;
+            if (supplies == null || supplies.BandageHeal <= 0f) return;
+            if (Health.Current >= Health.Max) { Say("You're not hurt"); return; }
+            if (!supplies.UseBandage()) { Say("No bandages: order them at a crafting room's tool bench"); return; }
+            Health.Heal(supplies.BandageHeal);
+            bandageReady = now + 1f;
+            Say($"Bandaged ({supplies.Bandages} left)");
+        }
+
         Combat.ArmorItem wornArmor;
         bool armorWorn;
 
@@ -556,7 +574,7 @@ namespace KingdomGame.Character
             Storage storage = null;
             Blueprint blueprint = null;
             ResourceNode node = null;
-            Furniture ladder = null, anvil = null, lever = null, rack = null;
+            Furniture ladder = null, anvil = null, lever = null, rack = null, toolBench = null;
             Place door = null;
             if (kingdom != null)
             {
@@ -596,14 +614,16 @@ namespace KingdomGame.Character
                     if (f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; anvil = null; throne = null; lever = null; }
                     else if (f.Config.lever && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { lever = f; ladder = null; anvil = null; throne = null; }
                     else if (f.Config.roomTag == RoomTag.Workshop && f.Config.machine == null && Armory != null && OpenArmory != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
-                    { anvil = f; ladder = null; throne = null; rack = null; }
+                    { anvil = f; ladder = null; throne = null; rack = null; toolBench = null; }
                     else if (f.Config.roomTag == RoomTag.Weapons && Armory != null && OpenGear != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
-                    { rack = f; anvil = null; ladder = null; throne = null; }
+                    { rack = f; anvil = null; ladder = null; throne = null; toolBench = null; }
+                    else if (f.Config.roomTag == RoomTag.Crafting && kingdom.Crafting != null && OpenCrafting != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
+                    { toolBench = f; rack = null; anvil = null; ladder = null; throne = null; }
                 }
                 foreach (var s in kingdom.Storages)
-                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; anvil = null; rack = null; }
+                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; }
                 foreach (var b in kingdom.Blueprints)
-                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; anvil = null; rack = null; }
+                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; }
             }
             // Trees, rocks and bushes in the cells round the ruler.
             var nature = NatureMap.Current;
@@ -614,7 +634,7 @@ namespace KingdomGame.Character
                     {
                         var n = nature.Live(at + new Vector2Int(dx, dy));
                         if (n == null || n.Empty || n.Config == null) continue;
-                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; rack = null; }
+                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; }
                     }
 
             if (lever != null)
@@ -642,6 +662,20 @@ namespace KingdomGame.Character
                     Hint = $"Gear up here once the {name} is in an armory: walls and a door all round it (I shows the kinds of room)";
                 else
                     Hint = $"This room is a {RoomTypes.Name(room).ToLowerInvariant()}, not an armory: keep beds, tables with seats and the throne out of it (I shows the kinds of room)";
+            }
+            else if (toolBench != null)
+            {
+                // Tools and supplies are made in a crafting room only (a walled room with a door, Building/RoomTypes.cs).
+                var room = kingdom.RoomTypeAt(toolBench.Cells.position);
+                if (room == RoomType.Crafting)
+                {
+                    Hint = "E: crafting (better tools for your villagers, bandages, cures for bites)";
+                    if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) OpenCrafting();
+                }
+                else if (room == RoomType.None)
+                    Hint = "Craft here once the tool bench is in a crafting room: walls and a door all round it (I shows the kinds of room)";
+                else
+                    Hint = $"This room is a {RoomTypes.Name(room).ToLowerInvariant()}, not a crafting room: keep beds, tables with seats, weapon racks and bookshelves out of it (I)";
             }
             else if (throne != null) UseThrone(kingdom);
             else if (storage != null) UseStorage(storage);

@@ -211,6 +211,16 @@ namespace KingdomGame.World
                 rulerController.OpenGear = gearPanel.Open;
             }
             else Debug.LogWarning("The Game Content has no Armory Config, so the ruler has the old rifle. Run KingdomGame > Build Game Scenes again.", this);
+            // The crafting room's order book: tools and supplies, made at a tool bench by crafters.
+            if (content.crafting != null)
+            {
+                var crafting = kingdom.gameObject.AddComponent<Crafting>();
+                crafting.Setup(content.crafting, kingdom);
+                kingdom.Crafting = crafting;
+                var craftingPanel = gameObject.AddComponent<CraftingPanel>();
+                craftingPanel.Setup(crafting, kingdom);
+                rulerController.OpenCrafting = craftingPanel.Open;
+            }
             var storagePanel = gameObject.AddComponent<StoragePanel>();
             storagePanel.Setup(rulerController);
             rulerController.OpenStorage = storagePanel.Open;

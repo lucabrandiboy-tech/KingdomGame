@@ -324,6 +324,7 @@ wins, so a room with a bed and a weapon rack is a bedroom, not an armory.
 | Armory | a weapon rack or armor stand | E there: armor for you, weapons and armor for soldiers |
 | Training room | a **training dummy** (new) | soldiers train there and go up in rank |
 | Library | a bookshelf | research 10% faster |
+| Crafting room | a **tool bench** (new) | E there: order tools and supplies (see section 11); crafters 15% faster |
 | Workshop | an anvil or crafting table | crafters 15% faster |
 | Kitchen, storeroom, bedroom, cottage | as before | as before |
 
@@ -368,3 +369,38 @@ Try it:
 What isn't done (honestly): other players online see your soldiers as ordinary villagers;
 the ruler's look doesn't change with armor; soldiers in melee can hit a zombie through a
 thin wall (so can you with the club).
+
+## 11. The crafting room
+
+A walled room with a door and a **tool bench** in it (Furniture tab, new) is a crafting
+room (**I** shows it). **E** at the tool bench opens the crafting screen. You order things
+there (paid from storage at once), and your **crafters** make them at the tool bench, one
+at a time, after any weapons on order at an anvil.
+
+- **Tools**, one set for each age (flint, bronze, iron, steel, ... machine tools): for good
+  and for every villager. Each set makes gathering 8% and building 5% faster, and the sets
+  add up. The crafting screen shows the total.
+- **Bandages** (5 an order): **C** heals you by 50 with one (the bandage count shows under
+  your health). A soldier who gets badly hurt uses one and keeps fighting, instead of
+  leaving for a bed.
+- **Cures for bites** (Bronze Age): a bitten villager is given one when they start to turn
+  pale, and lives (a message says so).
+- A crafting room also makes crafters 15% faster, like a workshop.
+
+Try it:
+
+1. **F10**: +10,000 of everything. Walls and a door round a room with a **tool bench** in
+   it. **I**: you have 1 crafting room. Walk to the bench: "E: crafting".
+2. Order **Flint tools** and **Bandages**. **V**: give a villager the Crafter job. They walk
+   to the tool bench and work ("making flint tools" when you hover them from the throne).
+   Or **F10, Finish crafting now**.
+3. When they're done: "Flint tools are ready" and the crafting screen says gather +8%.
+4. Get hurt (**F10, Wolves now**, and let one bite you), then **C**: you heal and the
+   bandage count under your health goes down.
+5. In the Bronze Age (or free build), order a **Cure for bites**. **F10, A bitten survivor
+   comes**, take them in (**Y**), then **F10, Bitten villagers turn in 10 s**: instead of
+   turning they're cured and a message says so.
+6. Save and load: the tools, bandages and cures are kept.
+
+What isn't done (honestly): tools don't show in the villagers' hands; the tool bench only
+works inside a crafting room (in another kind of room it tells you why).

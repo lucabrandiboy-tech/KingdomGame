@@ -109,6 +109,8 @@ namespace KingdomGame.UI
             if (GUILayout.Button("Finish all building now", button)) FinishBuilding();
             GUI.enabled = research != null && research.Researching != null;
             if (GUILayout.Button("Finish research now", button)) research.CheatFinishResearch();
+            GUI.enabled = kingdom.Crafting != null && kingdom.Crafting.HasWork;
+            if (GUILayout.Button("Finish crafting now", button)) kingdom.Crafting.CheatFinish();
             GUI.enabled = true;
             GUILayout.EndHorizontal();
 

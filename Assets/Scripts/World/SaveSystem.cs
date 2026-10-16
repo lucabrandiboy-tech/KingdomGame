@@ -320,6 +320,7 @@ namespace KingdomGame.World
 
             if (research != null) data.research = research.Save();
             if (kingdom.Armory != null) data.armory = kingdom.Armory.Save();
+            if (kingdom.Crafting != null) data.crafting = kingdom.Crafting.Save();
             // The players who joined (their kingdoms and where they are). If hosting didn't start this time,
             // the ones from the save are kept as they were.
             data.others = Host != null && Host.Core != null ? OthersSave.From(Host.Core) : loadedOthers ?? new OthersSave();
@@ -390,6 +391,7 @@ namespace KingdomGame.World
             if (dayNight != null && Upload == null) dayNight.SetTime(data.day, data.hour);   // (online the host's clock is the time)
             if (research != null && data.research != null) research.Load(data.research);
             if (kingdom.Armory != null && data.armory != null) kingdom.Armory.Load(data.armory);
+            if (kingdom.Crafting != null && data.crafting != null) kingdom.Crafting.Load(data.crafting);
 
             // Building configs and wall materials by name.
             var configs = new Dictionary<string, BuildingConfig>();

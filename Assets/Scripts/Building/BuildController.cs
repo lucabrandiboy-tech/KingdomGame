@@ -408,6 +408,14 @@ namespace KingdomGame.Building
                 dragStart = origin;
             }
 
+            // Belts point the way you drag them (Factorio-style).
+            bool belt = b.machine != null && b.machine.kind == Economy.MachineKind.Conveyor && b.rotations >= 4;
+            if (dragging && belt && origin != dragStart)
+            {
+                var d = origin - dragStart;
+                rotation = b.ClampRotation(Mathf.Abs(d.x) >= Mathf.Abs(d.y) ? (d.x >= 0 ? 0 : 2) : (d.y >= 0 ? 1 : 3));
+            }
+
             placements.Clear();
             if (dragging && b.dragToPlaceLines && (b.kind == BuildingKind.Floor || b.kind == BuildingKind.Roof || b.kind == BuildingKind.Plant || b.kind == BuildingKind.Dig)) Area(dragStart, origin, MaxArea, placements);
             else if (dragging && b.dragToPlaceLines) Line(dragStart, origin, size, kingdom.Config.maxLine, placements);
@@ -426,7 +434,7 @@ namespace KingdomGame.Building
             ShowPlacements(PointerOverHud && !dragging ? 0 : placements.Count, b);
 
             string cost = good > 1 ? $"{good} x {b.displayName}: {b.CostText(good)}" : $"{b.displayName}: {b.CostText()}";
-            if (b.rotations > 1) cost += "   (R: turn it)";
+            if (b.rotations > 1) cost += belt ? "   (R: turn it, or drag: it points the way you drag)" : "   (R: turn it)";
             Hover = firstProblem != null ? $"{cost}\n<color=#ff8a80>{firstProblem}</color>" : cost;
 
             if (dragging && (GameInput.FireReleased || !GameInput.FireHeld))
@@ -535,8 +543,7 @@ namespace KingdomGame.Building
                 if (!storage.Cells.Contains(cell)) continue;
                 var stock = storage.Stock;
                 string tearDown = storage.Config != null && kingdom.Storages.Count > 1 ? "\n" + kingdom.TearDownText(cell) : "";
-                Hover = $"{storage.name}: {stock.Get(Economy.ResourceType.Wood)} wood, {stock.Get(Economy.ResourceType.Stone)} stone, " +
-                        $"{stock.Get(Economy.ResourceType.Food)} food ({stock.Total} / {stock.Capacity}){tearDown}{roomText}";
+                Hover = $"{storage.name}: {Economy.ResourceText.Describe(stock)} ({stock.Total} / {stock.Capacity}){tearDown}{roomText}";
                 if (rightClick && tearDown.Length > 0) Say(kingdom.TearDown(cell));
                 return;
             }
@@ -553,6 +560,10 @@ namespace KingdomGame.Building
                 string health = built is Door door ? $" ({Mathf.CeilToInt(door.Health.Current)}/{Mathf.CeilToInt(door.Health.Max)})"
                     : built is Furniture f && f.Health != null ? $" ({Mathf.CeilToInt(f.Health.Current)}/{Mathf.CeilToInt(f.Health.Max)})" : "";
                 string about = built != null ? built.Config.displayName + health : kingdom.WallInfo(cell);
+                // A factory machine: what it's doing, or why it's stopped.
+                var works = built is Furniture piece ? piece.GetComponent<Machine>() : null;
+                string state = works != null && kingdom.Factory != null ? kingdom.Factory.Describe(works) : null;
+                if (state != null) about += "\n" + state;
                 Hover = (about != null ? about + "\n" : "") + teardown + roomText;
                 if (rightClick) Say(kingdom.TearDown(cell));
                 return;

@@ -8,42 +8,47 @@ namespace KingdomGame.Building
     /// <summary>
     /// A machine working by itself (see <see cref="MachineKind"/>). The smelter takes iron and
     /// wood from storage and puts steel back. A generator burns wood from storage and powers
-    /// the sawmills and quarries within its reach. Those send what they make along the
-    /// conveyor belts touching them to a storehouse or chest the belts (or the machine) touch;
-    /// with no way to storage they fill up and stop. A machine that isn't working is drawn darker.
-    /// An electric lamp shines only while a burning generator's power reaches it.
+    /// the sawmills and quarries within its reach. Those put what they make out, an item at a
+    /// time, onto the conveyor belts touching them (Building/Factory.cs carries it along) or
+    /// into a storehouse or chest touching them; with nowhere to put it they fill up and stop.
+    /// Belts, arms, furnaces and assemblers are run by the kingdom's <see cref="Factory"/>.
+    /// A machine that isn't working is drawn darker. An electric lamp shines only while a
+    /// burning generator's power reaches it.
     /// </summary>
     public sealed class Machine : MonoBehaviour
     {
-        const float RouteSeconds = 2f;
-        const int MaxBelts = 2000;
-
         static readonly List<Machine> generators = new List<Machine>();
         static readonly HashSet<Vector2Int> belts = new HashSet<Vector2Int>();
-
-        sealed class Parcel
-        {
-            public Transform Look;
-            public List<Vector2> Path;
-            public float Start;
-            public ResourceType Type;
-            public int Amount;
-            public Storage To;
-        }
 
         Furniture piece;
         MachineConfig config;
         Kingdom kingdom;
         SpriteRenderer look;
-        float workAt, poweredUntil, routeAt;
+        float workAt, poweredUntil, pushAt;
         FireLight lamp;
-        int held;
+        int held, pushTurn;
         bool working;
-        Storage target;
-        readonly List<Vector2> route = new List<Vector2>();
-        readonly List<Parcel> parcels = new List<Parcel>();
 
         public MachineConfig Config => config;
+        /// <summary>Its picture (the factory swaps a belt's for a curve, and dims machines that aren't working).</summary>
+        public SpriteRenderer Look => look;
+        /// <summary>What it has made and is waiting to put out (sawmills, quarries, drills).</summary>
+        public int Held => held;
+
+        /// <summary>One of what it holds is taken (by an arm). False if it holds none.</summary>
+        public bool TakeHeld()
+        {
+            if (held <= 0) return false;
+            held--;
+            return true;
+        }
+
+        /// <summary>Puts back what it held (a saved game).</summary>
+        public void SetHeld(int amount) => held = Mathf.Clamp(amount, 0, config != null ? config.holds : 60);
+
+        /// <summary>Run by the factory (belts, arms, furnaces, assemblers), not by itself.</summary>
+        public bool InFactory => config != null && (config.kind == MachineKind.Conveyor || config.kind == MachineKind.Arm
+            || config.kind == MachineKind.Furnace || config.kind == MachineKind.Assembler);
         float progress, lastWorked = -99f;
 
         /// <summary>A crafting table that needs a crafter: storage is short of what it makes and the ingredients are there.</summary>
@@ -86,12 +91,9 @@ namespace KingdomGame.Building
             look = picture;
             kingdom = owner;
             workAt = Time.time + config.workSeconds;
-            if (config.kind == MachineKind.Conveyor)
-            {
-                foreach (var c in furniture.Cells.allPositionsWithin) belts.Add(c);
-                enabled = false;
-            }
-            else if (config.kind == MachineKind.Generator) generators.Add(this);
+            if (config.kind == MachineKind.Conveyor) foreach (var c in furniture.Cells.allPositionsWithin) belts.Add(c);
+            if (InFactory) enabled = false;   // (the factory runs it)
+            if (config.kind == MachineKind.Generator) generators.Add(this);
             else if (config.kind == MachineKind.Lamp)
             {
                 // A cold white electric light, off until there's power.
@@ -100,6 +102,7 @@ namespace KingdomGame.Building
                 lamp.gameObject.SetActive(false);
                 workAt = Time.time + Random.value * 0.5f;   // (lamps don't all check on the same frame)
             }
+            if (kingdom != null && kingdom.Factory != null) kingdom.Factory.Register(this);
         }
 
         void OnDestroy()
@@ -107,7 +110,7 @@ namespace KingdomGame.Building
             if (config == null) return;
             if (config.kind == MachineKind.Conveyor && piece != null) foreach (var c in piece.Cells.allPositionsWithin) belts.Remove(c);
             generators.Remove(this);
-            foreach (var p in parcels) if (p.Look != null) Destroy(p.Look.gameObject);
+            if (kingdom != null && kingdom.Factory != null) kingdom.Factory.Unregister(this);
         }
 
         /// <summary>Whether a generator's power reaches <paramref name="at"/>.</summary>
@@ -127,7 +130,7 @@ namespace KingdomGame.Building
                 if (now < workAt) return;
                 workAt = now + 0.5f;
                 // Inside a house (far off the map): powered if the house is in a generator's reach.
-                bool on = PoweredAt(PowerSpot());
+                bool on = PoweredAt(PowerSpot);
                 if (lamp != null && lamp.gameObject.activeSelf != on) lamp.gameObject.SetActive(on);
                 if (look != null) look.color = on ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
                 return;
@@ -138,13 +141,12 @@ namespace KingdomGame.Building
                 if (look != null) look.color = now - lastWorked < 1f ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
                 return;
             }
-            Move(now);
             if (now >= workAt)
             {
                 workAt = now + config.workSeconds;
                 working = Work();
             }
-            if (held > 0 && parcels.Count < 4) Send(now);
+            if (held > 0) PushOut(now);
             if (look != null) look.color = working || Burning ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
         }
 
@@ -187,7 +189,7 @@ namespace KingdomGame.Building
 
                 case MachineKind.Producer:
                 {
-                    if (config.needsPower && !PoweredAt(PowerSpot())) return false;
+                    if (config.needsPower && !PoweredAt(PowerSpot)) return false;
                     // Auto-crafters stop when there's plenty; anything made to go out on belts waits while it's full.
                     if (config.keep > 0 && kingdom.Stock(config.makes) >= config.keep && config.inputs != null && config.inputs.Length > 0) return true;
                     if (config.toBelts && held >= config.holds) return false;
@@ -204,7 +206,7 @@ namespace KingdomGame.Building
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
                 {
-                    if (held >= config.holds || (config.needsPower && !PoweredAt(PowerSpot()))) return false;
+                    if (held >= config.holds || (config.needsPower && !PoweredAt(PowerSpot))) return false;
                     if (config.kind == MachineKind.Quarry)
                     {
                         held += config.output;
@@ -266,136 +268,34 @@ namespace KingdomGame.Building
             return true;
         }
 
-        // Where power is measured from: here, or for a machine inside a house (far off the map), the house's door.
-        Vector2 PowerSpot()
+        /// <summary>Where power is measured from: here, or for a machine inside a house (far off the map), the house's door.</summary>
+        public Vector2 PowerSpot
         {
-            var place = kingdom.PlaceAt((Vector2)transform.position);
-            return place != null ? place.Outside : (Vector2)transform.position;
-        }
-
-        ResourceType Makes => config.kind == MachineKind.Quarry ? ResourceType.Stone : config.kind == MachineKind.Producer ? config.makes : ResourceType.Wood;
-
-        // What's held goes out along the belts to storage, if there's a way and room.
-        void Send(float now)
-        {
-            if (now >= routeAt)
+            get
             {
-                routeAt = now + RouteSeconds;
-                FindRoute();
-            }
-            if (target == null || target.Stock.SpaceLeft < held) return;
-            var parcel = new Parcel { Path = new List<Vector2>(route), Start = now, Type = Makes, Amount = held, To = target };
-            held = 0;
-            var go = new GameObject("On the belt");
-            go.transform.SetParent(transform, false);
-            var r = go.AddComponent<SpriteRenderer>();
-            r.sprite = ArtSprites.Get(parcel.Type == ResourceType.Stone ? ArtKeys.Rock(0) : ArtKeys.LootBag);
-            r.sortingOrder = SortOrder.Furniture + 2;
-            go.transform.localScale = Vector3.one * 0.4f;
-            go.transform.position = parcel.Path[0];
-            parcel.Look = go.transform;
-            parcels.Add(parcel);
-        }
-
-        void Move(float now)
-        {
-            for (int i = parcels.Count - 1; i >= 0; i--)
-            {
-                var p = parcels[i];
-                float along = (now - p.Start) * config.beltSpeed;
-                int seg = Mathf.FloorToInt(along);
-                if (seg >= p.Path.Count - 1)
-                {
-                    // Arrived: into the storehouse (or the nearest with room, if that one went or filled up).
-                    int put = p.To != null ? p.To.Deposit(p.Type, p.Amount) : 0;
-                    if (put < p.Amount) put += kingdom.Store(p.Type, p.Amount - put, p.Path[p.Path.Count - 1]);
-                    if (put < p.Amount) held += p.Amount - put;
-                    if (p.Look != null) Destroy(p.Look.gameObject);
-                    parcels.RemoveAt(i);
-                    continue;
-                }
-                // (Through a house's wall hole the belt goes to its inside, far off the map: no flying across.)
-                if (p.Look != null) p.Look.position = (p.Path[seg + 1] - p.Path[seg]).sqrMagnitude > 4f ? p.Path[seg + 1]
-                    : Vector2.Lerp(p.Path[seg], p.Path[seg + 1], along - seg);
+                var place = kingdom != null ? kingdom.PlaceAt((Vector2)transform.position) : null;
+                return place != null ? place.Outside : (Vector2)transform.position;
             }
         }
 
-        static readonly Vector2Int[] Sides = { Vector2Int.right, Vector2Int.left, Vector2Int.up, Vector2Int.down };
+        /// <summary>What it makes (sawmills wood, quarries stone, producers their own).</summary>
+        public ResourceType Makes => config.kind == MachineKind.Quarry ? ResourceType.Stone : config.kind == MachineKind.Producer ? config.makes : ResourceType.Wood;
 
-        // The shortest way from the machine along touching belts to a storehouse or chest (none: target null).
-        void FindRoute()
+        // What it holds goes out an item at a time onto a belt touching it (one not pointing into it), or into a chest
+        // or storehouse touching it. With no factory (an old scene), it goes straight into storage.
+        void PushOut(float now)
         {
-            target = null;
-            route.Clear();
-            var storeAt = new Dictionary<Vector2Int, Storage>();
-            // Houses' belt holes (House.BeltHoles): red inputs carry from the belt just outside to the one just
-            // inside, blue outputs from inside to outside. One way only.
-            var holes = new Dictionary<Vector2Int, Vector2Int>();
-            var list = new List<(Vector2Int Outside, Vector2Int Inside, bool In)>();
-            foreach (var h in kingdom.Houses)
+            if (now < pushAt) return;
+            var factory = kingdom.Factory;
+            if (factory == null || factory.World == null)
             {
-                if (h == null) continue;
-                h.BeltHoles(list);
-                foreach (var hole in list)
-                    if (hole.In) holes[hole.Outside] = hole.Inside;
-                    else holes[hole.Inside] = hole.Outside;
+                held -= kingdom.Store(Makes, held, transform.position);
+                pushAt = now + 1f;
+                return;
             }
-            foreach (var s in kingdom.Storages)
-                if (s != null) foreach (var c in s.Cells.allPositionsWithin) storeAt[c] = s;
-
-            var cells = piece.Cells;
-            var from = new Dictionary<Vector2Int, Vector2Int>();
-            var queue = new Queue<Vector2Int>();
-            foreach (var c in cells.allPositionsWithin)
-                foreach (var d in Sides)
-                {
-                    var n = c + d;
-                    if (cells.Contains(n)) continue;
-                    if (storeAt.TryGetValue(n, out var next))
-                    {
-                        target = next;
-                        route.Add(cells.center);
-                        route.Add((Vector2)n + new Vector2(0.5f, 0.5f));
-                        return;
-                    }
-                    if (belts.Contains(n) && !from.ContainsKey(n))
-                    {
-                        from[n] = c;
-                        queue.Enqueue(n);
-                    }
-                }
-            while (queue.Count > 0 && from.Count < MaxBelts)
-            {
-                var c = queue.Dequeue();
-                if (holes.TryGetValue(c, out var other) && belts.Contains(other) && !from.ContainsKey(other))
-                {
-                    from[other] = c;
-                    queue.Enqueue(other);
-                }
-                foreach (var d in Sides)
-                {
-                    var n = c + d;
-                    if (storeAt.TryGetValue(n, out var store))
-                    {
-                        target = store;
-                        var back = new List<Vector2> { (Vector2)n + new Vector2(0.5f, 0.5f) };
-                        for (var k = c; ; k = from[k])
-                        {
-                            back.Add((Vector2)k + new Vector2(0.5f, 0.5f));
-                            if (cells.Contains(from[k])) break;
-                        }
-                        back.Add(cells.center);
-                        back.Reverse();
-                        route.AddRange(back);
-                        return;
-                    }
-                    if (belts.Contains(n) && !from.ContainsKey(n) && !cells.Contains(n))
-                    {
-                        from[n] = c;
-                        queue.Enqueue(n);
-                    }
-                }
-            }
+            pushAt = now + factory.OutputInterval;
+            var c = piece.Cells;
+            if (factory.World.PushOut(c.x, c.y, c.width, c.height, Makes, ref pushTurn)) held--;
         }
     }
 }

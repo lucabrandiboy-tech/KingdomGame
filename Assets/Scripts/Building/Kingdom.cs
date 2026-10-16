@@ -502,6 +502,9 @@ namespace KingdomGame.Building
         /// <summary>Whether a piece of furniture stands in a room of a kind.</summary>
         public bool InRoom(Furniture piece, RoomType type) => piece != null && RoomTypeAt(piece.Cells.position) == type;
 
+        static bool IsBelt(BuildingConfig b) => b != null && b.machine != null && b.machine.kind == MachineKind.Conveyor;
+        static bool IsBelt(Component thing) => thing is IBuilt built && IsBelt(built.Config);
+
         /// <summary>The room this cell is in, or null (outside).</summary>
         public Room RoomAt(Vector2Int cell)
         {
@@ -685,6 +688,17 @@ namespace KingdomGame.Building
                 if (layer != occupied && occupied.TryGetValue(c, out var top) && (top is Throne || top is Storage))
                 {
                     reason = "Something is already built here";
+                    return false;
+                }
+                // Belts lie flat like rugs, but things ride on them: nothing goes on top of one, and none under anything.
+                if (layer == occupied && rugs.TryGetValue(c, out var flat) && IsBelt(flat))
+                {
+                    reason = "There's a belt here";
+                    return false;
+                }
+                if (IsBelt(b) && occupied.TryGetValue(c, out var onTop) && onTop != null)
+                {
+                    reason = "Something is in the belt's way";
                     return false;
                 }
                 if (world != null && world.ChunkAt(c) != null && !(b.kind == BuildingKind.Door && SingleWallAt(c)))
@@ -1914,6 +1928,8 @@ namespace KingdomGame.Building
         public Combat.Armory Armory { get; set; }
         /// <summary>The crafting room's order book (tools and supplies) and the supplies made (null if there's none).</summary>
         public Crafting Crafting { get; set; }
+        /// <summary>The factory: belts, arms, furnaces and assemblers (null in an old scene without one).</summary>
+        public Factory Factory { get; set; }
 
         /// <summary>The nearest tool bench in a crafting room, where crafters make tools and supplies, or null.</summary>
         Furniture NearestToolBench(Vector2 from)

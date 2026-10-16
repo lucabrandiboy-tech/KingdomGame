@@ -27,6 +27,21 @@ static partial class Tests
         Run(nameof(RayWorksWithNegativeAndDiagonalDirections), RayWorksWithNegativeAndDiagonalDirections);
         Run(nameof(RayMatchesBruteForceSampling), RayMatchesBruteForceSampling);
 
+        Run(nameof(BeltsCarryItemsAlongALine), BeltsCarryItemsAlongALine);
+        Run(nameof(ItemsPackTightAtTheEnd), ItemsPackTightAtTheEnd);
+        Run(nameof(CurvesTurnTheCorner), CurvesTurnTheCorner);
+        Run(nameof(SideLoadingMergesTwoLines), SideLoadingMergesTwoLines);
+        Run(nameof(HeadOnBeltsBlock), HeadOnBeltsBlock);
+        Run(nameof(BeltsUnloadIntoAChest), BeltsUnloadIntoAChest);
+        Run(nameof(LoopsKeepGoing), LoopsKeepGoing);
+        Run(nameof(RemovingABeltSpillsItsItems), RemovingABeltSpillsItsItems);
+        Run(nameof(ArmsMoveItemsAtTheirSpeed), ArmsMoveItemsAtTheirSpeed);
+        Run(nameof(AssemblersTakeOnlyWhatTheyNeed), AssemblersTakeOnlyWhatTheyNeed);
+        Run(nameof(AssemblersHoldTwoBatches), AssemblersHoldTwoBatches);
+        Run(nameof(FurnacesSmeltWhatGoesIn), FurnacesSmeltWhatGoesIn);
+        Run(nameof(BurnerArmsFuelThemselves), BurnerArmsFuelThemselves);
+        Run(nameof(MachinesPushOntoBeltsGoingAway), MachinesPushOntoBeltsGoingAway);
+
         Run(nameof(RanksComeWithExperience), RanksComeWithExperience);
         Run(nameof(SoldiersGetTougherAndFaster), SoldiersGetTougherAndFaster);
         Run(nameof(PathStraightAndDiagonal), PathStraightAndDiagonal);

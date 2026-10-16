@@ -67,6 +67,8 @@ namespace KingdomGame.World
         public Combat.ArmoryConfig armory;
         [Tooltip("What the crafting room makes: tools for each age, bandages, cures for bites.")]
         public CraftingConfig crafting;
+        [Tooltip("The factory: recipes for furnaces and assemblers, fuels, how fast it runs.")]
+        public FactoryConfig factory;
 
         [Header("Online")]
         [Tooltip("Hosting and joining games: port, players, how far apart kingdoms are.")]

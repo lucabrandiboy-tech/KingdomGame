@@ -67,6 +67,10 @@ namespace KingdomGame.Art
         public static string Villager(bool carrying, int direction, int frame) => $"Villager/{(carrying ? "Carrying" : "Walking")}/{direction}/{frame}";
         public const string VillagerShadow = "Villager/Shadow";
         public static string Soldier(int look, int direction, int frame) => $"Soldier/{look}/{direction}/{frame}";
+        /// <summary>An item as it rides a belt or sits in an arm's hand.</summary>
+        public static string Item(Economy.ResourceType type) => $"Item/{type}";
+        /// <summary>An arm's swinging part (its base is the building's own picture, <paramref name="art"/>).</summary>
+        public static string ArmSwing(string art) => $"{art}/Swing";
         public static string Wall(string material, int variant) => $"Wall/{material}/{variant}";
         public const string GroundGrass = "Ground/Grass";
         public const string GroundDry = "Ground/Dry";
@@ -112,7 +116,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 22;
+        public const int Version = 23;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -248,6 +252,50 @@ namespace KingdomGame.Art
                     float degrees = h * 360f / FurnitureArt.HeadDirections;
                     Add(items, ArtKeys.Head(piece.Art, h), "AgeHeads", p => piece.Head(p, degrees), true, 0.18f);
                 }
+            }
+            // The factory (Building/Factory.cs): belts for each way they face, straight and turning left or right, at a quarter
+            // of the detail (there are many, and they're flat); arms (a base for each way, and the part that swings round),
+            // furnaces and assemblers a little sharper; and the items they carry.
+            for (int style = 0; style < FurnitureArt.BeltStyles; style++)
+                for (int r = 0; r < 4; r++)
+                {
+                    int st = style, rot = r;
+                    string art = FurnitureArt.Belt(style);
+                    Add(items, ArtKeys.Turned(art, r), "Belts", p => FurnitureArt.BeltPiece(p, st, 0, rot), false, quarter);
+                    Add(items, ArtKeys.Turned(art + "/CurveL", r), "Belts", p => FurnitureArt.BeltPiece(p, st, 1, rot), false, quarter);
+                    Add(items, ArtKeys.Turned(art + "/CurveR", r), "Belts", p => FurnitureArt.BeltPiece(p, st, 2, rot), false, quarter);
+                }
+            const float factory = 0.35f;
+            for (int style = 0; style < FurnitureArt.ArmStyles; style++)
+            {
+                int st = style;
+                string art = FurnitureArt.ArmBase(style);
+                for (int r = 0; r < 4; r++)
+                {
+                    int rot = r;
+                    Add(items, ArtKeys.Turned(art, r), "Factory", p => FurnitureArt.ArmBasePiece(p, st, rot), true, factory);
+                    Shadow(items, ArtKeys.Turned(art, r), "FurnitureShadows", 0.02f);
+                }
+                Add(items, ArtKeys.ArmSwing(art), "Factory", p => FurnitureArt.ArmSwingPiece(p, st), true, factory);
+            }
+            for (int style = 0; style < FurnitureArt.FurnaceStyles; style++)
+            {
+                int st = style;
+                string key = ArtKeys.Turned(FurnitureArt.FurnaceArt(style), 0);
+                Add(items, key, "Factory", p => FurnitureArt.FurnacePiece(p, st), true, factory);
+                Shadow(items, key, "FurnitureShadows", 0.03f);
+            }
+            for (int style = 0; style < FurnitureArt.AssemblerStyles; style++)
+            {
+                int st = style;
+                string key = ArtKeys.Turned(FurnitureArt.AssemblerArt(style), 0);
+                Add(items, key, "Factory", p => FurnitureArt.AssemblerPiece(p, st), true, factory);
+                Shadow(items, key, "FurnitureShadows", 0.03f);
+            }
+            foreach (Economy.ResourceType type in System.Enum.GetValues(typeof(Economy.ResourceType)))
+            {
+                var t = type;
+                Add(items, ArtKeys.Item(t), "Items", p => FurnitureArt.ItemPiece(p, t), false, quarter);
             }
             // Traps and towers (their turning heads drawn for each direction).
             foreach (var d in FurnitureArt.Defenses)

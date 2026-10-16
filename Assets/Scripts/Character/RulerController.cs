@@ -85,6 +85,8 @@ namespace KingdomGame.Character
         public System.Action OpenGear { get; set; }
         /// <summary>Opens the crafting screen (E at a tool bench in a crafting room).</summary>
         public System.Action OpenCrafting { get; set; }
+        /// <summary>Opens a factory machine's screen (E at an arm, furnace or assembler).</summary>
+        public System.Action<Machine> OpenFactory { get; set; }
         /// <summary>Opens a storehouse or chest to put things in or take them out (E at one).</summary>
         public System.Action<Storage> OpenStorage { get; set; }
         /// <summary>The weapon in hand, for the HUD.</summary>
@@ -378,6 +380,13 @@ namespace KingdomGame.Character
         // Wounds heal once the ruler hasn't been hurt for a while.
         float bandageReady;
 
+        // An arm, furnace or assembler (its screen opens with E).
+        static bool IsWorks(Furniture f)
+        {
+            var m = f.Config.machine;
+            return m != null && (m.kind == MachineKind.Arm || m.kind == MachineKind.Furnace || m.kind == MachineKind.Assembler);
+        }
+
         // C: a bandage from the crafting room's supplies heals you (not at full health).
         void UseBandage(float now)
         {
@@ -574,7 +583,7 @@ namespace KingdomGame.Character
             Storage storage = null;
             Blueprint blueprint = null;
             ResourceNode node = null;
-            Furniture ladder = null, anvil = null, lever = null, rack = null, toolBench = null;
+            Furniture ladder = null, anvil = null, lever = null, rack = null, toolBench = null, works = null;
             Place door = null;
             if (kingdom != null)
             {
@@ -614,16 +623,18 @@ namespace KingdomGame.Character
                     if (f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; anvil = null; throne = null; lever = null; }
                     else if (f.Config.lever && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { lever = f; ladder = null; anvil = null; throne = null; }
                     else if (f.Config.roomTag == RoomTag.Workshop && f.Config.machine == null && Armory != null && OpenArmory != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
-                    { anvil = f; ladder = null; throne = null; rack = null; toolBench = null; }
+                    { anvil = f; ladder = null; throne = null; rack = null; toolBench = null; works = null; }
                     else if (f.Config.roomTag == RoomTag.Weapons && Armory != null && OpenGear != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
-                    { rack = f; anvil = null; ladder = null; throne = null; toolBench = null; }
+                    { rack = f; anvil = null; ladder = null; throne = null; toolBench = null; works = null; }
                     else if (f.Config.roomTag == RoomTag.Crafting && kingdom.Crafting != null && OpenCrafting != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
-                    { toolBench = f; rack = null; anvil = null; ladder = null; throne = null; }
+                    { toolBench = f; rack = null; anvil = null; ladder = null; throne = null; works = null; }
+                    else if (IsWorks(f) && OpenFactory != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
+                    { works = f; toolBench = null; rack = null; anvil = null; ladder = null; throne = null; }
                 }
                 foreach (var s in kingdom.Storages)
-                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; }
+                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; works = null; }
                 foreach (var b in kingdom.Blueprints)
-                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; }
+                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; works = null; }
             }
             // Trees, rocks and bushes in the cells round the ruler.
             var nature = NatureMap.Current;
@@ -634,7 +645,7 @@ namespace KingdomGame.Character
                     {
                         var n = nature.Live(at + new Vector2Int(dx, dy));
                         if (n == null || n.Empty || n.Config == null) continue;
-                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; }
+                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; rack = null; toolBench = null; works = null; }
                     }
 
             if (lever != null)
@@ -662,6 +673,14 @@ namespace KingdomGame.Character
                     Hint = $"Gear up here once the {name} is in an armory: walls and a door all round it (I shows the kinds of room)";
                 else
                     Hint = $"This room is a {RoomTypes.Name(room).ToLowerInvariant()}, not an armory: keep beds, tables with seats and the throne out of it (I shows the kinds of room)";
+            }
+            else if (works != null)
+            {
+                var kind = works.Config.machine.kind;
+                Hint = kind == MachineKind.Assembler ? $"E: choose what the {works.Config.displayName.ToLowerInvariant()} makes"
+                    : kind == MachineKind.Arm ? $"E: choose what the {works.Config.displayName.ToLowerInvariant()} moves"
+                    : $"E: see what the {works.Config.displayName.ToLowerInvariant()} is doing";
+                if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) OpenFactory(works.GetComponent<Machine>());
             }
             else if (toolBench != null)
             {

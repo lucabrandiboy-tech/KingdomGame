@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 27;
+        const int SettingsVersion = 28;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -420,6 +420,9 @@ namespace KingdomGame.EditorTools
             if (content.progression == null) content.progression = Ages(defensesByAge, roofs);
             if (content.network == null) content.network = Asset<Networking.NetworkConfig>("Network/NetworkConfig", n => { });
             if (content.armory == null) content.armory = Weapons(bullet, rockets, c4);
+            // The factory's recipes and fuels.
+            if (content.factory == null)
+                content.factory = Asset<FactoryConfig>("Building/FactoryConfig", f => { f.recipes = Automation.RecipeBook.Defaults(); f.fuels = Automation.RecipeBook.DefaultFuels(); });
             // What the crafting room makes (tools, bandages, cures).
             if (content.crafting == null) content.crafting = Asset<CraftingConfig>("Building/CraftingConfig", c => c.items = CraftItem.Defaults());
             // Armor for the ruler and soldiers (bought at an armory room): older settings get the defaults.
@@ -1313,6 +1316,31 @@ namespace KingdomGame.EditorTools
                 });
             string A(string name) => FurnitureArt.AgeMachine(name);
             ResourceAmount In(ResourceType t, int n) => new ResourceAmount(t, n);
+            // The factory (Building/Factory.cs): arms, furnaces and assemblers. Burners until the Industrial age, then electric.
+            MachineConfig Works(string file, MachineKind kind, float swing, float speed, bool burner, float energy, float pollution) =>
+                Asset<MachineConfig>("Economy/Machines/" + file, m =>
+                {
+                    m.kind = kind; m.swingSeconds = swing; m.craftSpeed = speed; m.burner = burner; m.energyUse = energy;
+                    m.pollution = pollution; m.needsPower = !burner; m.holds = 60; m.workSeconds = 1f; m.reach = 1f;
+                });
+            BuildingConfig Factory(string file, string displayName, string art, int size, int rotations, int wood, int stone, int steel,
+                float seconds, float health, float height, MachineConfig machine) =>
+                Asset<BuildingConfig>("Building/Machines/" + file, b =>
+                {
+                    b.displayName = displayName; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Industry; b.art = art;
+                    b.size = new Vector2Int(size, size); b.rotations = rotations; b.woodCost = wood; b.stoneCost = stone; b.steelCost = steel;
+                    b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = true; b.flat = false;
+                    b.dragToPlaceLines = false; b.roomTag = RoomTag.None; b.machine = machine;
+                });
+            BuildingConfig Arm(string file, string displayName, int style, int wood, int stone, int steel, float swing, bool burner, float energy) =>
+                Factory(file, displayName, FurnitureArt.ArmBase(style), 1, 4, wood, stone, steel, 3f, 80f, 0.35f,
+                    Works(file, MachineKind.Arm, swing, 1f, burner, energy, 0f));
+            BuildingConfig Furnace(string file, string displayName, int style, int wood, int stone, int steel, float speed, bool burner, float energy, float pollution) =>
+                Factory(file, displayName, FurnitureArt.FurnaceArt(style), 2, 1, wood, stone, steel, 10f, 400f, 0.7f,
+                    Works(file, MachineKind.Furnace, 0.5f, speed, burner, energy, pollution));
+            BuildingConfig Assembler(string file, string displayName, int style, int wood, int stone, int steel, float speed, bool burner, float energy, float pollution) =>
+                Factory(file, displayName, FurnitureArt.AssemblerArt(style), 3, 1, wood, stone, steel, 16f, 500f, 0.7f,
+                    Works(file, MachineKind.Assembler, 0.5f, speed, burner, energy, pollution));
 
             // Stone Age: crude, slow, no power.
             var stone = new List<BuildingConfig>
@@ -1322,7 +1350,9 @@ namespace KingdomGame.EditorTools
                 Item("FishTrap", "Fish trap", A("FishTrap"), 2, 40, 20, 0, 12f, 150f, 0.2f, false, Producer("FishTrap", ResourceType.Food, 2, 40f, false)),
                 Item("SaplingBed", "Sapling bed", A("SaplingBed"), 2, 50, 10, 0, 12f, 150f, 0.2f, false,
                     Machine("SaplingBed", MachineKind.TreeFarm, 20f, 6, 3f, 0, 0, false, 2f, plantedTree, 240f)),
-                Item("LogChute", "Log chute", A("LogChute"), 1, 3, 0, 0, 2f, 60f, 0.05f, true, Machine("LogChute", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 0.6f)),
+                Arm("WoodenArm", "Wooden arm", 0, 12, 4, 0, 0.75f, true, 0.1f),
+                Furnace("StoneFurnace", "Stone furnace", 0, 0, 30, 0, 1f, true, 0.09f, 2f),
+                Belt(Item("LogChute", "Log chute", A("LogChute"), 1, 3, 0, 0, 2f, 60f, 0.05f, true, Machine("LogChute", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 0.6f)), 0),
             };
             // Bronze Age: a tree farm that keeps trees planted round it (they grow back when cut, so a sawmill or woodcutters never run out).
             var bronze = new List<BuildingConfig>
@@ -1332,16 +1362,18 @@ namespace KingdomGame.EditorTools
                 Item("CopperSluice", "Copper sluice", A("CopperSluice"), 2, 100, 60, 0, 20f, 300f, 0.4f, false, Producer("CopperSluice", ResourceType.Copper, 1, 40f, false)),
                 Item("BerryOrchard", "Berry orchard", A("BerryOrchard"), 2, 80, 10, 0, 18f, 200f, 0.3f, false, Producer("BerryOrchard", ResourceType.Food, 3, 30f, false)),
                 Item("BronzeSawPit", "Bronze saw pit", A("BronzeSawPit"), 2, 100, 40, 0, 20f, 300f, 0.5f, false, Machine("BronzeSawPit", MachineKind.Sawmill, 20f, 3, 5f, 0, 0, false)),
-                Item("SledgeTrack", "Sledge track", A("SledgeTrack"), 1, 4, 0, 0, 2f, 70f, 0.05f, true, Machine("SledgeTrack", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 0.8f)),
+                Assembler("WorkshopAssembler", "Workshop assembler", 0, 60, 30, 0, 0.5f, true, 0.15f, 3f),
+                Belt(Item("SledgeTrack", "Sledge track", A("SledgeTrack"), 1, 4, 0, 0, 2f, 70f, 0.05f, true, Machine("SledgeTrack", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 0.8f)), 1),
             };
             // Iron Age: the first automation, worked by water and treadwheels (no power), slower than the Industrial machines.
             var iron = new List<BuildingConfig>
             {
                 Item("WaterSawmill", "Water sawmill", FurnitureArt.Sawmill, 2, 150, 60, 0, 25f, 400f, 0.7f, false, Machine("WaterSawmill", MachineKind.Sawmill, 16f, 4, 6f, 0, 0, false)),
                 Item("TreadwheelQuarry", "Treadwheel quarry", FurnitureArt.Quarry, 2, 120, 80, 0, 25f, 500f, 1f, false, Machine("TreadwheelQuarry", MachineKind.Quarry, 20f, 3, 1f, 0, 0, false)),
-                Item("RollerTrack", "Roller track", FurnitureArt.Conveyor, 1, 4, 1, 0, 2f, 80f, 0.05f, true, Machine("RollerTrack", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 1f)),
+                Belt(Item("RollerTrack", "Roller track", FurnitureArt.Conveyor, 1, 4, 1, 0, 2f, 80f, 0.05f, true, Machine("RollerTrack", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 1f)), 2),
                 Item("BogIronPit", "Bog iron pit", A("BogIronPit"), 2, 80, 80, 0, 22f, 400f, 0.5f, false, Producer("BogIronPit", ResourceType.Iron, 1, 45f, false)),
                 Item("GranaryFarm", "Granary farm", A("GranaryFarm"), 2, 140, 40, 0, 22f, 300f, 0.4f, false, Producer("GranaryFarm", ResourceType.Food, 4, 30f, false)),
+                Arm("IronArm", "Iron arm", 1, 10, 10, 0, 0.5f, true, 0.12f),
             };
             var medieval = new List<BuildingConfig>
             {
@@ -1350,6 +1382,7 @@ namespace KingdomGame.EditorTools
                 Item("Windmill", "Windmill", A("Windmill"), 2, 180, 120, 0, 30f, 700f, 1.2f, false, Producer("Windmill", ResourceType.Food, 5, 25f, false)),
                 Item("WindSawmill", "Wind sawmill", A("WindSawmill"), 2, 160, 60, 0, 28f, 600f, 1.2f, false, Machine("WindSawmill", MachineKind.Sawmill, 14f, 4, 6f, 0, 0, false)),
                 Item("CoalPit", "Coal pit", A("CoalPit"), 2, 80, 100, 0, 24f, 600f, 0.6f, false, Producer("CoalPit", ResourceType.Coal, 1, 30f, false)),
+                Furnace("BrickFurnace", "Brick furnace", 1, 10, 60, 0, 2f, true, 0.18f, 3f),
             };
             // Renaissance: water and clockwork.
             var renaissance = new List<BuildingConfig>
@@ -1359,15 +1392,18 @@ namespace KingdomGame.EditorTools
                     Producer("ClockworkCrafter", ResourceType.Gunpowder, 2, 30f, false, false, 40, In(ResourceType.Coal, 2), In(ResourceType.Stone, 1), In(ResourceType.Food, 1))),
                 Item("WaterQuarry", "Water-powered quarry", A("WaterQuarry"), 2, 160, 120, 0, 30f, 800f, 1f, false, Machine("WaterQuarry", MachineKind.Quarry, 15f, 4, 1f, 0, 0, false)),
                 Item("StampMill", "Stamp mill", A("StampMill"), 2, 180, 140, 10, 32f, 800f, 1f, false, Producer("StampMill", ResourceType.Iron, 2, 40f, false)),
-                Item("CanvasBelt", "Canvas belt", A("CanvasBelt"), 1, 4, 2, 0, 2f, 100f, 0.05f, true, Machine("CanvasBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 1.4f)),
+                Assembler("ClockworkAssembler", "Clockwork assembler", 1, 60, 40, 10, 0.75f, true, 0.2f, 3f),
+                Belt(Item("CanvasBelt", "Canvas belt", A("CanvasBelt"), 1, 4, 2, 0, 2f, 100f, 0.05f, true, Machine("CanvasBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, false, 1.4f)), 3),
             };
             var industrial = new List<BuildingConfig>
             {
                 Item("Generator", "Generator", FurnitureArt.Generator, 2, 100, 100, 40, 35f, 700f, 1f, false, Machine("Generator", MachineKind.Generator, 30f, 0, 10f, 2, 0)),
                 Item("Sawmill", "Sawmill", FurnitureArt.Sawmill, 2, 80, 20, 30, 30f, 600f, 0.7f, false, Machine("Sawmill", MachineKind.Sawmill, 8f, 5, 8f, 0, 0)),
                 Item("Quarry", "Quarry", FurnitureArt.Quarry, 2, 40, 60, 40, 30f, 700f, 1f, false, Machine("Quarry", MachineKind.Quarry, 10f, 4, 1f, 0, 0)),
-                Item("Conveyor", "Conveyor belt", FurnitureArt.Conveyor, 1, 0, 2, 1, 2f, 150f, 0.05f, true, Machine("Conveyor", MachineKind.Conveyor, 1f, 1, 1f, 0, 0)),
+                Belt(Item("Conveyor", "Conveyor belt", FurnitureArt.Conveyor, 1, 0, 2, 1, 2f, 150f, 0.05f, true, Machine("Conveyor", MachineKind.Conveyor, 1f, 1, 1f, 0, 0)), 4),
                 Item("SteamDrill", "Steam drill", A("SteamDrill"), 2, 60, 80, 40, 34f, 900f, 1.1f, false, Producer("SteamDrill", ResourceType.Coal, 2, 20f, true, true)),
+                Arm("ElectricArm", "Electric arm", 2, 0, 2, 2, 0.42f, false, 0.013f),
+                Assembler("AssemblingMachine", "Assembling machine", 2, 0, 40, 30, 1f, false, 0.15f, 4f),
                 // Electric lights (Lights tab): they only shine while a generator's power reaches them.
                 Lamp(Item("ElectricLamp", "Electric lamp", FurnitureArt.ElectricLamp, 1, 5, 5, 3, 6f, 150f, 1.4f, false, Machine("ElectricLamp", MachineKind.Lamp, 1f, 0, 1.3f, 0, 0))),
                 Lamp(Item("Floodlight", "Floodlight", FurnitureArt.Floodlight, 1, 0, 10, 8, 10f, 250f, 1.5f, false, Machine("Floodlight", MachineKind.Lamp, 1f, 0, 2.6f, 0, 0))),
@@ -1379,7 +1415,9 @@ namespace KingdomGame.EditorTools
                 Item("ElectricSawmill", "Electric sawmill", A("ElectricSawmill"), 2, 80, 60, 50, 34f, 800f, 0.8f, false, Machine("ElectricSawmill", MachineKind.Sawmill, 8f, 6, 9f, 0, 0)),
                 Item("OreDrill", "Ore drill", A("OreDrill"), 2, 40, 120, 60, 40f, 1000f, 1.2f, false, Producer("OreDrill", ResourceType.Gold, 1, 40f, true, true)),
                 Item("TractorFarm", "Tractor farm", A("TractorFarm"), 2, 120, 60, 40, 34f, 700f, 0.6f, false, Producer("TractorFarm", ResourceType.Food, 10, 20f, true)),
-                Item("FastBelt", "Fast belt", A("FastBelt"), 1, 0, 2, 2, 2f, 180f, 0.05f, true, Machine("FastBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 3f)),
+                Arm("FastArm", "Fast arm", 3, 0, 2, 4, 0.18f, false, 0.046f),
+                Furnace("ElectricFurnace", "Electric furnace", 2, 0, 40, 40, 2f, false, 0.18f, 1f),
+                Belt(Item("FastBelt", "Fast belt", A("FastBelt"), 1, 0, 2, 2, 2f, 180f, 0.05f, true, Machine("FastBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 3f)), 5),
             };
             // World War 2: power plants and assembly lines.
             var ww2 = new List<BuildingConfig>
@@ -1389,7 +1427,8 @@ namespace KingdomGame.EditorTools
                     Producer("AssemblyLine", ResourceType.Electronics, 2, 25f, true, false, 40, In(ResourceType.Gold, 1), In(ResourceType.Copper, 2), In(ResourceType.Wire, 1))),
                 Item("Excavator", "Excavator", A("Excavator"), 2, 40, 160, 100, 44f, 1200f, 1.2f, false, Machine("Excavator", MachineKind.Quarry, 10f, 8, 1f, 0, 0)),
                 Item("MechanizedFarm", "Mechanized farm", A("MechanizedFarm"), 2, 120, 120, 60, 40f, 900f, 0.9f, false, Producer("MechanizedFarm", ResourceType.Food, 15, 20f, true)),
-                Item("ExpressBelt", "Express belt", A("ExpressBelt"), 1, 0, 2, 3, 2f, 220f, 0.05f, true, Machine("ExpressBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 4f)),
+                Assembler("AssemblyRobot", "Assembly robot", 3, 0, 40, 80, 1.5f, false, 0.3f, 3f),
+                Belt(Item("ExpressBelt", "Express belt", A("ExpressBelt"), 1, 0, 2, 3, 2f, 220f, 0.05f, true, Machine("ExpressBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 4f)), 6),
             };
             return new[] { stone, bronze, iron, medieval, renaissance, industrial, ww1, ww2 };
 
@@ -1397,6 +1436,21 @@ namespace KingdomGame.EditorTools
             static BuildingConfig Lamp(BuildingConfig b)
             {
                 if (b.category == BuildCategory.Industry) b.category = BuildCategory.Lights;
+                return b;
+            }
+
+            // Belts carry items one way now (the factory): four ways to face, drawn for each, curving at corners. Set every
+            // time, so older settings' belts get it too.
+            static BuildingConfig Belt(BuildingConfig b, int style)
+            {
+                string art = FurnitureArt.Belt(style);
+                if (b.art == art && b.rotations == 4 && b.flat && b.dragToPlaceLines && !b.blocksMovement) return b;
+                b.art = art;
+                b.rotations = 4;
+                b.flat = true;
+                b.dragToPlaceLines = true;
+                b.blocksMovement = false;
+                EditorUtility.SetDirty(b);
                 return b;
             }
         }

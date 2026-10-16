@@ -190,6 +190,13 @@ namespace KingdomGame.World
         (Research Research, BuildController Builder) KingdomTools(Kingdom kingdom, RulerController rulerController, CameraRig rig, WorldParts parts,
             Research.Unlocking unlocking)
         {
+            // The factory first, so machines built from here on (or loaded) join it.
+            var factory = kingdom.gameObject.AddComponent<Factory>();
+            factory.Setup(kingdom, content.factory);
+            kingdom.Factory = factory;
+            var factoryPanel = gameObject.AddComponent<FactoryPanel>();
+            factoryPanel.Setup(factory);
+            rulerController.OpenFactory = factoryPanel.Open;
             var research = gameObject.AddComponent<Research>();
             research.Setup(content.progression, kingdom, unlocking);
             gameObject.AddComponent<TechScreen>().Setup(research);

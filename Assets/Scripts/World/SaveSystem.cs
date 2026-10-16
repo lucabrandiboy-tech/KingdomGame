@@ -321,6 +321,7 @@ namespace KingdomGame.World
             if (research != null) data.research = research.Save();
             if (kingdom.Armory != null) data.armory = kingdom.Armory.Save();
             if (kingdom.Crafting != null) data.crafting = kingdom.Crafting.Save();
+            if (kingdom.Factory != null) data.factory = kingdom.Factory.Save();
             // The players who joined (their kingdoms and where they are). If hosting didn't start this time,
             // the ones from the save are kept as they were.
             data.others = Host != null && Host.Core != null ? OthersSave.From(Host.Core) : loadedOthers ?? new OthersSave();
@@ -479,6 +480,8 @@ namespace KingdomGame.World
                 var blueprint = kingdom.RestoreBlueprint(config, b.cells, b.rotation);
                 if (blueprint != null) Fill(blueprint, b.delivered, b.work);
             }
+            // The factory's items and machines' insides (now that the belts, arms and machines are back).
+            if (kingdom.Factory != null && data.factory != null) kingdom.Factory.Load(data.factory);
 
             foreach (var v in data.villagers)
             {

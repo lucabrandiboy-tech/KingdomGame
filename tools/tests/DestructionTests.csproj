@@ -33,6 +33,8 @@
     <Compile Include="../../Assets/Scripts/Audio/SoundSynth.cs" />
     <Compile Include="../../Assets/Scripts/Villagers/NeedsMath.cs" />
     <Compile Include="../../Assets/Scripts/Villagers/SoldierMath.cs" />
+    <Compile Include="../../Assets/Scripts/Economy/Inventory.cs" />
+    <Compile Include="../../Assets/Scripts/Automation/*.cs" />
     <Compile Include="../../Assets/Scripts/World/SeasonMath.cs" />
   </ItemGroup>
 </Project>

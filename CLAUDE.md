@@ -127,6 +127,16 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   (`Kingdom.Crafting`, items in `CraftingConfig`, defaults `CraftItem.Defaults`), made by crafters at a tool bench in a
   crafting room (`Villager.toolBench`). Tools add to `Kingdom.Boost(Gathering)`/`BuildBoost`; bandages (C heals the ruler,
   soldiers use one instead of retreating) and cures (a bitten villager's, before turning) are kept as supplies. Saved.
+- **Factory** (Factorio-style, the user's wish: "really close to Factorio"). The simulation is plain C# in
+  `Assets/Scripts/Automation` (`FactoryWorld`: belts carrying `BeltItem`s one way, one lane, curves and side-loading,
+  `Arm`s (inserters), ports (`IItemPort`: chests, machines); `Crafter`: furnaces and assemblers with `Recipe`s and
+  burner fuel), unit-tested in `tools/tests/FactoryTests.cs`. `Building/Factory.cs` runs it per kingdom
+  (`Kingdom.Factory`): registers machines (`MachineKind.Conveyor/Arm/Furnace/Assembler`, from `Machine.Setup`), makes
+  storages ports and houses' belt holes links, draws items and arms, saves (`Factory.Saved`). Numbers in `FactoryConfig`
+  (recipes, fuels) and `MachineConfig` (swing, craft speed, burner, energy, pollution). Older machines push their goods onto
+  touching belts (`Machine.PushOut`). E at an arm/furnace/assembler: `UI/FactoryPanel.cs`. Art in `Art/FactoryArt.cs`
+  (belts per facing with left/right curves, arms, furnaces, assemblers, `ArtKeys.Item` icons). Belts point the way they're
+  dragged (`BuildController.Placing`); nothing may sit on a belt (`Kingdom.CanPlace`).
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.
@@ -157,7 +167,7 @@ run in Unity**; the user starts with `docs/START-HERE.md` (one session that touc
 update), then tests them together with `docs/CASTLE-SURVIVAL-TEST.md`
 and `docs/HOUSES-TEST.md` (plus `docs/PHASE-2B-TEST.md` for the details; later
 updates: `docs/SAVE-TEST.md`, `WEAPONS-TEST.md`, `ONLINE-TEST.md`, `ENDLESS-WORLD-TEST.md`, `MACHINES-TEST.md`,
-`ZOMBIE-BASES-TEST.md`, `AGES-CONTENT-TEST.md`, `ZOMBIE-KINDS-TEST.md`, `GAMEPLAY-TEST.md`). Don't start 2C before they
+`ZOMBIE-BASES-TEST.md`, `AGES-CONTENT-TEST.md`, `ZOMBIE-KINDS-TEST.md`, `GAMEPLAY-TEST.md`, `FACTORY-TEST.md`). Don't start 2C before they
 confirm. See `docs/ROADMAP.md` and `docs/DECISIONS.md` sections 14-15.
 The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git pull`).
 
@@ -168,7 +178,7 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
   path finding (`Villagers/GridPathfinder.cs`), the zombies' flow field and
   waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`), room finding
   (`Building/RoomFinder.cs`), sounds (`Audio/SoundSynth.cs`), villagers' needs
-  (`Villagers/NeedsMath.cs`), soldiers' ranks (`Villagers/SoldierMath.cs`) and the seasons and weather (`World/SeasonMath.cs`). Keep those files free of `UnityEngine` so the
+  (`Villagers/NeedsMath.cs`), soldiers' ranks (`Villagers/SoldierMath.cs`), the factory (`Automation/*.cs`) and the seasons and weather (`World/SeasonMath.cs`). Keep those files free of `UnityEngine` so the
   tests can compile them.
 - `dotnet run --project tools/world-tests/WorldTests.csproj`: the endless world outside
   Unity (`Economy/NatureMap.cs` with stand-ins in `tools/world-tests/Stubs.cs` and the art

@@ -101,6 +101,15 @@ namespace KingdomGame.UI
             if (GUILayout.Button("+10,000 of everything", button)) Give(10000);
             if (GUILayout.Button("+500 XP", button)) kingdom.AddXp(500, "Cheat");
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Factory: +300 iron ore, copper ore and coal", button))
+            {
+                var near = kingdom.Throne != null ? kingdom.Throne.Center : Vector2.zero;
+                int stored = 0;
+                foreach (var t in new[] { ResourceType.IronOre, ResourceType.CopperOre, ResourceType.Coal }) stored += kingdom.Store(t, 300, near);
+                Say(stored < 900 ? "The storehouses are full: build more storehouses to hold more." : "+300 iron ore, copper ore and coal (for furnaces)");
+            }
+            GUILayout.EndHorizontal();
 
             Ages();
 

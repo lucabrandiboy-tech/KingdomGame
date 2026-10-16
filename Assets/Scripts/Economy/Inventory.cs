@@ -25,6 +25,10 @@ namespace KingdomGame.Economy
         MachineParts,
         Wire,
         Electronics,
+        /// <summary>Dug by drills from iron ore fields on the map; a furnace smelts it into iron.</summary>
+        IronOre,
+        /// <summary>Dug by drills from copper ore fields; a furnace smelts it into copper.</summary>
+        CopperOre,
     }
 
     /// <summary>An amount of one resource (extra building costs: an age's parts).</summary>
@@ -60,6 +64,8 @@ namespace KingdomGame.Economy
                 case ResourceType.IronBar: return "iron bars";
                 case ResourceType.Gear: return "gears";
                 case ResourceType.MachineParts: return "machine parts";
+                case ResourceType.IronOre: return "iron ore";
+                case ResourceType.CopperOre: return "copper ore";
                 default: return type.ToString().ToLowerInvariant();
             }
         }

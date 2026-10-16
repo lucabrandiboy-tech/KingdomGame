@@ -22,6 +22,12 @@ namespace KingdomGame.Economy
         Workbench,
         /// <summary>Makes <see cref="MachineConfig.makes"/> by itself (from <see cref="MachineConfig.inputs"/> if any): farms, kilns, drills, auto-crafters.</summary>
         Producer,
+        /// <summary>An arm (inserter): picks items up behind it and puts them down in front (Building/Factory.cs).</summary>
+        Arm,
+        /// <summary>A furnace: smelts what arms put in it (ore into metal), burning fuel or on power.</summary>
+        Furnace,
+        /// <summary>An assembler: makes the recipe you choose from what arms put in it.</summary>
+        Assembler,
     }
 
     /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
@@ -60,5 +66,17 @@ namespace KingdomGame.Economy
         public bool toBelts;
         [Tooltip("How fast things ride the conveyor belts, in tiles a second.")]
         [Min(0.2f)] public float beltSpeed = 2f;
+
+        [Header("Factory: arms, furnaces, assemblers")]
+        [Tooltip("Arms: seconds to swing from where they pick up to where they drop (back takes as long).")]
+        [Min(0.05f)] public float swingSeconds = 0.6f;
+        [Tooltip("Furnaces and assemblers: crafting speed (1 = a recipe's own time).")]
+        [Min(0.05f)] public float craftSpeed = 1f;
+        [Tooltip("Arms, furnaces and assemblers: burns wood or coal put in it (an arm takes its own) instead of needing power.")]
+        public bool burner = true;
+        [Tooltip("MW used while working: how fast a burner eats its fuel (wood holds 2 MJ, coal 4).")]
+        [Min(0f)] public float energyUse = 0.1f;
+        [Tooltip("Pollution made each minute while working.")]
+        [Min(0f)] public float pollution;
     }
 }

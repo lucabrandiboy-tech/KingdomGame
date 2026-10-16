@@ -44,6 +44,8 @@ namespace KingdomGame.World
         public Combat.Armory.Saved armory = new Combat.Armory.Saved();
         /// <summary>The crafting room: tools made, supplies, orders (older saves: none).</summary>
         public Building.Crafting.Saved crafting;
+        /// <summary>The factory: items on belts, arms, what's in furnaces and assemblers (older saves: none).</summary>
+        public Building.Factory.Saved factory;
         public bool hasSurvival;
         public SurvivalSave survival = new SurvivalSave();
         /// <summary>A hosted game: the players who joined it (their kingdoms, and where they were).</summary>

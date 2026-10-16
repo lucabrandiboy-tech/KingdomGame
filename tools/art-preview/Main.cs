@@ -112,6 +112,8 @@ static class Program
         Render(castle, Path.Combine(dir, "horde_night.png"), 1920, 1080, new Vector2(0.5f, -4.2f), 5f, Time.Night);
         Render(castle, Path.Combine(dir, "zombie_kinds.png"), 1920, 1080, new Vector2(0f, -15.4f), 5f, Time.Day);
         Render(castle, Path.Combine(dir, "soldiers.png"), 1920, 1080, new Vector2(0f, -23f), 4f, Time.Day);
+        Render(castle, Path.Combine(dir, "factory.png"), 1920, 1080, new Vector2(19f, -6.5f), 4.5f, Time.Day);
+        Render(castle, Path.Combine(dir, "factory_close.png"), 1920, 1080, new Vector2(15.5f, -4.5f), 2f, Time.Day);
         Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
         Render(world, Path.Combine(dir, "game_winter.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 2);
         Render(world, Path.Combine(dir, "ruins_village.png"), 1920, 1080, new Vector2(-20f, 30f), 8f, Time.Day);
@@ -476,6 +478,97 @@ static class Program
             Piece(FurnitureArt.ToolBench, -1, -26, 2, 1, 0, 0.45f);
             Piece(FurnitureArt.ToolBench, 7, -26, 2, 1, 2, 0.45f);
             for (int y = -27; y < -19; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
+            BuildFactory();
+        }
+
+        // East of the castle (factory.png): a small factory as Building/Factory.cs draws it. Iron ore rides a conveyor
+        // (fed round a curve from a log chute coming down), a wooden arm drops it into a stone furnace, an electric arm
+        // takes the iron out onto a fast belt, and another feeds it into an assembler making gears. An express belt and a
+        // canvas belt beside them.
+        void BuildFactory()
+        {
+            const int conveyor = 4;
+            // The log chute coming down into the start of the line (a curve), then the line going right and turning up.
+            FactoryBelt(0, 12, -1, 3, 0);
+            FactoryBelt(0, 12, -2, 3, 0);
+            FactoryBelt(conveyor, 12, -3, 0, 1);
+            for (int x = 13; x <= 17; x++) FactoryBelt(conveyor, x, -3, 0, 0);
+            FactoryBelt(conveyor, 18, -3, 1, 1);
+            FactoryBelt(conveyor, 18, -2, 1, 0);
+            FactoryBelt(conveyor, 18, -1, 1, 0);
+            foreach (var (x, y, dir, pos) in new[] { (12, -1, 3, 0.4f), (12, -2, 3, 0.2f), (12, -2, 3, 0.7f), (13, -3, 0, 0.3f), (14, -3, 0, 0.1f), (14, -3, 0, 0.8f), (15, -3, 0, 0.5f), (16, -3, 0, 0.2f), (17, -3, 0, 0.6f), (18, -2, 1, 0.3f), (18, -1, 1, 0.9f) })
+                OnBelt(x, y, dir, pos, KingdomGame.Economy.ResourceType.IronOre);
+            OnBelt(18, -3, 1, 0.5f, KingdomGame.Economy.ResourceType.Coal, true, 0);
+            // A wooden arm (facing down) puts ore into the stone furnace below the line.
+            FactoryArm(0, 14, -4, 3, 0.55f, KingdomGame.Economy.ResourceType.IronOre);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.FurnaceArt(0), 0), 13, -6, 2, 2, 0.7f);
+            // An electric arm takes the iron out onto a fast belt, and another feeds the assembler.
+            FactoryArm(2, 15, -6, 0, 0.3f, KingdomGame.Economy.ResourceType.Iron);
+            for (int x = 16; x <= 18; x++) FactoryBelt(5, x, -6, 0, 0);
+            foreach (var (x, pos) in new[] { (16, 0.2f), (16, 0.7f), (17, 0.45f), (18, 0.95f) }) OnBelt(x, -6, 0, pos, KingdomGame.Economy.ResourceType.Iron);
+            FactoryArm(2, 19, -6, 0, 0.85f, KingdomGame.Economy.ResourceType.Iron);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.AssemblerArt(2), 0), 20, -7, 3, 3, 0.7f);
+            Things.Add(new Inst { Key = ArtKeys.Item(KingdomGame.Economy.ResourceType.Gear), X = 22.05f, Y = -4.45f, Scale = 1.6f, Order = 154 });
+            // More kinds: an express belt and a canvas belt carrying mixed things, a brick furnace, a clockwork assembler.
+            for (int y = -8; y <= -1; y++) FactoryBelt(6, 25, y, 1, 0);
+            for (int y = -1; y >= -8; y--) FactoryBelt(3, 26, y, 3, 0);
+            var mixed = new[] { KingdomGame.Economy.ResourceType.Copper, KingdomGame.Economy.ResourceType.Gear, KingdomGame.Economy.ResourceType.Wire, KingdomGame.Economy.ResourceType.Electronics, KingdomGame.Economy.ResourceType.Steel, KingdomGame.Economy.ResourceType.CopperOre, KingdomGame.Economy.ResourceType.Coal, KingdomGame.Economy.ResourceType.Wood };
+            for (int i = 0; i < 8; i++)
+            {
+                OnBelt(25, -8 + i, 1, 0.3f, mixed[i]);
+                OnBelt(26, -1 - i, 3, 0.6f, mixed[(i + 3) % mixed.Length]);
+            }
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.FurnaceArt(1), 0), 13, -9, 2, 2, 0.7f);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.FurnaceArt(2), 0), 16, -9, 2, 2, 0.7f);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.AssemblerArt(1), 0), 20, -11, 3, 3, 0.7f);
+            FactoryArm(1, 19, -10, 2, 0.1f, null);
+            FactoryArm(3, 23, -10, 0, 0.6f, KingdomGame.Economy.ResourceType.Gunpowder);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.AssemblerArt(0), 0), 12, -13, 3, 3, 0.7f);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.AssemblerArt(3), 0), 16, -13, 3, 3, 0.7f);
+            for (int y = -14; y <= 0; y++) for (int x = 11; x <= 27; x++) used.Add((x, y));
+        }
+
+        void FactoryPiece(string key, int x, int y, int w, int h, float height)
+        {
+            float cx = x + w / 2f, cy = y + h / 2f;
+            Things.Add(new Inst { Key = ArtKeys.Shadow(key), X = cx + 0.55f * height, Y = cy - 0.65f * height, Order = -100, Shadow = true });
+            Things.Add(new Inst { Key = key, X = cx, Y = cy, Order = 150 });
+        }
+
+        // A belt tile facing `dir` (straight, or a curve turning left / right: turn 1 / 2), like Factory.DrawPiece.
+        void FactoryBelt(int style, int x, int y, int dir, int turn)
+        {
+            string art = FurnitureArt.Belt(style);
+            Things.Add(new Inst { Key = ArtKeys.Turned(turn == 0 ? art : art + (turn == 1 ? "/CurveL" : "/CurveR"), dir), X = x + 0.5f, Y = y + 0.5f, Order = -900 });
+        }
+
+        // An item on a belt `pos` along it (straight, or round a curve coming in travelling `from`), like Belt.Place.
+        void OnBelt(int x, int y, int dir, float pos, KingdomGame.Economy.ResourceType item, bool curve = false, int from = 0)
+        {
+            var d = Step(dir);
+            float ox = d.x * (pos - 0.5f), oy = d.y * (pos - 0.5f);
+            if (curve)
+            {
+                var i = Step(from);
+                float a = pos * MathF.PI / 2f, c = MathF.Cos(a), sn = MathF.Sin(a);
+                ox = (-i.x + d.x) * 0.5f + (-d.x * c + i.x * sn) * 0.5f;
+                oy = (-i.y + d.y) * 0.5f + (-d.y * c + i.y * sn) * 0.5f;
+            }
+            Things.Add(new Inst { Key = ArtKeys.Item(item), X = x + 0.5f + ox, Y = y + 0.5f + oy, Order = -880 });
+        }
+
+        static Vector2 Step(int dir) => dir == 0 ? new Vector2(1, 0) : dir == 1 ? new Vector2(0, 1) : dir == 2 ? new Vector2(-1, 0) : new Vector2(0, -1);
+
+        // An arm facing `dir`, swung `angle` of the way from its pickup to its drop, perhaps holding something.
+        void FactoryArm(int style, int x, int y, int dir, float angle, KingdomGame.Economy.ResourceType? held)
+        {
+            string art = FurnitureArt.ArmBase(style);
+            FactoryPiece(ArtKeys.Turned(art, dir), x, y, 1, 1, 0.35f);
+            float rot = dir * 90f + 180f - 180f * angle;
+            Things.Add(new Inst { Key = ArtKeys.ArmSwing(art), X = x + 0.5f, Y = y + 0.5f, Rot = rot, Order = 153 });
+            if (held == null) return;
+            var hand = Rotate(new Vector2(FurnitureArt.ArmReach, 0f), rot);
+            Things.Add(new Inst { Key = ArtKeys.Item(held.Value), X = x + 0.5f + hand.x, Y = y + 0.5f + hand.y, Order = 154 });
         }
 
         // A soldier like Villager.Animate: its look's picture for the nearest direction, and its weapon in its right hand.

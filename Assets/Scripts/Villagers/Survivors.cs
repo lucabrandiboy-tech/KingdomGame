@@ -23,7 +23,7 @@ namespace KingdomGame.Villagers
         static readonly (Job job, string trade)[] Trades =
         {
             (Job.Builder, "a carpenter"), (Job.Woodcutter, "a woodcutter"), (Job.Miner, "a stonemason"), (Job.Forager, "a farmer"),
-            (Job.Hunter, "a hunter"), (Job.Guard, "a soldier"), (Job.Crafter, "a blacksmith"),
+            (Job.Hunter, "a hunter"), (Job.Guard, "a watchman"), (Job.Soldier, "a soldier"), (Job.Crafter, "a blacksmith"),
         };
         // What you might notice: signs of a bite; things that look like it but aren't; nothing much.
         static readonly string[] BiteSigns =

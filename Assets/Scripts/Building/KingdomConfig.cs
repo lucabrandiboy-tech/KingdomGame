@@ -32,5 +32,17 @@ namespace KingdomGame.Building
         [Min(1)] public int roofReach = 4;
         [Tooltip("Pixels per tile of the roof pictures (drawn while playing, for each roof's shape). Lower saves video memory.")]
         [Range(16, 128)] public int roofDetail = 64;
+
+        [Header("Rooms (I shows them all)")]
+        [Tooltip("Villagers and soldiers hurt below this share of their health go to an infirmary's bed (if there's one free)...")]
+        [Range(0, 1)] public float recoverBelow = 0.6f;
+        [Tooltip("...and get back this many hit points a second there (a bed elsewhere heals only slowly, at night).")]
+        [Min(0)] public float infirmaryHealPerSecond = 4f;
+        [Tooltip("Soldiers asleep in a barracks' beds heal this many times as fast.")]
+        [Min(1)] public float barracksHealing = 2f;
+        [Tooltip("A library makes research this much faster (0.1 = 10%).")]
+        [Range(0, 1)] public float libraryResearch = 0.1f;
+        [Tooltip("A workshop makes crafters this much faster (0.15 = 15%).")]
+        [Range(0, 1)] public float workshopCrafting = 0.15f;
     }
 }

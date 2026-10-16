@@ -113,6 +113,16 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   `Ruins.State`). Art in `Art/RuinArt.cs`. Lost blueprints: `Research.AddBlueprint` (halves a research).
 - **Goals** (`Progression/Goals.cs`, each age's list in `AgeConfig.goals`, defaults in `GameSetup.DefaultGoals`):
   checked every second (`Goals.Progress` per `GoalKind`), rewards go into storage. Saved as `SaveData.goals`.
+- **Kinds of room** (`Building/RoomTypes.cs`: a walled room's kind from its furniture's `RoomTag`, first rule that fits;
+  `Kingdom.CountRooms/RoomTypeAt/InRoom`; numbers in `KingdomConfig` "Rooms"; I opens `UI/RoomsPanel.cs`). Infirmary beds
+  heal the hurt (`Kingdom.Recover`, `Villager.StartRecover`), barracks heal soldiers faster, a library and a workshop speed
+  research and crafting.
+- **Soldiers** (`Job.Soldier` in `Villagers/Villager.cs`, numbers in `VillagerConfig` "Soldiers"): fight zombies and wolves
+  (`LookForFoes`/`Fighting`; outside the walls they go as near as they can, `NavGrid.NearestReachable`, and shoot over),
+  retreat to a bed when badly hurt, train at dummies in a training room, ranks in `SoldierMath` (unit-tested). Gear:
+  `Combat.ArmorItem` (`ArmoryConfig.armor`, defaults in `ArmorItem.Defaults`) and copies of the kingdom's weapons, bought in
+  `UI/GearPanel.cs` (E at a weapon rack or armor stand in an armory room); the ruler's armor is `Armory.RulerArmor`
+  (`RulerController.WearArmor`). Soldier pictures: `CharacterArt.SoldierFrame`, one look per armor `look`.
 - Drawing order: fixed per kind of thing, in `Core/SortOrder.cs` (no y-sorting).
   Shadows use `Look.AddShadow`; things that should glow at night use `Look.MakeGlow`.
 - Textures are smooth (bilinear or trilinear) with mipmaps; no Pixel Perfect Camera.
@@ -154,7 +164,7 @@ The user saves work with Git Bash (`git add -A`, `git commit`, `git push`, `git 
   path finding (`Villagers/GridPathfinder.cs`), the zombies' flow field and
   waves (`Zombies/FlowField.cs`, `Zombies/WaveMath.cs`), room finding
   (`Building/RoomFinder.cs`), sounds (`Audio/SoundSynth.cs`), villagers' needs
-  (`Villagers/NeedsMath.cs`) and the seasons and weather (`World/SeasonMath.cs`). Keep those files free of `UnityEngine` so the
+  (`Villagers/NeedsMath.cs`), soldiers' ranks (`Villagers/SoldierMath.cs`) and the seasons and weather (`World/SeasonMath.cs`). Keep those files free of `UnityEngine` so the
   tests can compile them.
 - `dotnet run --project tools/world-tests/WorldTests.csproj`: the endless world outside
   Unity (`Economy/NatureMap.cs` with stand-ins in `tools/world-tests/Stubs.cs` and the art

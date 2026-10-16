@@ -62,6 +62,7 @@ namespace UnityEngine.InputSystem
         public KeyControl kKey => null;
         public KeyControl jKey => null;
         public KeyControl oKey => null;
+        public KeyControl iKey => null;
         public KeyControl rightShiftKey => null;
     }
 

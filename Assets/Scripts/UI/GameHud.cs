@@ -42,7 +42,7 @@ namespace KingdomGame.UI
             "In a house: B furnish it, U upgrade it (once you reach the next age)\n" +
             "On the walls: walk along them, shoot over them; E climbs down\n" +
             "Walk over loot bags to pick them up\n" +
-            "V  villagers' jobs          T  research\n" +
+            "V  villagers' jobs          T  research          I  kinds of room\n" +
             "Esc  pause          F3  performance info          H  hide this\n" +
             "F10  cheats, for testing (offline games)";
 

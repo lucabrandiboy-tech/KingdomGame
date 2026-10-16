@@ -111,6 +111,7 @@ static class Program
         Render(castle, Path.Combine(dir, "castle_close.png"), 1920, 1080, new Vector2(-1.2f, 1.2f), 3f, Time.Day);
         Render(castle, Path.Combine(dir, "horde_night.png"), 1920, 1080, new Vector2(0.5f, -4.2f), 5f, Time.Night);
         Render(castle, Path.Combine(dir, "zombie_kinds.png"), 1920, 1080, new Vector2(0f, -15.4f), 5f, Time.Day);
+        Render(castle, Path.Combine(dir, "soldiers.png"), 1920, 1080, new Vector2(0f, -23f), 4f, Time.Day);
         Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
         Render(world, Path.Combine(dir, "game_winter.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 2);
         Render(world, Path.Combine(dir, "ruins_village.png"), 1920, 1080, new Vector2(-20f, 30f), 8f, Time.Day);
@@ -458,6 +459,29 @@ static class Program
             Things.Add(new Inst { Key = ArtKeys.AcidGlob, X = 0.4f, Y = -13.2f, Order = 2500, Glow = true, Scale = 1.5f });
             Things.Add(new Inst { Key = ArtKeys.ScreamRing, X = 3.6f, Y = -16.6f, Order = 2500, Scale = 3f, Alpha = 0.7f });
             for (int y = -19; y < -12; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
+
+            // Further south (soldiers.png): a soldier in each look of armor with a weapon of its age, walking, and one
+            // training at a dummy beside a medicine table (Villagers/Villager.cs).
+            string[] arms = { WeaponArt.Club, WeaponArt.Bow, WeaponArt.Crossbow, WeaponArt.Musket, WeaponArt.Smg };
+            for (int look = 0; look < CharacterArt.SoldierLooks; look++)
+            {
+                float x = -5f + look * 2.2f;
+                Soldier(look, arms[look], x, -21f, 90f, 1);
+                Soldier(look, arms[look], x, -22.6f, 0f, 3);
+            }
+            Piece(FurnitureArt.TrainingDummy, -4, -25, 1, 1, 0, 0.75f);
+            Soldier(1, WeaponArt.Club, -5.3f, -24.5f, 0f, 0);
+            Piece(FurnitureArt.MedicineTable, 1, -25, 2, 1, 0, 0.35f);
+            Piece(FurnitureArt.MedicineTable, 5, -25, 2, 1, 1, 0.35f);
+            for (int y = -27; y < -19; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
+        }
+
+        // A soldier like Villager.Animate: its look's picture for the nearest direction, and its weapon in its right hand.
+        void Soldier(int look, string weapon, float x, float y, float facing, int frame)
+        {
+            Person(ArtKeys.Soldier(look, 0, frame), x, y, facing, CharacterArt.VillagerDirections, ArtKeys.VillagerShadow);
+            var hand = Rotate(CharacterArt.SoldierHand, facing);
+            Things.Add(new Inst { Key = ArtKeys.Weapon(weapon), X = x + hand.x, Y = y + hand.y, Rot = facing, Scale = 0.86f, Order = 1001 });
         }
 
         // A piece of furniture like Furniture.Setup: its picture for the way it faces, centered on

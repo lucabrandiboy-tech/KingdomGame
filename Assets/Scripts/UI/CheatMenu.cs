@@ -154,6 +154,16 @@ namespace KingdomGame.UI
                 Say(n > 0 ? $"{n} villager{(n == 1 ? "" : "s")} will turn in 10 seconds" : "Nobody here is bitten");
             }
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Hurt everyone (to try the infirmary)", button))
+                foreach (var v in kingdom.Villagers) if (v != null && v.Health != null && !v.Health.Dead) v.Health.SetCurrent(v.Health.Max * 0.25f);
+            if (GUILayout.Button("Soldiers +100 experience", button))
+            {
+                int n = 0;
+                foreach (var v in kingdom.Villagers) if (v != null && v.IsSoldier) { v.GiveXp(100f); n++; }
+                Say(n > 0 ? $"{n} soldier{(n == 1 ? "" : "s")} got 100 experience" : "No soldiers (V: give villagers the Soldier job)");
+            }
+            GUILayout.EndHorizontal();
 
             Heading("You");
             GUILayout.BeginHorizontal();

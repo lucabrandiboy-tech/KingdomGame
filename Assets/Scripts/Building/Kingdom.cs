@@ -9,10 +9,11 @@ using UnityEngine;
 
 namespace KingdomGame.Building
 {
-    /// <summary>A room: an area closed off by walls and doors, named after what's in it.</summary>
+    /// <summary>A room: an area closed off by walls and doors, named after what's in it (see <see cref="RoomTypes"/>).</summary>
     public sealed class Room
     {
         public string Name;
+        public RoomType Type;
         public readonly List<Vector2Int> Cells = new List<Vector2Int>();
         /// <summary>A spot near the middle that's inside the room, for its label.</summary>
         public Vector2 LabelAt;
@@ -261,12 +262,21 @@ namespace KingdomGame.Building
                 }
             var dead = new Sprite[CharacterArt.DeadDirections];
             for (int d = 0; d < dead.Length; d++) dead[d] = ArtSprites.Get(ArtKeys.VillagerDead(d));
+            var soldiers = new Sprite[CharacterArt.SoldierLooks][,];
+            for (int look = 0; look < soldiers.Length; look++)
+            {
+                soldiers[look] = new Sprite[CharacterArt.VillagerDirections, CharacterArt.WalkFrames];
+                for (int d = 0; d < CharacterArt.VillagerDirections; d++)
+                    for (int f = 0; f < CharacterArt.WalkFrames; f++)
+                        soldiers[look][d, f] = ArtSprites.Get(ArtKeys.Soldier(look, d, f));
+            }
             villagerSprites = new VillagerSprites
             {
                 Walking = walking,
                 Carrying = carrying,
                 Shadow = ArtSprites.Get(ArtKeys.VillagerShadow),
                 Dead = dead,
+                Soldier = soldiers,
             };
         }
 
@@ -476,6 +486,21 @@ namespace KingdomGame.Building
             var node = nature != null ? nature.Live(cell) : null;
             return node != null && node.Blocks ? node : null;
         }
+
+        readonly int[] roomCounts = new int[System.Enum.GetValues(typeof(RoomType)).Length];
+
+        /// <summary>How many rooms of a kind the kingdom has.</summary>
+        public int CountRooms(RoomType type)
+        {
+            UpdateRooms(false);
+            return roomCounts[(int)type];
+        }
+
+        /// <summary>What kind of room a cell is in (<see cref="RoomType.None"/>: not in one).</summary>
+        public RoomType RoomTypeAt(Vector2Int cell) => RoomAt(cell)?.Type ?? RoomType.None;
+
+        /// <summary>Whether a piece of furniture stands in a room of a kind.</summary>
+        public bool InRoom(Furniture piece, RoomType type) => piece != null && RoomTypeAt(piece.Cells.position) == type;
 
         /// <summary>The room this cell is in, or null (outside).</summary>
         public Room RoomAt(Vector2Int cell)
@@ -1493,12 +1518,13 @@ namespace KingdomGame.Building
         public int UpgradeCost(Upgrade u) => Mathf.RoundToInt(100f * Mathf.Pow(1.35f, Level(u)));
         /// <summary>How much faster villagers are at it: 1 + 5% a level, plus what furniture adds.</summary>
         public float Boost(Upgrade u) => 1f + PerLevel * Level(u)
-            + FurnitureBoost(u == Upgrade.Speed ? BoostKind.Speed : u == Upgrade.Gathering ? BoostKind.Gathering : BoostKind.Crafting);
+            + FurnitureBoost(u == Upgrade.Speed ? BoostKind.Speed : u == Upgrade.Gathering ? BoostKind.Gathering : BoostKind.Crafting)
+            + (u == Upgrade.Crafting && CountRooms(RoomType.Workshop) > 0 ? config.workshopCrafting : 0f);   // (a workshop)
 
         /// <summary>Builders' work speed (furniture that helps).</summary>
         public float BuildBoost => 1f + FurnitureBoost(BoostKind.Building);
         /// <summary>Research speed (furniture that helps).</summary>
-        public float ResearchBoost => 1f + FurnitureBoost(BoostKind.Research);
+        public float ResearchBoost => 1f + FurnitureBoost(BoostKind.Research) + (CountRooms(RoomType.Library) > 0 ? config.libraryResearch : 0f);
 
         readonly float[] furnitureBoosts = new float[6];
         readonly HashSet<BuildingConfig> boostSeen = new HashSet<BuildingConfig>();
@@ -1625,19 +1651,115 @@ namespace KingdomGame.Building
 
         public VillagerConfig VillagerSettings => villagerConfig;
 
-        /// <summary>The nearest bed with room in it, or null.</summary>
-        public Furniture FreeBed(Vector2 from)
+        /// <summary>
+        /// The nearest bed with room in it, or null. With <paramref name="only"/>, only beds in that kind of room; without,
+        /// an infirmary's beds are kept for the hurt unless there's no other.
+        /// </summary>
+        public Furniture FreeBed(Vector2 from, RoomType only = RoomType.None)
         {
-            Furniture best = null;
-            float bestDistance = float.MaxValue;
+            Furniture best = null, spare = null;
+            float bestDistance = float.MaxValue, spareDistance = float.MaxValue;
             foreach (var f in furniture)
             {
                 if (f == null || f.Config.sleeps <= 0) continue;
                 if (sleepers.TryGetValue(f, out int n) && n >= f.Config.sleeps) continue;
+                var room = only != RoomType.None || HasInfirmary ? RoomTypeAt(f.Cells.position) : RoomType.None;
+                if (only != RoomType.None && room != only) continue;
+                float d = Travel(from, f.Cells.center);
+                if (only == RoomType.None && room == RoomType.Infirmary)
+                {
+                    if (d < spareDistance) { spareDistance = d; spare = f; }
+                    continue;
+                }
+                if (d < bestDistance) { bestDistance = d; best = f; }
+            }
+            return best != null ? best : spare;
+        }
+
+        bool HasInfirmary => CountRooms(RoomType.Infirmary) > 0;
+
+        /// <summary>
+        /// A hurt villager goes to an infirmary's bed to get better (below the Kingdom Config's Recover Below); a badly hurt
+        /// soldier to any bed (a barracks' first) if there's no room in an infirmary. True if it went.
+        /// </summary>
+        public bool Recover(Villager v)
+        {
+            if (villagerConfig == null || !villagerConfig.needs || v.Health == null) return false;   // (healing in bed comes with needs)
+            float health = v.Health.Fraction;
+            if (health >= config.recoverBelow) return false;
+            bool fighter = v.Job == Job.Guard || v.Job == Job.Soldier;
+            bool wounded = v.Job == Job.Soldier && health < villagerConfig.soldierRetreatBelow;
+            if (fighter && ShelterNow && !wounded) return false;   // not while there are zombies to fight, unless badly hurt
+            var bed = HasInfirmary ? FreeBed(v.Position, RoomType.Infirmary) : null;
+            if (bed == null && wounded) bed = FreeBed(v.Position, RoomType.Barracks) ?? FreeBed(v.Position);
+            return bed != null && v.StartRecover(bed);
+        }
+
+        // ---------------------------------------------------------- soldiers --
+
+        readonly Dictionary<Furniture, Villager> trainees = new Dictionary<Furniture, Villager>();
+
+        public void ClaimDummy(Furniture dummy, Villager by)
+        {
+            if (dummy != null) trainees[dummy] = by;
+        }
+
+        public void ReleaseDummy(Furniture dummy, Villager by)
+        {
+            if ((object)dummy != null && trainees.TryGetValue(dummy, out var who) && who == by) trainees.Remove(dummy);
+        }
+
+        // The nearest training dummy in a training room that nobody's at.
+        Furniture FreeDummy(Vector2 from)
+        {
+            if (CountRooms(RoomType.Training) == 0) return null;
+            Furniture best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var f in furniture)
+            {
+                if (f == null || f.Config.roomTag != RoomTag.Training) continue;
+                if (trainees.TryGetValue(f, out var who) && who != null) continue;
+                if (!InRoom(f, RoomType.Training)) continue;
                 float d = Travel(from, f.Cells.center);
                 if (d < bestDistance) { bestDistance = d; best = f; }
             }
             return best;
+        }
+
+        // Where a soldier with nothing to do stands guard: its own spot in a loose line in front of the throne.
+        Vector2 GuardSpot(Villager v)
+        {
+            if (Throne == null) return v.Position;
+            int k = Mathf.Abs(v.GetInstanceID()) % 9;
+            var spot = Throne.Front + new Vector2((k % 3 - 1) * 1.6f, -1.8f - (k / 3) * 1.4f);
+            if (!Nav.Walkable(spot) && !Nav.NearestFreeSpot(spot, new RectInt(0, 0, 0, 0), out spot)) return v.Position;
+            return spot;
+        }
+
+        /// <summary>The soldiers by rank, how many are getting better in bed, and what would help them (for the villagers panel).</summary>
+        public string SoldierSummary()
+        {
+            var ranks = new int[SoldierMath.RankNames.Length];
+            int recovering = 0, armored = 0, total = 0;
+            foreach (var v in villagers)
+            {
+                if (v == null || v.Job != Job.Soldier) continue;
+                total++;
+                ranks[v.Rank]++;
+                if (v.Recovering) recovering++;
+                if (v.Armor != null) armored++;
+            }
+            if (total == 0) return null;
+            var parts = new List<string>();
+            for (int r = ranks.Length - 1; r >= 0; r--)
+                if (ranks[r] > 0) parts.Add($"{ranks[r]} {SoldierMath.RankName(r).ToLowerInvariant()}{(ranks[r] == 1 ? "" : "s")}");
+            string text = string.Join(", ", parts);
+            if (recovering > 0) text += $", {recovering} getting better";
+            // The one thing that would help most.
+            if (CountRooms(RoomType.Armory) == 0) text += ". Arm them at an armory: a weapon rack in a walled room (I)";
+            else if (armored < total) text += $". {total - armored} without armor: E at the armory's rack";
+            else if (CountRooms(RoomType.Training) == 0) text += ". A training dummy in a room of its own lets them train (I)";
+            return text;
         }
 
         public void ClaimBed(Furniture bed)
@@ -1666,12 +1788,14 @@ namespace KingdomGame.Building
         bool CareFor(Villager v)
         {
             if (!villagerConfig.needs) return false;
-            if (v.Job == Job.Guard && ShelterNow) return false;   // keeps watch while zombies are about
+            if (Recover(v)) return true;   // hurt: to an infirmary's bed
+            if ((v.Job == Job.Guard || v.Job == Job.Soldier) && ShelterNow) return false;   // keeps watch while zombies are about
             bool hungry = v.Fed < NeedsMath.EatBelow;
             if (hungry && Meal(v)) return true;
             if (v.WantsSleep(out bool nap))
             {
-                var bed = FreeBed(v.Position);
+                // Soldiers sleep in a barracks if there's room (they heal faster there).
+                var bed = v.Job == Job.Soldier ? FreeBed(v.Position, RoomType.Barracks) ?? FreeBed(v.Position) : FreeBed(v.Position);
                 v.StartSleep(bed, bed == null ? GroundSleepSpot(v.Position) : v.Position, nap);
                 return true;
             }
@@ -1716,7 +1840,7 @@ namespace KingdomGame.Building
         // Something's burning and there's a well: everyone but the guards fetches water (a few to each fire).
         bool FightFire(Villager v)
         {
-            if (v.Job == Job.Guard) return false;
+            if (v.Job == Job.Guard || v.Job == Job.Soldier) return false;
             var fires = Fires.Current;
             if (fires == null || fires.Count == 0) return false;
             var blaze = fires.NeedingHands(v.Position);
@@ -1843,14 +1967,31 @@ namespace KingdomGame.Building
         public void AssignJob(Villager v)
         {
             float now = Time.time;
-            // Zombies about: everyone but the guards goes to the shelter flag and waits.
-            if (v.Job != Job.Guard && ShelterNow)
+            // Zombies about: everyone but the guards and soldiers goes to the shelter flag and waits.
+            if (v.Job != Job.Guard && v.Job != Job.Soldier && ShelterNow)
             {
                 var flag = NearestShelter(v.Position);
                 if (flag != null && v.StartShelter(flag)) return;
             }
             if (FightFire(v)) return;
             if (CareFor(v)) return;
+            if (v.Job == Job.Soldier)
+            {
+                // (They look for zombies and wolves to fight themselves.) Something left in hand goes back to storage;
+                // then training at a dummy in a training room, or standing guard in front of the throne.
+                if (v.CarryAmount > 0)
+                {
+                    var store = NearestWithSpace(v.Position);
+                    if (store != null && v.StartReturn(store)) return;
+                }
+                if (v.CanTrain && !ShelterNow)
+                {
+                    var dummy = FreeDummy(v.Position);
+                    if (dummy != null && v.StartTrain(dummy)) return;
+                }
+                v.StandGuard(GuardSpot(v));
+                return;
+            }
             if (v.Job == Job.Hunter)
             {
                 Hunt(v);
@@ -2300,6 +2441,7 @@ namespace KingdomGame.Building
             rooms.Clear();
             roomAt.Clear();
             diningHall = false;
+            System.Array.Clear(roomCounts, 0, roomCounts.Length);
             var seen = new HashSet<Component>();
             var tags = new Dictionary<RoomTag, int>();
             bool Dining() => tags.TryGetValue(RoomTag.Table, out int tables) && tables > 0 && tags.TryGetValue(RoomTag.Seat, out int seats) && seats > 0;
@@ -2324,7 +2466,9 @@ namespace KingdomGame.Building
                             tags[built.Config.roomTag] = (tags.TryGetValue(built.Config.roomTag, out int n) ? n : 0) + 1;
                     }
                 }
-                room.Name = NameOf(room.Size, throne, tags);
+                room.Type = RoomTypes.Of(room.Size, throne, t => tags.TryGetValue(t, out int n) ? n : 0);
+                room.Name = RoomTypes.Name(room.Type);
+                roomCounts[(int)room.Type]++;
                 if (Dining()) diningHall = true;
                 // Label it at the cell nearest the middle.
                 var middle = sum / room.Size;
@@ -2357,9 +2501,10 @@ namespace KingdomGame.Building
                             tags[built.Config.roomTag] = (tags.TryGetValue(built.Config.roomTag, out int n) ? n : 0) + 1;
                     }
                 }
-                string what = NameOf(room.Size, false, tags);
+                room.Type = RoomTypes.Of(room.Size, false, t => tags.TryGetValue(t, out int n) ? n : 0);
+                roomCounts[(int)room.Type]++;
                 if (Dining()) diningHall = true;
-                room.Name = what == "Empty room" || what == "Small room" ? house.Name : $"{house.Name}: {what.ToLowerInvariant()}";
+                room.Name = room.Type == RoomType.Empty || room.Type == RoomType.Small ? house.Name : $"{house.Name}: {RoomTypes.Name(room.Type).ToLowerInvariant()}";
                 room.LabelAt = inside.Inner.center;
                 rooms.Add(room);
             }
@@ -2384,22 +2529,6 @@ namespace KingdomGame.Building
             x0 = Mathf.Max(cells.xMin, x0 - 1); y0 = Mathf.Max(cells.yMin, y0 - 1);
             x1 = Mathf.Min(cells.xMax - 1, x1 + 1); y1 = Mathf.Min(cells.yMax - 1, y1 + 1);
             return new RectInt(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
-        }
-
-        static string NameOf(int size, bool throne, Dictionary<RoomTag, int> tags)
-        {
-            int Count(RoomTag tag) => tags.TryGetValue(tag, out int n) ? n : 0;
-            if (throne) return "Throne room";
-            if (Count(RoomTag.Bed) >= 3) return "Barracks";
-            if (Count(RoomTag.Bed) > 0 && (Count(RoomTag.Cooking) > 0 || Count(RoomTag.Table) > 0) && size <= 30) return "Cottage";
-            if (Count(RoomTag.Bed) > 0) return "Bedroom";
-            if (Count(RoomTag.Table) > 0 && Count(RoomTag.Seat) > 0) return size >= 24 ? "Great hall" : "Dining hall";
-            if (Count(RoomTag.Books) > 0) return "Library";
-            if (Count(RoomTag.Weapons) > 0) return "Armory";
-            if (Count(RoomTag.Cooking) > 0) return "Kitchen";
-            if (Count(RoomTag.Workshop) > 0) return "Workshop";
-            if (Count(RoomTag.Storage) > 0) return "Storeroom";
-            return size <= 4 ? "Small room" : "Empty room";
         }
     }
 }

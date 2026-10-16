@@ -81,6 +81,8 @@ namespace KingdomGame.Character
         public Combat.Armory Armory { get; set; }
         /// <summary>Opens the weapons screen (E at an anvil).</summary>
         public System.Action OpenArmory { get; set; }
+        /// <summary>Opens the gear screen (E at a weapon rack or armor stand in an armory room).</summary>
+        public System.Action OpenGear { get; set; }
         /// <summary>Opens a storehouse or chest to put things in or take them out (E at one).</summary>
         public System.Action<Storage> OpenStorage { get; set; }
         /// <summary>The weapon in hand, for the HUD.</summary>
@@ -154,6 +156,7 @@ namespace KingdomGame.Character
                 if (RespawnOnDeath && Time.time >= respawnAt) Respawn();
                 return;
             }
+            WearArmor();
             Heal();
             // The wall under them caved in (or was torn down): down they go.
             if (OnWalls && Kingdom.Current != null && !Kingdom.Current.WallTopAt(NavCell(transform.position)))
@@ -370,6 +373,25 @@ namespace KingdomGame.Character
         // ------------------------------------------------------------ health --
 
         // Wounds heal once the ruler hasn't been hurt for a while.
+        Combat.ArmorItem wornArmor;
+        bool armorWorn;
+
+        // The armor bought at an armory room: it takes some off every hit and adds health (the share of health is kept).
+        void WearArmor()
+        {
+            if (Health == null || config == null || Health.Dead) return;
+            var suit = Armory != null ? Armory.RulerArmor : null;
+            if (armorWorn && suit == wornArmor) return;
+            wornArmor = suit;
+            armorWorn = true;
+            Health.Armor = suit != null ? suit.armor : 0f;
+            float max = config.maxHealth + (suit != null ? suit.health : 0f);
+            if (Mathf.Approximately(max, Health.Max)) return;
+            float share = Health.Fraction;
+            Health.SetMax(max);
+            Health.SetCurrent(share * max);
+        }
+
         void Heal()
         {
             if (Health == null || Health.Current >= Health.Max || Time.time - Health.LastHurt < config.healDelay) return;
@@ -534,7 +556,7 @@ namespace KingdomGame.Character
             Storage storage = null;
             Blueprint blueprint = null;
             ResourceNode node = null;
-            Furniture ladder = null, anvil = null, lever = null;
+            Furniture ladder = null, anvil = null, lever = null, rack = null;
             Place door = null;
             if (kingdom != null)
             {
@@ -574,12 +596,14 @@ namespace KingdomGame.Character
                     if (f.Config.climb && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { ladder = f; anvil = null; throne = null; lever = null; }
                     else if (f.Config.lever && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best)) { lever = f; ladder = null; anvil = null; throne = null; }
                     else if (f.Config.roomTag == RoomTag.Workshop && f.Config.machine == null && Armory != null && OpenArmory != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
-                    { anvil = f; ladder = null; throne = null; }
+                    { anvil = f; ladder = null; throne = null; rack = null; }
+                    else if (f.Config.roomTag == RoomTag.Weapons && Armory != null && OpenGear != null && Closer(BuildingLook.Distance(f.Cells, here), reach, ref best))
+                    { rack = f; anvil = null; ladder = null; throne = null; }
                 }
                 foreach (var s in kingdom.Storages)
-                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; anvil = null; }
+                    if (Closer(BuildingLook.Distance(s.Cells, here), reach, ref best)) { storage = s; throne = null; ladder = null; anvil = null; rack = null; }
                 foreach (var b in kingdom.Blueprints)
-                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; anvil = null; }
+                    if (b != null && !b.Cancelled && Closer(BuildingLook.Distance(b.Cells, here), reach, ref best)) { blueprint = b; storage = null; throne = null; ladder = null; anvil = null; rack = null; }
             }
             // Trees, rocks and bushes in the cells round the ruler.
             var nature = NatureMap.Current;
@@ -590,7 +614,7 @@ namespace KingdomGame.Character
                     {
                         var n = nature.Live(at + new Vector2Int(dx, dy));
                         if (n == null || n.Empty || n.Config == null) continue;
-                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; }
+                        if (Closer(n.DistanceFrom(here), n.Config.reach, ref best)) { node = n; blueprint = null; storage = null; throne = null; ladder = null; anvil = null; rack = null; }
                     }
 
             if (lever != null)
@@ -603,6 +627,21 @@ namespace KingdomGame.Character
             {
                 Hint = $"E: make weapons at the {anvil.Config.displayName.ToLowerInvariant()}";
                 if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) OpenArmory();
+            }
+            else if (rack != null)
+            {
+                // Gear is handed out in an armory room only (a walled room with a door, Building/RoomTypes.cs).
+                string name = rack.Config.displayName.ToLowerInvariant();
+                var room = kingdom.RoomTypeAt(rack.Cells.position);
+                if (room == RoomType.Armory)
+                {
+                    Hint = $"E: gear up at the {name} (armor for you, weapons and armor for your soldiers)";
+                    if (GameInput.Pressed(KeyCode.E) && !UiFocus.TakesEscape) OpenGear();
+                }
+                else if (room == RoomType.None)
+                    Hint = $"Gear up here once the {name} is in an armory: walls and a door all round it (I shows the kinds of room)";
+                else
+                    Hint = $"This room is a {RoomTypes.Name(room).ToLowerInvariant()}, not an armory: keep beds, tables with seats and the throne out of it (I shows the kinds of room)";
             }
             else if (throne != null) UseThrone(kingdom);
             else if (storage != null) UseStorage(storage);
@@ -666,6 +705,7 @@ namespace KingdomGame.Character
                 else MoveTo(at);
                 if (rig != null) rig.Follow(transform, true);
             }
+            WearArmor();   // (its health first, so a saved game's health isn't cut down)
             if (Health != null) Health.SetCurrent(health);
             if (Backpack != null && backpack != null)
                 for (int i = 0; i < backpack.Length && i < Inventory.TypeCount; i++)

@@ -27,6 +27,8 @@ static partial class Tests
         Run(nameof(RayWorksWithNegativeAndDiagonalDirections), RayWorksWithNegativeAndDiagonalDirections);
         Run(nameof(RayMatchesBruteForceSampling), RayMatchesBruteForceSampling);
 
+        Run(nameof(RanksComeWithExperience), RanksComeWithExperience);
+        Run(nameof(SoldiersGetTougherAndFaster), SoldiersGetTougherAndFaster);
         Run(nameof(PathStraightAndDiagonal), PathStraightAndDiagonal);
         Run(nameof(PathGoesAroundAWall), PathGoesAroundAWall);
         Run(nameof(PathNeverCutsCorners), PathNeverCutsCorners);

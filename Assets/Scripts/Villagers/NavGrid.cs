@@ -126,6 +126,56 @@ namespace KingdomGame.Villagers
             return false;
         }
 
+        int[] reached;           // NearestReachable's marks (this search's number where it has been)
+        int reachSearch;
+        readonly Queue<int> reachQueue = new Queue<int>();
+
+        /// <summary>
+        /// The middle of the cell nearest <paramref name="target"/> that can be walked to from <paramref name="from"/>
+        /// (searching out up, down, left and right over walkable cells, at most <paramref name="maxCells"/> of them): where
+        /// to go when the target itself can't be reached (outside the walls). False if there's nowhere to stand.
+        /// </summary>
+        public bool NearestReachable(Vector2 from, Vector2 target, int maxCells, out Vector2 spot)
+        {
+            spot = from;
+            var start = CellAt(from);
+            if (!Inside(start)) return false;
+            if (reached == null) reached = new int[Cells.width * Cells.height];
+            if (++reachSearch == int.MaxValue)
+            {
+                Array.Clear(reached, 0, reached.Length);
+                reachSearch = 1;
+            }
+            reachQueue.Clear();
+            int first = Index(start);
+            reached[first] = reachSearch;
+            reachQueue.Enqueue(first);
+            float best = float.MaxValue;
+            int bestIndex = -1, visited = 0;
+            while (reachQueue.Count > 0 && visited++ < maxCells)
+            {
+                int i = reachQueue.Dequeue();
+                var cell = new Vector2Int(Cells.xMin + i % Cells.width, Cells.yMin + i / Cells.width);
+                if (Walkable(cell) && (NoStopping == null || !NoStopping(cell)))
+                {
+                    float d = (new Vector2(cell.x + 0.5f, cell.y + 0.5f) - target).sqrMagnitude;
+                    if (d < best) { best = d; bestIndex = i; }
+                }
+                for (int k = 0; k < 4; k++)
+                {
+                    var next = cell + (k == 0 ? Vector2Int.right : k == 1 ? Vector2Int.left : k == 2 ? Vector2Int.up : Vector2Int.down);
+                    if (!Walkable(next)) continue;
+                    int n = Index(next);
+                    if (reached[n] == reachSearch) continue;
+                    reached[n] = reachSearch;
+                    reachQueue.Enqueue(n);
+                }
+            }
+            if (bestIndex < 0) return false;
+            spot = new Vector2(Cells.xMin + bestIndex % Cells.width + 0.5f, Cells.yMin + bestIndex / Cells.width + 0.5f);
+            return true;
+        }
+
         void OnWallCellChanged(Vector2Int cell, bool added) => Change(cell, added ? +1 : -1);
 
         void Change(Vector2Int cell, int amount)

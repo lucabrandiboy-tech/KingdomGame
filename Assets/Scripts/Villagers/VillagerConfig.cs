@@ -61,5 +61,29 @@ namespace KingdomGame.Villagers
         [Min(5)] public float huntDistance = 80f;
         [Tooltip("They give up on an animal after this many seconds and look for another.")]
         [Min(5)] public float huntSeconds = 60f;
+
+        [Header("Soldiers")]
+        [Tooltip("Hit points a soldier has on top of Max Health (armor and rank add more).")]
+        [Min(0)] public float soldierHealth = 40f;
+        [Tooltip("Soldiers go after zombies and wolves they can see this close (tiles).")]
+        [Min(2)] public float soldierSight = 14f;
+        [Tooltip("While zombies attack the kingdom, soldiers go after any within this many tiles of the throne.")]
+        [Min(5)] public float soldierDefendRadius = 45f;
+        [Tooltip("Below this share of their health soldiers leave the fight for a bed (an infirmary's first), if one is free.")]
+        [Range(0, 1)] public float soldierRetreatBelow = 0.3f;
+        [Tooltip("Experience for each rank after Recruit: Private, Corporal, Sergeant, Captain.")]
+        public float[] rankXp = { 20f, 60f, 140f, 300f };
+        [Tooltip("Each rank adds this many hit points...")]
+        [Min(0)] public float rankHealth = 8f;
+        [Tooltip("...and makes them attack this much faster (0.1 = 10%).")]
+        [Range(0, 1)] public float rankSpeed = 0.1f;
+        [Tooltip("Experience for each zombie or wolf a soldier finishes off.")]
+        [Min(0)] public float killXp = 5f;
+        [Tooltip("Experience a second at a training dummy in a training room...")]
+        [Min(0)] public float trainXpPerSecond = 0.25f;
+        [Tooltip("...which takes them only as far as this rank (0 Recruit, 1 Private, 2 Corporal, 3 Sergeant, 4 Captain): the rest takes real fights.")]
+        [Range(0, 4)] public int trainUpToRank = 3;
+        [Tooltip("Seconds of training at a time (then they see to eating and sleeping).")]
+        [Min(5)] public float trainSeconds = 40f;
     }
 }

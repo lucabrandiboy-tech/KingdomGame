@@ -194,6 +194,7 @@ namespace KingdomGame.World
             research.Setup(content.progression, kingdom, unlocking);
             gameObject.AddComponent<TechScreen>().Setup(research);
             gameObject.AddComponent<VillagersPanel>().Setup(kingdom);
+            gameObject.AddComponent<RoomsPanel>().Setup(kingdom);
 
             // The ruler's weapons: a club to start with, the rest made at an anvil (free build has them all).
             if (content.armory != null)
@@ -205,6 +206,9 @@ namespace KingdomGame.World
                 var armoryPanel = gameObject.AddComponent<ArmoryPanel>();
                 armoryPanel.Setup(armory, kingdom);
                 rulerController.OpenArmory = armoryPanel.Open;
+                var gearPanel = gameObject.AddComponent<GearPanel>();
+                gearPanel.Setup(armory, kingdom);
+                rulerController.OpenGear = gearPanel.Open;
             }
             else Debug.LogWarning("The Game Content has no Armory Config, so the ruler has the old rifle. Run KingdomGame > Build Game Scenes again.", this);
             var storagePanel = gameObject.AddComponent<StoragePanel>();

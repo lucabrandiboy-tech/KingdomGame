@@ -252,6 +252,10 @@ namespace KingdomGame.World
         public string name;
         /// <summary>Bitten: seconds until it turns into a zombie (-1: it isn't).</summary>
         public float turnsIn = -1f;
+        /// <summary>A soldier's weapon and armor (their names in the Armory Config; empty: none) and experience.</summary>
+        public string weapon;
+        public string armor;
+        public float xp;
     }
 
     [Serializable]

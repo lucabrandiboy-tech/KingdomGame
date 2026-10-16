@@ -142,6 +142,114 @@ namespace KingdomGame.Combat
             Changed?.Invoke();
         }
 
+        // ------------------------------------------------------------ gear --
+        // Armor for the ruler and soldiers, and copies of the kingdom's weapons for soldiers, bought at an armory room
+        // (a weapon rack or armor stand in a walled room with a door: UI/GearPanel.cs). Paid from storage, given at once.
+
+        ArmorItem rulerArmor;
+
+        /// <summary>The kinds of armor, from the first age to the last.</summary>
+        public IReadOnlyList<ArmorItem> ArmorKinds => config != null && config.armor != null ? config.armor : Array.Empty<ArmorItem>();
+        /// <summary>What the ruler wears (null: nothing).</summary>
+        public ArmorItem RulerArmor => rulerArmor;
+
+        /// <summary>What a copy of <paramref name="item"/> for a soldier costs, of <paramref name="type"/>.</summary>
+        public int CopyCost(ArmsItem item, ResourceType type) =>
+            item == null ? 0 : Mathf.CeilToInt(item.Cost(type) * (config != null ? config.soldierWeaponCost : 0.5f));
+
+        public string CopyCostText(ArmsItem item, int times = 1)
+        {
+            var parts = new List<string>();
+            for (int k = 0; k < Inventory.TypeCount; k++)
+            {
+                int n = CopyCost(item, (ResourceType)k) * times;
+                if (n > 0) parts.Add($"{n} {ResourceText.Name((ResourceType)k)}");
+            }
+            return parts.Count > 0 ? string.Join(", ", parts) : "free";
+        }
+
+        // Not yet in the kingdom's age: why not (null if it is).
+        static string TooEarly(int age)
+        {
+            var research = Research.Current;
+            if (research == null || research.Mode == Research.Unlocking.Everything || research.Age >= age) return null;
+            var a = research.AgeAt(age);
+            return $"Needs the {(a != null ? a.displayName : "next age")}";
+        }
+
+        bool Affords(Func<ResourceType, int> cost, int times)
+        {
+            if (kingdom == null) return true;
+            for (int k = 0; k < Inventory.TypeCount; k++)
+                if (kingdom.Available((ResourceType)k) < cost((ResourceType)k) * times) return false;
+            return true;
+        }
+
+        bool Spend(Func<ResourceType, int> cost, int times)
+        {
+            if (kingdom == null) return true;
+            var costs = new int[Inventory.TypeCount];
+            for (int k = 0; k < costs.Length; k++) costs[k] = cost((ResourceType)k) * times;
+            return kingdom.TrySpend(costs);
+        }
+
+        /// <summary>Whether <paramref name="times"/> suits of <paramref name="armor"/> can be bought now, and if not, why.</summary>
+        public bool CanBuy(ArmorItem armor, int times, out string reason)
+        {
+            reason = armor == null ? "Nothing to buy" : TooEarly(armor.age);
+            if (reason == null && times > 0 && !Affords(armor.Cost, times)) reason = $"Needs {armor.CostText(times)} in storage";
+            return reason == null;
+        }
+
+        /// <summary>Pays for <paramref name="times"/> suits of <paramref name="armor"/> from storage. False if it can't.</summary>
+        public bool BuyArmor(ArmorItem armor, int times) => times <= 0 || (CanBuy(armor, times, out _) && Spend(armor.Cost, times));
+
+        /// <summary>Whether <paramref name="times"/> copies of <paramref name="item"/> can be made for soldiers now, and if not, why.</summary>
+        public bool CanCopy(ArmsItem item, int times, out string reason)
+        {
+            reason = item == null || item.weapon == null || item.heavy ? "Soldiers can't use that"
+                : !owned.Contains(item) ? "Make it at an anvil first"
+                : null;
+            if (reason == null && times > 0 && !Affords(t => CopyCost(item, t), times)) reason = $"Needs {CopyCostText(item, times)} in storage";
+            return reason == null;
+        }
+
+        /// <summary>Pays for <paramref name="times"/> copies of <paramref name="item"/> from storage. False if it can't.</summary>
+        public bool BuyCopies(ArmsItem item, int times) => times <= 0 || (CanCopy(item, times, out _) && Spend(t => CopyCost(item, t), times));
+
+        /// <summary>The ruler puts on <paramref name="armor"/> (already paid for).</summary>
+        public void Wear(ArmorItem armor)
+        {
+            rulerArmor = armor;
+            Changed?.Invoke();
+        }
+
+        /// <summary>A kind of armor by its name (saved games), or null.</summary>
+        public ArmorItem FindArmor(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var a in ArmorKinds) if (a != null && a.displayName == name) return a;
+            return null;
+        }
+
+        /// <summary>A weapon by its name (saved games), or null.</summary>
+        public ArmsItem FindItem(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var item in Items) if (item != null && item.displayName == name) return item;
+            return null;
+        }
+
+        /// <summary>The weapon a new soldier starts with: the first one everyone has (the club).</summary>
+        public ArmsItem StartingWeapon
+        {
+            get
+            {
+                foreach (var item in Items) if (item != null && item.startsOwned && item.weapon != null && !item.heavy) return item;
+                return null;
+            }
+        }
+
         /// <summary>A crafter worked on the first order for <paramref name="seconds"/>.</summary>
         public void Work(float seconds)
         {
@@ -167,11 +275,17 @@ namespace KingdomGame.Combat
             public List<string> orders = new List<string>();
             public float work;
             public string selected;
+            /// <summary>What the ruler wears (empty: nothing).</summary>
+            public string rulerArmor;
         }
 
         public Saved Save()
         {
-            var s = new Saved { selected = Selected != null ? Selected.displayName : null, work = orders.Count > 0 ? orders[0].Work : 0f };
+            var s = new Saved
+            {
+                selected = Selected != null ? Selected.displayName : null, work = orders.Count > 0 ? orders[0].Work : 0f,
+                rulerArmor = rulerArmor != null ? rulerArmor.displayName : null,
+            };
             foreach (var item in Items) if (item != null && owned.Contains(item)) s.owned.Add(item.displayName);
             foreach (var o in orders) s.orders.Add(o.Item.displayName);
             return s;
@@ -191,6 +305,7 @@ namespace KingdomGame.Combat
             if (orders.Count > 0) orders[0].Work = s.work;
             var chosen = Find(s.selected);
             if (chosen != null && owned.Contains(chosen)) selected = chosen;
+            rulerArmor = FindArmor(s.rulerArmor);
             Changed?.Invoke();
         }
     }

@@ -14,6 +14,8 @@ namespace KingdomGame.Villagers
         public Sprite Shadow;
         /// <summary>Lying dead (zombies got them), one picture per direction (<see cref="Art.CharacterArt.DeadDirections"/>).</summary>
         public Sprite[] Dead;
+        /// <summary>Soldiers, one set for each look of armor (<see cref="Combat.ArmorItem.look"/>): [look][direction, frame].</summary>
+        public Sprite[][,] Soldier;
     }
 
     /// <summary>
@@ -32,10 +34,15 @@ namespace KingdomGame.Villagers
     /// They get hungry and tired (<see cref="NeedsMath"/>): they eat at a storehouse (a meal of food) and sleep at
     /// night, in a bed if there's one free (healing too), otherwise on the ground by the throne. Guards sleep by day.
     /// Hungry or tired villagers work and walk slower; fed and rested ones with a dining hall a little faster.
+    /// Hurt ones go to an infirmary's bed to heal, if there is one.
+    ///
+    /// Soldiers (<see cref="Job.Soldier"/>) don't run: they go after zombies and wolves with the weapon and armor
+    /// you give them at an armory room, leave the fight for a bed when badly hurt, train at the dummies of a training
+    /// room when there's nothing to fight, and go up in rank (<see cref="SoldierMath"/>).
     /// </summary>
     public sealed class Villager : MonoBehaviour
     {
-        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter, Eat, Sleep, Water, Douse, Hunt, PickUp }
+        enum Task { Idle, Fetch, Deliver, Build, Return, MakeRoom, Flee, Gather, Guard, Dig, Craft, Shelter, Eat, Sleep, Water, Douse, Hunt, PickUp, Fight, Train, Muster }
 
         /// <summary>Seconds a villager stays scared after last seeing a zombie.</summary>
         const float ScaredSeconds = 4f;
@@ -95,6 +102,24 @@ namespace KingdomGame.Villagers
         float shotAt, repathAt, huntUntil;
         LootBag pickup;
         float turnAt = -1f;      // bitten: when it turns into a zombie (-1: it isn't)
+        bool recovering;         // in bed to heal (an infirmary's, or a badly hurt soldier's)
+        RoomType bedRoom;        // the kind of room its bed is in
+        // Soldiers: their weapon and armor (bought at an armory room), experience, what they're fighting (and how it's
+        // moving), the training dummy they're at, and their weapon's picture in hand (swinging or kicking back).
+        Combat.ArmsItem weapon;
+        Combat.ArmorItem armor;
+        float xp;
+        Health foe;
+        Vector2 foeWas, foeVelocity;
+        float attackAt, struckFoeAt = -99f, directFailUntil, retreatCheckAt, trainUntil, swingLeft, recoilLeft;
+        float lastAttackAt, ignoreUntil;
+        Health ignored;          // a foe it gave up on (out of reach for a long while), left alone for a time
+        Furniture dummy;
+        SpriteRenderer weaponRenderer;
+        Combat.ArmsItem shownWeapon;
+        const float SwingSeconds = 0.22f, Muzzle = 0.3f;
+        static readonly Vector2 Hand = Art.CharacterArt.SoldierHand;   // (where its right hand is in the pictures)
+        const float WeaponScale = 0.86f;
 
         public bool IsIdle => task == Task.Idle;
         /// <summary>Its name (survivors who joined have one; the first villagers don't).</summary>
@@ -113,7 +138,91 @@ namespace KingdomGame.Villagers
                 if (job == value) return;
                 job = value;
                 Abandon();
+                // A new soldier gets the weapon everyone starts with (the club) until you give it a better one.
+                if (job == Job.Soldier && weapon == null && kingdom != null && kingdom.Armory != null) weapon = kingdom.Armory.StartingWeapon;
+                ApplyGear();
             }
+        }
+
+        // ------------------------------------------------------------ soldiers --
+
+        public bool IsSoldier => job == Job.Soldier;
+        /// <summary>A soldier's weapon (null: none).</summary>
+        public Combat.ArmsItem Weapon => weapon;
+        /// <summary>A soldier's armor (null: none).</summary>
+        public Combat.ArmorItem Armor => armor;
+        /// <summary>A soldier's experience (rank comes with it).</summary>
+        public float Xp => xp;
+        /// <summary>A soldier's rank: 0 Recruit .. 4 Captain.</summary>
+        public int Rank => config != null ? SoldierMath.Rank(xp, config.rankXp) : 0;
+        public string RankName => SoldierMath.RankName(Rank);
+        /// <summary>In bed to heal.</summary>
+        public bool Recovering => recovering && task == Task.Sleep;
+        // A hurt soldier in a bed outside an infirmary gets up once it's this well (fit to fight again).
+        float RecoveredAt => Mathf.Min(0.95f, (kingdom.Config != null ? kingdom.Config.recoverBelow : 0.6f) + 0.1f);
+        /// <summary>The look of its armor (0: none).</summary>
+        int ArmorLook => armor != null ? Mathf.Clamp(armor.look, 0, 4) : 0;
+
+        /// <summary>Gives it a weapon (already paid for).</summary>
+        public void Arm(Combat.ArmsItem item)
+        {
+            weapon = item;
+            ShowWeapon();
+        }
+
+        /// <summary>Gives it armor (already paid for).</summary>
+        public void Wear(Combat.ArmorItem suit)
+        {
+            armor = suit;
+            ApplyGear();
+        }
+
+        /// <summary>Puts back a soldier's gear and experience (a saved game): before its hit points are put back.</summary>
+        public void RestoreGear(Combat.ArmsItem item, Combat.ArmorItem suit, float experience)
+        {
+            if (item != null) weapon = item;
+            armor = suit;
+            xp = Mathf.Max(0f, experience);
+            ApplyGear();
+        }
+
+        // A soldier's hit points (its armor and rank add some) and armor; the share of health it had is kept.
+        void ApplyGear()
+        {
+            if (Health == null || config == null || Health.Dead) return;
+            bool soldier = job == Job.Soldier;
+            float max = soldier ? SoldierMath.MaxHealth(config.maxHealth, config.soldierHealth, armor != null ? armor.health : 0f, Rank, config.rankHealth) : config.maxHealth;
+            Health.Armor = soldier && armor != null ? armor.armor : 0f;
+            ShowWeapon();
+            if (Mathf.Approximately(max, Health.Max)) return;
+            float share = Health.Fraction;
+            Health.SetMax(max);
+            Health.SetCurrent(share * max);
+        }
+
+        /// <summary>Experience for a soldier from outside a fight (the cheat menu).</summary>
+        public void GiveXp(float amount) => GainXp(amount);
+
+        void GainXp(float amount)
+        {
+            if (amount <= 0f || job != Job.Soldier) return;
+            int before = Rank;
+            xp += amount;
+            if (Rank == before) return;
+            ApplyGear();
+            kingdom.Report($"{(string.IsNullOrEmpty(Name) ? "A soldier" : Name)} is now a {RankName.ToLowerInvariant()}!");
+        }
+
+        // The weapon in its hand (soldiers only, and not while asleep).
+        void ShowWeapon()
+        {
+            if (weaponRenderer == null) return;
+            if (shownWeapon != weapon)
+            {
+                shownWeapon = weapon;
+                weaponRenderer.sprite = weapon != null ? ArtSprites.Get(Art.ArtKeys.Weapon(weapon.art)) : null;
+            }
+            weaponRenderer.enabled = job == Job.Soldier && weaponRenderer.sprite != null && !asleep && !onPost;
         }
         /// <summary>Hit points (zombies).</summary>
         public Health Health { get; private set; }
@@ -144,10 +253,14 @@ namespace KingdomGame.Villagers
                     case Task.Douse: return "putting out a fire";
                     case Task.Hunt: return quarry != null && quarry.IsWolf ? "fighting a wolf" : "hunting a deer";
                     case Task.PickUp: return "fetching meat";
-                    case Task.Sleep: return asleep ? (inBed ? "asleep in bed" : napping ? "napping on the ground" : "asleep on the ground") : "going to bed";
+                    case Task.Sleep: return recovering ? (asleep ? "getting better in bed" : "going to bed to get better")
+                        : asleep ? (inBed ? "asleep in bed" : napping ? "napping on the ground" : "asleep on the ground") : "going to bed";
                     case Task.Guard: return onPost ? $"guarding the {post?.Name.ToLowerInvariant()}" : "going to a tower";
+                    case Task.Fight: return foe != null && foe.GetComponent<World.Animal>() != null ? "fighting a wolf" : "fighting zombies";
+                    case Task.Train: return "training";
+                    case Task.Muster: return "going to stand guard";
                     case Task.Gather: return node != null ? $"gathering {ResourceText.Name(node.Config.resource)}" : "gathering";
-                    default: return Scared ? "hiding" : "idle";
+                    default: return Scared ? "hiding" : job == Job.Soldier ? "standing guard" : "idle";
                 }
             }
         }
@@ -167,10 +280,18 @@ namespace KingdomGame.Villagers
             bodyRenderer.sortingOrder = SortOrder.Characters;
             thinkAt = Time.time + Random.Range(0f, config.thinkSeconds);
 
+            var hand = new GameObject("Weapon").transform;
+            hand.SetParent(body, false);
+            hand.localPosition = Hand;
+            hand.localScale = Vector3.one * WeaponScale;
+            weaponRenderer = hand.gameObject.AddComponent<SpriteRenderer>();
+            weaponRenderer.sortingOrder = SortOrder.Characters + 1;
+            weaponRenderer.enabled = false;
+
             Health = gameObject.AddComponent<Health>();
             Health.Setup(Team.Friendly, config.maxHealth, 0.18f, true);
-            // Hurt: it runs (guards stay on their towers, and a hunter keeps shooting what it's after).
-            Health.Hurt += (h, amount, from) => { if (!h.Dead && job != Job.Guard && task != Task.Hunt) Flee(from); };
+            // Hurt: it runs (guards stay on their towers, a hunter keeps shooting what it's after, and soldiers fight).
+            Health.Hurt += (h, amount, from) => { if (!h.Dead && job != Job.Guard && job != Job.Soldier && task != Task.Hunt) Flee(from); };
             Health.Died += OnDied;
         }
 
@@ -256,7 +377,7 @@ namespace KingdomGame.Villagers
             var clock = kingdom.Clock;
             float hour = clock != null ? clock.Hour : 12f;
             bool night = clock != null && clock.IsNight;
-            bool guard = job == Job.Guard;
+            bool guard = job == Job.Guard || job == Job.Soldier;   // (they keep watch at night and sleep by day)
             if (!NeedsMath.ShouldSleep(hour, night, rested, guard)) return false;
             nap = !(guard ? NeedsMath.GuardSleepTime(hour) : night);
             return true;
@@ -291,6 +412,7 @@ namespace KingdomGame.Villagers
             Abandon();
             task = Task.Sleep;
             napping = nap;
+            recovering = false;
             if (toBed != null)
             {
                 bed = toBed;
@@ -306,16 +428,32 @@ namespace KingdomGame.Villagers
             portal = null;
         }
 
+        /// <summary>Hurt: off to <paramref name="toBed"/> (an infirmary's, or any for a badly hurt soldier) to lie there until better.</summary>
+        public bool StartRecover(Furniture toBed)
+        {
+            if (toBed == null) return false;
+            StartSleep(toBed, Position, true);
+            if (bed == null)
+            {
+                Idle();   // no way to the bed
+                return false;
+            }
+            recovering = true;
+            return true;
+        }
+
         // At the bed (or the spot on the ground): into it, out of sight, or lying down.
         void LieDown()
         {
             asleep = true;
             sleepAngle = Random.Range(0f, 360f);
+            bedRoom = RoomType.None;
             if (bed != null)
             {
                 inBed = true;
                 bedside = Position;
                 transform.position = bed.Cells.center;
+                bedRoom = kingdom.RoomTypeAt(bed.Cells.position);
             }
             ShowAsleep();
         }
@@ -334,6 +472,7 @@ namespace KingdomGame.Villagers
         {
             if (bodyRenderer != null) bodyRenderer.enabled = !inBed;
             if (shadow != null) shadow.enabled = !asleep && !onPost;
+            ShowWeapon();
             if (asleep && !inBed && sprites.Dead != null && sprites.Dead.Length > 0)
             {
                 // Lying on its back on the ground.
@@ -349,14 +488,30 @@ namespace KingdomGame.Villagers
             float hours = Time.deltaTime * kingdom.GameHoursPerSecond;
             fed = NeedsMath.Hunger(fed, hours, config.hungerHours);
             rested = NeedsMath.Rest(rested, hours, asleep, inBed, config.awakeHours, config.bedSleepHours, config.groundSleepHours, config.groundRestCap);
-            if (asleep && inBed) Health.Heal(config.healPerHourInBed * hours);
+            // In bed it heals: fast in an infirmary, faster for soldiers in a barracks.
+            if (asleep && inBed)
+            {
+                var rooms = kingdom.Config;
+                if (bedRoom == RoomType.Infirmary && rooms != null) Health.Heal(rooms.infirmaryHealPerSecond * Time.deltaTime);
+                else Health.Heal(config.healPerHourInBed * hours * (job == Job.Soldier && bedRoom == RoomType.Barracks && rooms != null ? rooms.barracksHealing : 1f));
+            }
             if (Time.time < needsAt) return;
             needsAt = Time.time + 1f;
 
             var clock = kingdom.Clock;
             float hour = clock != null ? clock.Hour : 12f;
             bool night = clock != null && clock.IsNight;
-            bool guard = job == Job.Guard;
+            bool guard = job == Job.Guard || job == Job.Soldier;
+            if (task == Task.Sleep && recovering)
+            {
+                // Better (nearly whole after an infirmary; well enough to fight again elsewhere): up again.
+                if (asleep && Health.Fraction >= (bedRoom == RoomType.Infirmary ? 0.95f : RecoveredAt))
+                {
+                    Idle();
+                    thinkAt = Time.time;
+                }
+                return;
+            }
             if (task == Task.Sleep)
             {
                 if (!asleep) return;   // still on the way
@@ -368,7 +523,7 @@ namespace KingdomGame.Villagers
                 }
                 return;
             }
-            if (task == Task.Idle || task == Task.Eat || task == Task.Flee || task == Task.Shelter || task == Task.MakeRoom || task == Task.Water || task == Task.Douse || Scared) return;
+            if (task == Task.Idle || task == Task.Eat || task == Task.Flee || task == Task.Shelter || task == Task.MakeRoom || task == Task.Water || task == Task.Douse || task == Task.Fight || Scared) return;
             if (guard && kingdom.ShelterNow) return;   // keeps watch while zombies are about
             bool sleepy = NeedsMath.ShouldSleep(hour, night, rested, guard);
             bool starving = fed < NeedsMath.Urgent && Time.time >= noMealUntil && kingdom.Available(ResourceType.Food) > 0;
@@ -609,7 +764,12 @@ namespace KingdomGame.Villagers
             Vector2 before = transform.position;
             if (config.needs) Needs();
 
-            if (Time.time >= lookAt)
+            if (Time.time >= lookAt && job == Job.Soldier)
+            {
+                lookAt = Time.time + 0.3f;
+                LookForFoes();
+            }
+            else if (Time.time >= lookAt)
             {
                 lookAt = Time.time + 0.3f;
                 var director = ZombieDirector.Current;
@@ -665,6 +825,15 @@ namespace KingdomGame.Villagers
             else if (task == Task.Hunt)
             {
                 Hunting();
+            }
+            else if (task == Task.Fight)
+            {
+                Fighting();
+            }
+            else if (task == Task.Train && (dummy == null || job != Job.Soldier))
+            {
+                Idle();   // the dummy went
+                thinkAt = Time.time;
             }
             else if (task == Task.PickUp && pickup == null)
             {
@@ -891,6 +1060,29 @@ namespace KingdomGame.Villagers
                     Idle();
                     return;
                 }
+                case Task.Train:
+                {
+                    // Blows (or aiming drill, with a gun) at the dummy; experience as far as training goes.
+                    var toDummy = dummy.Cells.center - Position;
+                    if (toDummy.sqrMagnitude > 0.0001f) facing = toDummy.normalized;
+                    if (Time.time >= attackAt)
+                    {
+                        attackAt = Time.time + Random.Range(0.9f, 1.4f);
+                        if (weapon == null || weapon.weapon == null || weapon.weapon.melee)
+                        {
+                            swingLeft = SwingSeconds;
+                            Audio.Sounds.Play(Audio.Sound.Hammer, Position, 0.35f);   // (a dull thump on the straw)
+                        }
+                        else recoilLeft = 0.1f;
+                    }
+                    if (Rank < config.trainUpToRank) GainXp(config.trainXpPerSecond * Time.deltaTime);
+                    if (Time.time >= trainUntil)
+                    {
+                        Idle();
+                        thinkAt = Time.time;
+                    }
+                    return;
+                }
                 case Task.PickUp:
                 {
                     if (carryAmount > 0 && carryType != ResourceType.Food) { Idle(); return; }
@@ -969,6 +1161,243 @@ namespace KingdomGame.Villagers
             if (shots.Fire(bow, Position + aim * 0.3f, aim)) Audio.Sounds.Fired(bow, Position);
         }
 
+        // ------------------------------------------------------------ fighting --
+
+        // Soldiers: after the nearest zombie or wolf they can see, or (zombies attacking the kingdom) any near the throne.
+        // Badly hurt, they leave the fight for a bed if one is free; in bed getting better, they stay there.
+        void LookForFoes()
+        {
+            if (weapon == null && kingdom.Armory != null) Arm(kingdom.Armory.StartingWeapon);   // (the club, at least)
+            if (Recovering || weapon == null || weapon.weapon == null) return;
+            if (Health.Fraction < config.soldierRetreatBelow && task != Task.Sleep && Time.time >= retreatCheckAt)
+            {
+                retreatCheckAt = Time.time + 2f;
+                if (kingdom.Recover(this)) return;
+            }
+            var target = FindFoe();
+            if (target == null || (target == ignored && Time.time < ignoreUntil)) return;
+            if (task == Task.Fight && foe != null && !foe.Dead)
+            {
+                // Sticks with the one it's after unless another is much closer.
+                if (target == foe || (target.Position - Position).sqrMagnitude > (foe.Position - Position).sqrMagnitude * 0.5f) return;
+            }
+            StartFight(target);
+        }
+
+        Health FindFoe()
+        {
+            Health best = null;
+            float bestDistance = float.MaxValue;
+            var director = ZombieDirector.Current;
+            if (director != null)
+            {
+                if (space == null)
+                {
+                    // One it can see (one camping at its far-off base only if it's close: they don't go storming bases).
+                    var seen = director.NearestVisible(Position, config.soldierSight);
+                    if (seen != null && seen.Health != null && !seen.Health.Dead)
+                    {
+                        float d = (seen.Position - Position).sqrMagnitude;
+                        if (!seen.AtBase || d < 36f) { best = seen.Health; bestDistance = d; }
+                    }
+                }
+                // Zombies attacking the kingdom: any near the throne.
+                var throne = kingdom.Throne;
+                if (throne != null && kingdom.ShelterNow)
+                {
+                    float r2 = config.soldierDefendRadius * config.soldierDefendRadius;
+                    foreach (var z in director.Zombies)
+                    {
+                        if (z == null || z.AtBase || z.Health == null || z.Health.Dead || (z.Position - throne.Center).sqrMagnitude > r2) continue;
+                        float d = (z.Position - Position).sqrMagnitude;   // (from inside a house, any of them will do)
+                        if (d < bestDistance) { bestDistance = d; best = z.Health; }
+                    }
+                }
+            }
+            var wild = World.Wildlife.Current;
+            if (wild != null && space == null)
+            {
+                var wolf = wild.NearestWolf(Position, config.soldierSight);
+                if (wolf != null && wolf.Health != null && (wolf.Position - Position).sqrMagnitude < bestDistance) best = wolf.Health;
+            }
+            return best;
+        }
+
+        /// <summary>Go after <paramref name="target"/> (a zombie or a wolf) and fight it until one of them falls.</summary>
+        public bool StartFight(Health target)
+        {
+            if (target == null || target.Dead) return false;
+            Abandon();
+            foe = target;
+            foeWas = target.Position;
+            foeVelocity = Vector2.zero;
+            lastAttackAt = Time.time;
+            task = Task.Fight;
+            repathAt = 0f;
+            attackAt = Mathf.Max(attackAt, Time.time + 0.2f);
+            return true;
+        }
+
+        // Fighting: near enough (and, with a gun, nothing in the way), it attacks; otherwise it goes after the foe,
+        // finding the way again every so often as it moves.
+        void Fighting()
+        {
+            var w = weapon != null ? weapon.weapon : null;
+            if (foe == null || foe.Dead || !foe.isActiveAndEnabled || w == null)
+            {
+                // It fell soon after a shot: that shot most likely did it.
+                if (foe != null && foe.Dead && Time.time - struckFoeAt < 2f) GainXp(config.killXp);
+                foe = null;
+                Idle();
+                thinkAt = Time.time;
+                return;
+            }
+            float dt = Mathf.Max(Time.deltaTime, 1e-4f);
+            var moved = (foe.Position - foeWas) / dt;
+            foeWas = foe.Position;
+            if (moved.sqrMagnitude < 64f) foeVelocity = Vector2.Lerp(foeVelocity, moved, 0.2f);
+
+            var to = foe.Position - Position;
+            float d = to.magnitude;
+            // Too far gone (a wolf running off, a zombie wandering away): not worth chasing across the land.
+            var throne = kingdom.Throne;
+            bool defending = kingdom.ShelterNow && throne != null
+                && (foe.Position - throne.Center).sqrMagnitude <= config.soldierDefendRadius * config.soldierDefendRadius;
+            if (space == null && d > config.soldierSight * 1.6f && !defending)
+            {
+                foe = null;
+                Idle();
+                thinkAt = Time.time;
+                return;
+            }
+            float reach = w.melee ? w.range + foe.Radius : Mathf.Min(w.range * 0.85f, config.soldierSight);
+            if (space == null && d <= reach && (w.melee || ClearShot(foe.Position, w)))
+            {
+                path.Clear();
+                pathIndex = 0;
+                portal = null;
+                if (d > 1e-4f) facing = to / d;
+                if (Time.time >= attackAt)
+                {
+                    lastAttackAt = Time.time;
+                    attackAt = Time.time + SoldierMath.AttackGap(w.fireRate, Rank, config.rankSpeed);
+                    if (w.melee) Strike(w);
+                    else Fire(w);
+                }
+                return;
+            }
+            // Standing there unable to hit it for a long while (out of reach behind a wall, with a club): it leaves that
+            // one be, and sees to eating and sleeping.
+            if (Time.time - lastAttackAt > 20f)
+            {
+                ignored = foe;
+                ignoreUntil = Time.time + 30f;
+                foe = null;
+                Idle();
+                thinkAt = Time.time;
+                return;
+            }
+            if (Time.time >= repathAt)
+            {
+                repathAt = Time.time + 0.6f;
+                if (!Approach(foe.Position))
+                {
+                    foe = null;   // no getting any nearer: it waits for the next one it can reach
+                    Idle();
+                    thinkAt = Time.time + 1f;
+                    return;
+                }
+            }
+            if (pathIndex < path.Count)
+            {
+                FollowPath();
+                lastAttackAt = Time.time;   // (on its way: not stuck)
+            }
+            else if ((object)portal != null) GoThrough();
+        }
+
+        // Towards a foe: straight there if there's a way, otherwise (it's outside the walls) as near as it can get, to
+        // shoot over the wall. False if it can't get any nearer.
+        bool Approach(Vector2 target)
+        {
+            if (space != null || Time.time >= directFailUntil)
+            {
+                if (Walk(new RectInt(NavGrid.CellAt(target), Vector2Int.one), true)) return true;
+                directFailUntil = Time.time + 4f;   // (don't search the whole way again for a while)
+            }
+            if (space != null || !nav.NearestReachable(Position, target, 2500, out var spot)) return false;
+            if ((spot - Position).sqrMagnitude < 0.3f)
+            {
+                // As near as it gets: it stays (and shoots if it can).
+                path.Clear();
+                pathIndex = 0;
+                return true;
+            }
+            return Walk(new RectInt(NavGrid.CellAt(spot), Vector2Int.one), false);
+        }
+
+        // Nothing in the way of a shot at <paramref name="target"/> (a wall right in front it shoots over, like the ruler).
+        bool ClearShot(Vector2 target, Combat.WeaponConfig w)
+        {
+            var to = target - Position;
+            float d = to.magnitude;
+            float over = Muzzle + Mathf.Max(0f, w.overWalls);
+            if (d <= over) return true;
+            var pixels = Destruction.PixelWorld.Current;
+            return pixels == null || !pixels.Raycast(Position + to / d * over, target, out _, out _);
+        }
+
+        // A shot (or a handful of pellets) where the foe will be when it gets there.
+        void Fire(Combat.WeaponConfig w)
+        {
+            var shots = Combat.Projectiles.Current;
+            if (shots == null) return;
+            float flight = Vector2.Distance(Position, foe.Position) / Mathf.Max(1f, w.projectileSpeed);
+            var aim = foe.Position + foeVelocity * flight - Position;
+            if (aim.sqrMagnitude < 1e-6f) return;
+            aim.Normalize();
+            bool fired = false;
+            for (int i = 0; i < Mathf.Max(1, w.pellets); i++) fired |= shots.Fire(w, Position + aim * Muzzle, aim, -1f, -1f, w.pierce);
+            if (!fired) return;
+            Audio.Sounds.Fired(w, Position);
+            recoilLeft = 0.08f;
+            struckFoeAt = Time.time;
+        }
+
+        // A blow with a club or blade.
+        void Strike(Combat.WeaponConfig w)
+        {
+            swingLeft = SwingSeconds;
+            Audio.Sounds.Fired(w, Position);
+            if (!foe.Damage(w.hitDamage, Position)) return;
+            GainXp(config.killXp);
+            foe = null;   // (next frame it looks for the next one)
+        }
+
+        /// <summary>Train at a training dummy for a while (soldiers with nothing to fight).</summary>
+        public bool StartTrain(Furniture target)
+        {
+            if (target == null) return false;
+            dummy = target;
+            kingdom.ClaimDummy(target, this);
+            task = Task.Train;
+            trainUntil = Time.time + config.trainSeconds;
+            if (Walk(target.Cells, true)) return true;
+            Idle();
+            return false;
+        }
+
+        /// <summary>Whether training can still take it up a rank.</summary>
+        public bool CanTrain => config != null && Rank < config.trainUpToRank;
+
+        /// <summary>Go and stand guard at <paramref name="spot"/> (soldiers with nothing to do): it waits there.</summary>
+        public void StandGuard(Vector2 spot)
+        {
+            if (space == null && (spot - Position).sqrMagnitude < 9f) return;   // near enough: waits where it is
+            task = Task.Muster;
+            if (!Walk(new RectInt(NavGrid.CellAt(spot), Vector2Int.one), false)) Idle();
+        }
+
         // Drops the current job, giving back anything promised.
         void Abandon()
         {
@@ -1000,6 +1429,10 @@ namespace KingdomGame.Villagers
             quarry = null;
             if (pickup != null && pickup.Collector == (Component)this) pickup.Collector = null;
             pickup = null;
+            if ((object)dummy != null) kingdom.ReleaseDummy(dummy, this);
+            dummy = null;
+            foe = null;
+            recovering = false;
             well = null;
             bucket = false;
             task = Task.Idle;
@@ -1113,6 +1546,8 @@ namespace KingdomGame.Villagers
                 stepClock = 0f;
             }
             var frames = carryAmount > 0 || bucket ? sprites.Carrying : sprites.Walking;
+            if (job == Job.Soldier && sprites.Soldier != null && sprites.Soldier.Length > 0 && carryAmount == 0)
+                frames = sprites.Soldier[Mathf.Min(ArmorLook, sprites.Soldier.Length - 1)] ?? frames;
             // Turning: greyer and greener over its last half minute.
             float turning = turnAt >= 0f ? Mathf.Clamp01(1f - (turnAt - Time.time) / 30f) : 0f;
             bodyRenderer.color = Color.Lerp(Color.white, new Color(0.7f, 0.84f, 0.64f), turning);
@@ -1123,6 +1558,19 @@ namespace KingdomGame.Villagers
             bodyRenderer.sprite = frames[direction, Mathf.FloorToInt(stepClock) % frames.GetLength(1)];
             body.localRotation = Quaternion.Euler(0f, 0f, now);
             shadow.transform.localRotation = body.localRotation;
+            // A soldier's weapon: a blow sweeps it across in front, a shot kicks it back.
+            if (weaponRenderer != null && weaponRenderer.enabled)
+            {
+                var hand = weaponRenderer.transform;
+                if (swingLeft > 0f)
+                {
+                    swingLeft -= Time.deltaTime;
+                    hand.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(65f, -65f, 1f - Mathf.Clamp01(swingLeft / SwingSeconds)));
+                }
+                else hand.localRotation = Quaternion.identity;
+                if (recoilLeft > 0f) recoilLeft -= Time.deltaTime;
+                hand.localPosition = Hand - (recoilLeft > 0f ? new Vector2(0.035f, 0f) : Vector2.zero);
+            }
         }
 
         void OnDestroy()

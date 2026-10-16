@@ -307,3 +307,64 @@ Try it (two computers, or two copies of the game on one: see docs/ONLINE-TEST.md
 4. **O**, **Ride home**.
 
 Tell me what feels laggy or wrong (zombies jumping about, hits not landing).
+
+## 10. Kinds of room, soldiers and armor
+
+**Kinds of room.** A room is a space closed in all round by walls and doors (give it a door
+so villagers can get in). What you put in it decides what kind it is, and its name shows on
+the floor when you build from the throne. **I** opens the rooms guide: every kind, what
+makes one, what it does, and how many you have. The first kind on the list that fits
+wins, so a room with a bed and a weapon rack is a bedroom, not an armory.
+
+| Room | Needs | Does |
+| --- | --- | --- |
+| Infirmary | a **medicine table** (new) and a bed | hurt villagers and soldiers go to its beds and heal fast |
+| Barracks | 3 or more beds | soldiers asleep there heal twice as fast |
+| Dining hall / great hall | a table and a chair or bench (the cafeteria) | fed, rested villagers work 10% faster |
+| Armory | a weapon rack or armor stand | E there: armor for you, weapons and armor for soldiers |
+| Training room | a **training dummy** (new) | soldiers train there and go up in rank |
+| Library | a bookshelf | research 10% faster |
+| Workshop | an anvil or crafting table | crafters 15% faster |
+| Kitchen, storeroom, bedroom, cottage | as before | as before |
+
+**Soldiers** are a new job (**V**, Soldier). They don't run from zombies:
+- They go after zombies and wolves they can see (14 tiles), and when a horde attacks,
+  after any zombie near the throne. A zombie outside your walls: they go as close as they
+  can and shoot over the wall (like you do), if they have a gun or bow.
+- They start with a club. Badly hurt (below 30%) they leave the fight for a bed (an
+  infirmary's first), and get up again once they're better.
+- With nothing to fight they train at a training dummy (in a training room), or stand
+  guard in front of the throne. They sleep by day, like guards.
+- Ranks: recruit, private, corporal, sergeant, captain. Each rank gives more health and
+  faster attacks. Training gets them to sergeant; captain takes real fights (kills).
+
+**Armor and weapons** (E at a weapon rack or armor stand inside an armory room):
+- **You**: buy armor for each age (padded jerkin, bronze scales, chainmail, plate, ...,
+  flak vest). It takes some damage off every hit and adds health. Your look doesn't change
+  (yet); your health bar does.
+- **Soldiers**: the arrows pick one soldier, or all of them. Give them copies of the weapons
+  you've made at the anvil (half the cost) and armor (full cost each). Their look changes
+  with their armor: tunic, padding, mail, plate, a modern uniform.
+
+Try it:
+
+1. **F10**: +10,000 of everything. Build a walled room with a door and put a **weapon rack**
+   in it. Press **I**: the guide says you have 1 armory. Walk to the rack: "E: gear up".
+2. Buy yourself the padded jerkin. Your health goes up by 15.
+3. **V**: make 3 villagers soldiers (**-** by another job frees one up, then **+** by Soldier).
+   They walk to the throne and stand guard, each with a club.
+4. Back at the rack: give all soldiers the jerkin, and a bow (free build has every weapon
+   already; in survival make it at the anvil first). They change look; the weapon shows in
+   their hands.
+5. Another walled room with a **training dummy**: soldiers walk in and hit it in turns (one
+   per dummy). **F10, Soldiers +100 experience**: a message says they're now corporals.
+6. **F10, Wolves now**, or wait for a horde: the soldiers go for them; shooters stop at
+   range and shoot.
+7. A room with a **medicine table** and a bed (the guide says Infirmary). **F10, Hurt
+   everyone**: hurt villagers go and lie in its beds, and get up healed after a few seconds.
+   The soldiers (below 30%) go to bed too, the infirmary's first.
+8. Save, load: soldiers keep their weapon, armor and rank; you keep your armor.
+
+What isn't done (honestly): other players online see your soldiers as ordinary villagers;
+the ruler's look doesn't change with armor; soldiers in melee can hit a zombie through a
+thin wall (so can you with the club).

@@ -62,6 +62,10 @@ namespace KingdomGame.Building
         Cooking,
         Workshop,
         Decor,
+        /// <summary>A training dummy: a room with one is a training room (soldiers train there).</summary>
+        Training,
+        /// <summary>A medicine table: with a bed, the room is an infirmary.</summary>
+        Medicine,
     }
 
     /// <summary>

@@ -292,6 +292,9 @@ namespace KingdomGame.World
                     rested = v.Rested,
                     name = v.Name,
                     turnsIn = v.TurnsIn,
+                    weapon = v.Weapon != null ? v.Weapon.displayName : null,
+                    armor = v.Armor != null ? v.Armor.displayName : null,
+                    xp = v.Xp,
                 });
             }
 
@@ -479,6 +482,8 @@ namespace KingdomGame.World
             {
                 var at = Reachable(v.position);
                 var villager = kingdom.AddVillager(at, (Villagers.Job)v.job);
+                // A soldier's gear first: it adds to the health put back next.
+                if (kingdom.Armory != null) villager.RestoreGear(kingdom.Armory.FindItem(v.weapon), kingdom.Armory.FindArmor(v.armor), v.xp);
                 villager.Restore(kingdom.PlaceAt(at), (ResourceType)Mathf.Clamp(v.carryType, 0, Inventory.TypeCount - 1), v.carryAmount, v.health);
                 villager.SetNeeds(v.fed, v.rested);
                 villager.Name = v.name;

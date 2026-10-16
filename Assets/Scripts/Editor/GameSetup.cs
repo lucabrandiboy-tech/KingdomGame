@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 25;
+        const int SettingsVersion = 26;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -105,6 +105,7 @@ namespace KingdomGame.EditorTools
             bool villagerNeeds = oldContent != null && oldContent.settingsVersion < 22;   // villagers eat and sleep
             // Fire: what burns (wood walls, wooden furniture and doors), wells, flamethrowers, burning zombies. New settings get it too.
             bool fireUpdate = oldContent == null || oldContent.settingsVersion < 24;
+            bool roomsUpdate = oldContent != null && oldContent.settingsVersion < 26;   // kinds of room: training dummies, medicine tables
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -419,6 +420,12 @@ namespace KingdomGame.EditorTools
             if (content.progression == null) content.progression = Ages(defensesByAge, roofs);
             if (content.network == null) content.network = Asset<Networking.NetworkConfig>("Network/NetworkConfig", n => { });
             if (content.armory == null) content.armory = Weapons(bullet, rockets, c4);
+            // Armor for the ruler and soldiers (bought at an armory room): older settings get the defaults.
+            if (content.armory != null && (content.armory.armor == null || content.armory.armor.Length == 0))
+            {
+                content.armory.armor = Combat.ArmorItem.Defaults();
+                EditorUtility.SetDirty(content.armory);
+            }
             // Everything on the build bar, in order (each item shows on its category's tab).
             var menu = new List<BuildingConfig> { stoneWallBuilding, woodWallBuilding };
             menu.AddRange(castle);
@@ -464,6 +471,22 @@ namespace KingdomGame.EditorTools
                 var list = new List<BuildingConfig>(content.buildMenu) { house };
                 content.buildMenu = list.ToArray();
                 Debug.Log("Added houses to your build bar (the Houses tab). Your other settings were kept.");
+            }
+
+            if (roomsUpdate)
+            {
+                // The training dummy and the medicine table (training rooms, infirmaries) join the Furniture tab, after the armor stand.
+                var list = new List<BuildingConfig>(content.buildMenu);
+                for (int i = 0; i < castle.Count; i++)
+                {
+                    var b = castle[i];
+                    if (b == null || list.Contains(b)) continue;
+                    int at = i > 0 ? list.IndexOf(castle[i - 1]) : -1;
+                    if (at >= 0) list.Insert(at + 1, b);
+                    else list.Add(b);
+                }
+                content.buildMenu = list.ToArray();
+                Debug.Log("Added the training dummy and the medicine table (Furniture tab): rooms have kinds now (press I in the game). Your other settings were kept.");
             }
 
             if (minesUpdate)
@@ -594,6 +617,11 @@ namespace KingdomGame.EditorTools
                 EditorUtility.SetDirty(content.survival);
             }
             HunterBow(content.villager);
+            if (content.villager != null && (content.villager.rankXp == null || content.villager.rankXp.Length == 0))
+            {
+                content.villager.rankXp = new[] { 20f, 60f, 140f, 300f };   // soldiers' ranks
+                EditorUtility.SetDirty(content.villager);
+            }
             AddGoals(content.progression);
 
             if (villagerNeeds && content.kingdom != null && content.kingdom.startFood < 60)
@@ -757,6 +785,8 @@ namespace KingdomGame.EditorTools
                 Furnish("Furniture/Bookshelf", "Bookshelf", FurnitureArt.Bookshelf, BuildCategory.Furniture, new Vector2Int(2, 1), 4, 25, 0, 0, 6f, RoomTag.Books, true, 120f, 0.6f),
                 Furnish("Furniture/WeaponRack", "Weapon rack", FurnitureArt.WeaponRack, BuildCategory.Furniture, new Vector2Int(2, 1), 4, 15, 10, 0, 5f, RoomTag.Weapons, true, 120f, 0.45f),
                 Furnish("Furniture/ArmorStand", "Armor stand", FurnitureArt.ArmorStand, BuildCategory.Furniture, Vector2Int.one, 4, 5, 15, 0, 4f, RoomTag.Weapons, true, 100f, 0.7f),
+                Furnish("Furniture/TrainingDummy", "Training dummy", FurnitureArt.TrainingDummy, BuildCategory.Furniture, Vector2Int.one, 1, 15, 0, 5, 3f, RoomTag.Training, true, 80f, 0.75f),
+                Furnish("Furniture/MedicineTable", "Medicine table", FurnitureArt.MedicineTable, BuildCategory.Furniture, new Vector2Int(2, 1), 4, 20, 0, 15, 5f, RoomTag.Medicine, true, 90f, 0.35f),
                 Furnish("Furniture/Cauldron", "Cauldron", FurnitureArt.Cauldron, BuildCategory.Furniture, Vector2Int.one, 1, 0, 15, 0, 4f, RoomTag.Cooking, true, 150f, 0.35f, light: 0.45f),
                 Furnish("Furniture/Anvil", "Anvil", FurnitureArt.Anvil, BuildCategory.Furniture, Vector2Int.one, 2, 5, 20, 0, 4f, RoomTag.Workshop, true, 200f, 0.4f),
                 Furnish("Furniture/Banner", "Banner", FurnitureArt.Banner, BuildCategory.Furniture, Vector2Int.one, 4, 5, 0, 10, 3f, RoomTag.Decor, false, 30f, 0.9f),

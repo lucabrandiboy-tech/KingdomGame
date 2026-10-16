@@ -58,6 +58,8 @@ namespace KingdomGame.Art
             new Piece { Art = Ladder, Rotations = 4, Draw = DrawLadder },
             new Piece { Art = StoneStairs, Rotations = 4, Draw = DrawStoneStairs },
             new Piece { Art = MineHead, Rotations = 1, Draw = DrawMineHead },
+            new Piece { Art = TrainingDummy, Rotations = 1, Draw = DrawTrainingDummy },
+            new Piece { Art = MedicineTable, Rotations = 4, Draw = DrawMedicineTable },
         };
 
         /// <summary>Where the candelabra's three candles are, in tiles from its middle.</summary>

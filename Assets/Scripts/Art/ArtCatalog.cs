@@ -66,6 +66,7 @@ namespace KingdomGame.Art
         public static string Weapon(string name) => $"Ruler/Weapon/{name}";
         public static string Villager(bool carrying, int direction, int frame) => $"Villager/{(carrying ? "Carrying" : "Walking")}/{direction}/{frame}";
         public const string VillagerShadow = "Villager/Shadow";
+        public static string Soldier(int look, int direction, int frame) => $"Soldier/{look}/{direction}/{frame}";
         public static string Wall(string material, int variant) => $"Wall/{material}/{variant}";
         public const string GroundGrass = "Ground/Grass";
         public const string GroundDry = "Ground/Dry";
@@ -111,7 +112,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 20;
+        public const int Version = 21;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -176,6 +177,15 @@ namespace KingdomGame.Art
                         Add(items, ArtKeys.Villager(carrying, d, f), "Villagers", p => CharacterArt.VillagerFrame(p, c, facing, frame), false);
                     }
             Shadow(items, ArtKeys.Villager(false, 0, 0), "CharacterShadows", 0.02f, ArtKeys.VillagerShadow);
+            // Soldiers, in each look of armor (they share the villagers' shadow).
+            for (int look = 0; look < CharacterArt.SoldierLooks; look++)
+                for (int d = 0; d < CharacterArt.VillagerDirections; d++)
+                    for (int f = 0; f < CharacterArt.WalkFrames; f++)
+                    {
+                        int l = look, frame = f;
+                        float facing = d * 360f / CharacterArt.VillagerDirections;
+                        Add(items, ArtKeys.Soldier(look, d, f), "Soldiers", p => CharacterArt.SoldierFrame(p, l, facing, frame), false, CharacterArt.SoldierDetail);
+                    }
 
             // Castle furniture (a picture for each way it can face), floors, doors, small effects,
             // the zombies and the fallen: at half detail (see ArtItem.Detail).

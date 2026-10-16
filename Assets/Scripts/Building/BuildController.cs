@@ -501,7 +501,11 @@ namespace KingdomGame.Building
                     ? $"\nFed {Mathf.RoundToInt(person.Fed * 100f)}%, rested {Mathf.RoundToInt(person.Rested * 100f)}%" +
                       (person.Pace < 0.99f ? $": working at {Mathf.RoundToInt(person.Pace * 100f)}% speed" : person.Pace > 1.01f ? $": content, working at {Mathf.RoundToInt(person.Pace * 100f)}% speed" : "")
                     : "";
-                Hover = $"{Villagers.Jobs.Name(person.Job)}: {person.Doing}  (health {Mathf.CeilToInt(person.Health.Current)}/{Mathf.CeilToInt(person.Health.Max)}){needs}";
+                // A soldier: its rank and gear.
+                string who = person.IsSoldier
+                    ? $"{person.RankName} ({(person.Weapon != null ? person.Weapon.displayName.ToLowerInvariant() : "no weapon")}, {(person.Armor != null ? person.Armor.displayName.ToLowerInvariant() : "no armor")})"
+                    : Villagers.Jobs.Name(person.Job);
+                Hover = $"{who}: {person.Doing}  (health {Mathf.CeilToInt(person.Health.Current)}/{Mathf.CeilToInt(person.Health.Max)}){needs}";
                 return;
             }
 

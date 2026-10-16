@@ -21,12 +21,17 @@ namespace KingdomGame.Villagers
         Crafter,
         /// <summary>Shoots deer (and wolves) with a bow and brings the meat to storage as food.</summary>
         Hunter,
+        /// <summary>
+        /// Fights zombies and wolves with the weapon and armor you give them at an armory room; trains at training dummies
+        /// and goes up in rank. Doesn't run or shelter; sleeps by day like guards.
+        /// </summary>
+        Soldier,
     }
 
     public static class Jobs
     {
         /// <summary>The jobs in the villagers panel, in order.</summary>
-        public static readonly Job[] Listed = { Job.Builder, Job.Woodcutter, Job.Miner, Job.Forager, Job.Hunter, Job.Guard, Job.Crafter };
+        public static readonly Job[] Listed = { Job.Builder, Job.Woodcutter, Job.Miner, Job.Forager, Job.Hunter, Job.Guard, Job.Soldier, Job.Crafter };
 
         public static string Name(Job job, bool plural = false)
         {
@@ -39,6 +44,7 @@ namespace KingdomGame.Villagers
                 case Job.Guard: return plural ? "Guards" : "Guard";
                 case Job.Crafter: return plural ? "Crafters" : "Crafter";
                 case Job.Hunter: return plural ? "Hunters" : "Hunter";
+                case Job.Soldier: return plural ? "Soldiers" : "Soldier";
                 default: return "Idle";
             }
         }
@@ -67,6 +73,7 @@ namespace KingdomGame.Villagers
                 case Job.Guard: return "man the towers (archer tower, ballista, cannon)";
                 case Job.Crafter: return "make the weapons you order at an anvil (E at one), and each age's parts at its crafting table";
                 case Job.Hunter: return "shoot deer with a bow and bring the meat home (and shoot wolves)";
+                case Job.Soldier: return "fight zombies and wolves (arm them at an armory room), train at dummies and rank up";
                 default: return "";
             }
         }

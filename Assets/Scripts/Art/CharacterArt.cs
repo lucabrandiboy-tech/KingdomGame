@@ -49,6 +49,18 @@ namespace KingdomGame.Art
 
         static float Stride(int frame) => frame == 1 ? 1f : frame == 3 ? -1f : 0f;
 
+        /// <summary>The looks of soldiers (Combat.ArmorItem.look): 0 a tunic, 1 padding, 2 mail, 3 plate, 4 a modern uniform.</summary>
+        public const int SoldierLooks = 5;
+        /// <summary>Share of the art detail soldiers are drawn at (they're small on screen; video memory).</summary>
+        public const float SoldierDetail = 0.35f;
+
+        /// <summary>
+        /// One walking frame of a soldier in armor of look <paramref name="look"/>, holding a weapon in both hands (its
+        /// picture is drawn separately, at the right hand), like <see cref="VillagerFrame"/>.
+        /// </summary>
+        public static PixelImage SoldierFrame(int ppu, int look, float facingDegrees, int frame) =>
+            Soldier(ppu, ArtLight.For(facingDegrees), Stride(frame), look);
+
         /// <summary>Picture width of each kind of zombie, in tiles.</summary>
         public static float ZombieSize(string kind) => kind == "Brute" ? 0.9f : kind == "Runner" ? 0.62f : 0.64f * ZombieScale(kind);
 
@@ -568,7 +580,8 @@ namespace KingdomGame.Art
 
         // The materials people (and animals) are made of.
         // Hide: an animal's short coat; Pelt: the same with a darker back.
-        enum Mat { Cape, Hem, Tunic, Gold, Steel, Fur, Hair, Skin, Glove, Boot, Sack, Rope, Cap, Rot, Rag, Wound, Hide, Pelt }
+        // Mail: rings of chainmail.
+        enum Mat { Cape, Hem, Tunic, Gold, Steel, Fur, Hair, Skin, Glove, Boot, Sack, Rope, Cap, Rot, Rag, Wound, Hide, Pelt, Mail }
 
         // One body part: a capsule (A to B, radius R; A = B for a ball) or an ellipsoid (A = middle,
         // B = radii), seen from above. Heights (z) are in tiles: the head is about 1.5 tiles up.
@@ -640,6 +653,73 @@ namespace KingdomGame.Art
             parts.Add(Body(0.075f, 0f, 1.43f, 0.02f, 0.06f, 0.02f, Mat.Cap, PixelImage.Rgb(74, 52, 34)));    // its brim
             return Figure(ppu, VillagerSize, light, parts, false);
         }
+
+        // A soldier: a villager's build, both hands forward on the weapon like the ruler, in the kingdom's blue, with the
+        // armor of its look over it.
+        static PixelImage Soldier(int ppu, Vector3 light, float step, int look)
+        {
+            var parts = new System.Collections.Generic.List<Part>();
+            var blue = PixelImage.Rgb(40, 54, 104);
+            var boot = PixelImage.Rgb(42, 30, 22);
+            Color32 body = blue, arms = blue;
+            Mat bodyMat = Mat.Tunic, armMat = Mat.Tunic, handMat = Mat.Skin;
+            Color32 hands = Skin;
+            switch (look)
+            {
+                case 1: body = PixelImage.Rgb(150, 122, 82); bodyMat = Mat.Sack; break;                                     // padded jerkin
+                case 2: body = arms = PixelImage.Rgb(128, 132, 140); bodyMat = armMat = Mat.Mail; break;                     // mail
+                case 3: body = arms = PixelImage.Rgb(132, 138, 148); bodyMat = armMat = Mat.Steel;                           // plate
+                    hands = PixelImage.Rgb(110, 114, 122); handMat = Mat.Steel; break;
+                case 4: body = arms = PixelImage.Rgb(86, 92, 60); hands = PixelImage.Rgb(52, 46, 36); handMat = Mat.Glove;  // uniform
+                    boot = PixelImage.Rgb(34, 28, 22); break;
+            }
+            parts.Add(Limb(0.02f + step * 0.06f, 0.055f, 0.05f, 0.09f + step * 0.06f, 0.055f, 0.05f, 0.026f, Mat.Boot, boot));
+            parts.Add(Limb(0.02f - step * 0.06f, -0.055f, 0.05f, 0.09f - step * 0.06f, -0.055f, 0.05f, 0.026f, Mat.Boot, boot));
+            parts.Add(Body(0f, 0f, 1.15f, 0.085f, 0.14f, 0.18f, bodyMat, body));
+            // Arms forward to the weapon: the right hand on the grip, the left under the barrel.
+            parts.Add(Limb(0.0f, -0.135f, 1.22f, 0.045f, -0.17f, 1.09f, 0.037f, armMat, arms));
+            parts.Add(Limb(0.045f, -0.17f, 1.09f, 0.13f, -0.1f, 1.16f, 0.031f, armMat, arms));
+            parts.Add(Ball(Hand.x, Hand.y, 1.17f, 0.026f, handMat, hands));
+            parts.Add(Limb(0.0f, 0.135f, 1.22f, 0.145f, 0.078f, 1.1f, 0.037f, armMat, arms));
+            parts.Add(Limb(0.145f, 0.078f, 1.1f, 0.3f, -0.073f, 1.16f, 0.031f, armMat, arms));
+            parts.Add(Ball(0.31f, -0.082f, 1.17f, 0.025f, handMat, hands));
+            var steel = PixelImage.Rgb(116, 120, 128);
+            switch (look)
+            {
+                case 0:
+                    parts.Add(Limb(0.06f, 0.11f, 1.33f, -0.04f, -0.12f, 1.33f, 0.018f, Mat.Tunic, PixelImage.Rgb(150, 34, 32)));   // red sash
+                    parts.Add(Ball(0.02f, 0f, 1.44f, 0.064f, Mat.Cap, PixelImage.Rgb(60, 42, 28)));                                   // leather cap
+                    parts.Add(Body(0.075f, 0f, 1.43f, 0.02f, 0.06f, 0.02f, Mat.Cap, PixelImage.Rgb(74, 52, 34)));
+                    break;
+                case 1:
+                    parts.Add(Body(-0.01f, 0.125f, 1.26f, 0.045f, 0.04f, 0.06f, Mat.Sack, PixelImage.Rgb(132, 106, 70)));             // padded shoulders
+                    parts.Add(Body(-0.01f, -0.125f, 1.26f, 0.045f, 0.04f, 0.06f, Mat.Sack, PixelImage.Rgb(132, 106, 70)));
+                    parts.Add(Ball(0.02f, 0f, 1.44f, 0.068f, Mat.Sack, PixelImage.Rgb(118, 94, 62)));                                 // padded coif
+                    break;
+                case 2:
+                    parts.Add(Body(0.005f, 0f, 1.17f, 0.075f, 0.128f, 0.175f, Mat.Tunic, blue));                                      // tabard over the mail
+                    parts.Add(Ball(0.02f, 0f, 1.45f, 0.066f, Mat.Steel, steel));                                                      // round helmet
+                    parts.Add(Limb(0.07f, 0f, 1.47f, 0.095f, 0f, 1.43f, 0.012f, Mat.Steel, steel));                                   // its nose guard
+                    break;
+                case 3:
+                    parts.Add(Body(0.015f, 0f, 1.2f, 0.06f, 0.07f, 0.16f, Mat.Tunic, blue));                                          // a narrow tabard
+                    parts.Add(Body(-0.01f, 0.13f, 1.27f, 0.05f, 0.045f, 0.065f, Mat.Steel, PixelImage.Rgb(124, 130, 140)));          // pauldrons
+                    parts.Add(Body(-0.01f, -0.13f, 1.27f, 0.05f, 0.045f, 0.065f, Mat.Steel, PixelImage.Rgb(124, 130, 140)));
+                    parts.Add(Ball(0.02f, 0f, 1.45f, 0.07f, Mat.Steel, PixelImage.Rgb(128, 132, 142)));                              // helmet
+                    parts.Add(Limb(-0.05f, 0f, 1.52f, 0.055f, 0f, 1.53f, 0.016f, Mat.Fur, PixelImage.Rgb(150, 30, 30)));             // red plume
+                    break;
+                case 4:
+                    parts.Add(Body(0f, 0f, 1.19f, 0.08f, 0.12f, 0.16f, Mat.Sack, PixelImage.Rgb(64, 70, 46)));                        // vest
+                    parts.Add(Body(-0.1f, 0f, 1.3f, 0.06f, 0.1f, 0.1f, Mat.Sack, PixelImage.Rgb(78, 74, 52)));                        // pack
+                    parts.Add(Body(0.015f, 0f, 1.43f, 0.082f, 0.08f, 0.07f, Mat.Cap, PixelImage.Rgb(72, 80, 50)));                   // helmet
+                    break;
+            }
+            return Figure(ppu, 0.27f, 0.36f, 0.24f, light, parts);
+        }
+
+        /// <summary>Where a soldier's right hand (the weapon's grip) is, from its middle, in tiles.</summary>
+        public static Vector2 SoldierHand => Hand;
+        static readonly Vector2 Hand = new Vector2(0.14f, -0.088f);
 
         /// <summary>
         /// Draws a figure made of rounded parts as seen from above: each pixel shows
@@ -830,6 +910,11 @@ namespace KingdomGame.Art
                         case Mat.Wound:
                             texture = (Noise.Value(wx * 700f, wy * 700f, 67u) - 0.5f) * 0.25f;
                             shine = 0.4f; shininess = 20f;
+                            break;
+                        case Mat.Mail:
+                            // Rows of little rings: bright tops, dark gaps.
+                            texture = (Noise.Value(wx * 1300f, wy * 1300f, 71u) - 0.5f) * 0.2f + Mathf.Sin(wx * 600f) * 0.04f;
+                            shine = 0.35f; shininess = 12f;
                             break;
                     }
                     float shade = (0.32f + diffuse * 0.95f) * (1f + cavity * 0.6f) + texture;

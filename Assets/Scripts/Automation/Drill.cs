@@ -20,7 +20,7 @@ namespace KingdomGame.Automation
     /// nowhere to put it, it waits. Burner drills burn wood or coal that arms (or another drill) put in. Plain C#
     /// (unit-tested); Building/Factory.cs runs it.
     /// </summary>
-    public sealed class Drill : IItemPort, ITicking
+    public sealed class Drill : IItemPort, ITicking, IPowerUser
     {
         public const int MaxFuel = 5;
         // How long it waits before looking again when there's no ore left under it.
@@ -31,6 +31,7 @@ namespace KingdomGame.Automation
         readonly List<Spot> area = new List<Spot>();
         int next;
         float idle;
+        bool wanting;   // it has ore to dig and room to put it (only power or fuel is missing, if anything)
 
         /// <summary>Its bottom-left cell, its size (it's square), the way its chute faces, and how many tiles round itself it mines.</summary>
         public readonly Spot At;
@@ -60,6 +61,9 @@ namespace KingdomGame.Automation
         public readonly Spot Output;
         /// <summary>The tiles it digs (its own, and <see cref="Reach"/> round them).</summary>
         public IReadOnlyList<Spot> Area => area;
+        /// <summary>MW an electric one wants: its use while it digs, a thirtieth of that while it waits.</summary>
+        public float PowerDemand() => Burner ? 0f : wanting ? EnergyUse : EnergyUse * PowerGrid.IdleShare;
+        public void SetPower(float share) => Power = share;
 
         public Drill(FactoryWorld world, IOreGround ground, Spot at, int size, int dir, int reach)
         {
@@ -188,6 +192,7 @@ namespace KingdomGame.Automation
         public void Tick(float dt)
         {
             Working = false;
+            wanting = false;
             if (Holding && !PutOut())
             {
                 Problem = world != null && world.Exists(Output)
@@ -206,6 +211,7 @@ namespace KingdomGame.Automation
                 idle = LookAgain;
                 return;
             }
+            wanting = true;
             float rate;
             if (Burner)
             {

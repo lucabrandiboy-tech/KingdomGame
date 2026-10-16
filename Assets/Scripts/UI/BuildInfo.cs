@@ -72,13 +72,22 @@ namespace KingdomGame.UI
             switch (m.kind)
             {
                 case MachineKind.Generator:
-                    text.Append($"Generator: powers machines and lamps within {m.reach:0} tiles; burns coal, or wood (which goes 3 times as fast)\n");
+                    text.Append($"Generator: {Factory.Watts(m.powerOutput)} for what's within {m.reach:0} tiles and every power pole wired to it; burns coal, or wood (a third as long), only for what's used\n");
+                    break;
+                case MachineKind.PowerPole:
+                    text.Append($"Power pole: wires to poles within {m.wireReach:0.#} tiles and powers a {m.supplyArea:0} x {m.supplyArea:0} square round it\n");
+                    break;
+                case MachineKind.Accumulator:
+                    text.Append($"Accumulator: stores {m.storeMJ:0.#} MJ of spare power and gives it back (up to {Factory.Watts(m.powerOutput)}) when the network is short\n");
+                    break;
+                case MachineKind.Solar:
+                    text.Append($"Solar panel: {Factory.Watts(m.powerOutput)} in full sun, none at night, no fuel\n");
                     break;
                 case MachineKind.Conveyor:
                     text.Append($"Conveyor belt: carries things along at {m.beltSpeed:0.#} tiles a second\n");
                     break;
                 case MachineKind.Lamp:
-                    text.Append("Electric light\n");
+                    text.Append($"Electric light ({Factory.Watts(m.powerUse)})\n");
                     break;
                 case MachineKind.TreeFarm:
                     text.Append($"Plants trees within {m.reach:0} tiles; they grow back after they're cut\n");
@@ -119,7 +128,8 @@ namespace KingdomGame.UI
             // (only these kinds look for power: see Machine.Work)
             bool usesPower = m.kind == MachineKind.Producer || m.kind == MachineKind.Sawmill || m.kind == MachineKind.Quarry || m.kind == MachineKind.Lamp
                 || (!m.burner && (m.kind == MachineKind.Arm || m.kind == MachineKind.Furnace || m.kind == MachineKind.Assembler || m.kind == MachineKind.Drill));
-            if (m.needsPower && usesPower) text.Append("Needs power (a generator nearby)\n");
+            if ((m.needsPower || m.kind == MachineKind.Lamp) && usesPower)
+                text.Append("Needs electricity: a generator's reach or a power pole's area\n");
         }
 
         static string Inputs(MachineConfig m)

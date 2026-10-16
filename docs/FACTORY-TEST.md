@@ -23,6 +23,13 @@ The kingdom now has a factory you build like the rest (builders build it from bl
   burner drill (coal is its fuel). With nowhere to put it they wait. While you place one it says how much ore it would dig
   there. The digging frame and the burner drill burn wood or coal (an arm puts it in); the electric ones need power. Their
   bit turns while they dig.
+- **Electricity** (from the Industrial age): a **generator** powers what's within its reach (10 tiles for the first one)
+  and every **power pole** wired to it. Poles wire themselves to the nearest poles within their wire reach (you see the
+  wires) and power the square round them; poles wired together are one network sharing all its generators. Generators burn
+  only for what's used (coal from storage, or wood, which holds a third as much; an arm can put fuel straight in). If more
+  is wanted than the network gives, every machine on it works slower (a brownout). **Accumulators** store what's spare and
+  give it back when it's short; **solar panels** give power by day only. While you place anything electric, blue areas show
+  what's powered. Electric arms, furnaces, assemblers, drills, lamps and the older electric machines all run on it.
 - The older machines (woodcutter's camps, quarries, steam and ore drills) put what they make out an item at a time onto
   a belt touching them, or into a chest touching them; arms can take it out of them too.
 - From the throne, point at any factory piece to see what it's doing or why it's stopped.
@@ -36,13 +43,15 @@ What's where, by age (Industry tab):
 | Iron Age | roller track, iron arm, burner drill (2x2, 15 a minute) |
 | Medieval | brick furnace (twice as fast) |
 | Renaissance | canvas belt, clockwork assembler |
-| Industrial | conveyor belt, electric arm, assembling machine, electric mining drill (3x3, digs 5x5 tiles, 30 a minute) (electric: a generator's power has to reach them) |
-| World War 1 | fast belt, fast arm, electric furnace |
-| World War 2 | express belt, assembly robot, big mining drill (3x3, digs 7x7 tiles, 60 a minute) |
+| Industrial | conveyor belt, electric arm, assembling machine, electric mining drill (3x3, digs 5x5 tiles, 30 a minute), wooden power pole (wires 7.5 tiles, powers 5x5); generator 0.9 MW |
+| World War 1 | fast belt, fast arm, electric furnace, medium power pole (wires 9, powers 7x7), big power pole (2x2, wires 30, powers 4x4), accumulator (5 MJ); diesel generator 1.8 MW |
+| World War 2 | express belt, assembly robot, big mining drill (3x3, digs 7x7 tiles, 60 a minute), substation (2x2, wires 18, powers 18x18), solar panel (60 kW by day); power plant 4 MW |
 
-None of this has been run in Unity yet. The belts, arms, furnaces, assemblers and drills are plain code that the unit tests
-run (tools/tests/FactoryTests.cs: lines, packing, curves, side-loading, head-on belts, chests, loops, arms, assemblers,
-furnaces, burner fuel, drills digging onto a belt, waiting when blocked, feeding each other and a furnace); the ore fields
+None of this has been run in Unity yet. The belts, arms, furnaces, assemblers, drills and electricity are plain code that
+the unit tests run (tools/tests/FactoryTests.cs: lines, packing, curves, side-loading, head-on belts, chests, loops, arms,
+assemblers, furnaces, burner fuel, drills digging onto a belt, waiting when blocked, feeding each other and a furnace;
+tools/tests/PowerTests.cs: poles wiring up, supply areas, generators sharing the load and burning for what's used,
+brownouts slowing machines, accumulators and solar panels through day and night); the ore fields
 are checked by tools/world-tests (the same everywhere, one of each round the start, mining and saving, the ground showing
 ore exactly where it is); the pictures were checked in the art preview. Run **KingdomGame > Build Game Scenes** after
 `git pull` (the art changed, so it bakes again; the new drills join the build bar).
@@ -89,6 +98,25 @@ ore exactly where it is); the pictures were checked in the art preview. Run **Ki
    time, and a tile that's dug out is bare ground. When nothing is left under it, it stops and says so.
 8. Save, load: the drills' fuel and what they hold are kept, and what's been dug stays dug.
 
+## Electricity
+
+1. Free build (every age is open), **F10**: **+10,000 of everything** (coal included).
+2. Put down a **generator** near the storehouse (the storehouse has coal from the cheat). Pick an **electric arm** or an
+   **assembling machine**: while you hold it, a faint blue circle shows the generator's reach. Place it inside the circle.
+   **F10, Finish all building now**. It works; point at it from the throne: no "No power" line.
+3. Place one outside the circle: point at it: "No power: put it within a generator's reach or a power pole's area".
+4. Place **wooden power poles** in a line from the generator to it, each within 7.5 tiles of the last (the blue squares
+   show what each powers). Finish building: wires join the poles, and the machine works.
+5. Point at a pole (or E beside it): "Power network: ... used of ... (1 generator, ...)".
+6. Put down many electric machines working at once (or several electric drills on an ore field): when they want more than
+   0.9 MW the network line turns orange ("only 60% of what's wanted"), and they all work slower. A second generator fixes it.
+7. Take the coal out of storage (or use it up): the generator says "no fuel", and everything on it stops.
+8. An **accumulator** and a **solar panel** on a pole's area: by day the panel charges the
+   accumulator (point at it: "Stored ... charging"); at night (F10, time of day) the accumulator keeps things going until
+   it's empty. A **big power pole** reaches 30 tiles to another big pole; a **substation** powers an 18x18 square.
+9. Lamps in a house are powered when the house's door is in a generator's reach or a pole's area.
+10. Save, load: the generators' fuel and the accumulators' charge are kept; the wires come back by themselves.
+
 Things that aren't done yet (honestly):
 
 - One lane of items per belt (Factorio has two).
@@ -96,4 +124,5 @@ Things that aren't done yet (honestly):
   down and dragging them again.
 - Other players online see your belts and machines but not the items moving on them.
 - Online, each player's computer keeps its own ore fields: what your drills dig isn't taken out of a friend's world.
-- Power poles, Craftables for the ages and pollution come next.
+- Generators don't need water (Factorio's boilers and pumps are left out).
+- Craftables for the ages and pollution come next.

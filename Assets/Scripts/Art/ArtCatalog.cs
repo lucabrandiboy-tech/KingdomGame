@@ -120,7 +120,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 24;
+        public const int Version = 25;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -308,6 +308,18 @@ namespace KingdomGame.Art
                 }
                 Add(items, ArtKeys.DrillHead(art), "Factory", p => FurnitureArt.DrillBitPiece(p, st), true, factory);
             }
+            // Electricity: power poles, the accumulator, the solar panel (wires are drawn by the game).
+            for (int style = 0; style < FurnitureArt.PoleStyles; style++)
+            {
+                int st = style;
+                string key = ArtKeys.Turned(FurnitureArt.PoleArt(style), 0);
+                Add(items, key, "Factory", p => FurnitureArt.PolePiece(p, st), true, factory);
+                Shadow(items, key, "FurnitureShadows", 0.03f);
+            }
+            Add(items, ArtKeys.Turned(FurnitureArt.AccumulatorArt, 0), "Factory", p => FurnitureArt.AccumulatorPiece(p), true, factory);
+            Shadow(items, ArtKeys.Turned(FurnitureArt.AccumulatorArt, 0), "FurnitureShadows", 0.03f);
+            Add(items, ArtKeys.Turned(FurnitureArt.SolarArt, 0), "Factory", p => FurnitureArt.SolarPiece(p), true, factory);
+            Shadow(items, ArtKeys.Turned(FurnitureArt.SolarArt, 0), "FurnitureShadows", 0.03f);
             foreach (Economy.ResourceType type in System.Enum.GetValues(typeof(Economy.ResourceType)))
             {
                 var t = type;

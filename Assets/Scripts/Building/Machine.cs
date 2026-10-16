@@ -7,24 +7,24 @@ namespace KingdomGame.Building
 {
     /// <summary>
     /// A machine working by itself (see <see cref="MachineKind"/>). The smelter takes iron and
-    /// wood from storage and puts steel back. A generator burns wood from storage and powers
-    /// the sawmills and quarries within its reach. Those put what they make out, an item at a
-    /// time, onto the conveyor belts touching them (Building/Factory.cs carries it along) or
-    /// into a storehouse or chest touching them; with nowhere to put it they fill up and stop.
-    /// Belts, arms, furnaces, assemblers and drills are run by the kingdom's <see cref="Factory"/>.
-    /// A machine that isn't working is drawn darker. An electric lamp shines only while a
-    /// burning generator's power reaches it.
+    /// wood from storage and puts steel back. Sawmills, quarries and producers that need power
+    /// work while the kingdom's electricity reaches them (<see cref="PowerShare"/>, set by the
+    /// factory's power grid: a generator's reach or a power pole's area). They put what they make
+    /// out, an item at a time, onto the conveyor belts touching them (Building/Factory.cs carries
+    /// it along) or into a storehouse or chest touching them; with nowhere to put it they fill up
+    /// and stop. Belts, arms, furnaces, assemblers, drills, generators, power poles, accumulators
+    /// and solar panels are run by the kingdom's <see cref="Factory"/>. A machine that isn't
+    /// working is drawn darker. An electric lamp shines only while it has power.
     /// </summary>
     public sealed class Machine : MonoBehaviour
     {
-        static readonly List<Machine> generators = new List<Machine>();
         static readonly HashSet<Vector2Int> belts = new HashSet<Vector2Int>();
 
         Furniture piece;
         MachineConfig config;
         Kingdom kingdom;
         SpriteRenderer look;
-        float workAt, poweredUntil, pushAt;
+        float workAt, pushAt;
         FireLight lamp;
         int held, pushTurn;
         bool working;
@@ -46,9 +46,19 @@ namespace KingdomGame.Building
         /// <summary>Puts back what it held (a saved game).</summary>
         public void SetHeld(int amount) => held = Mathf.Clamp(amount, 0, config != null ? config.holds : 60);
 
-        /// <summary>Run by the factory (belts, arms, furnaces, assemblers, drills), not by itself.</summary>
+        /// <summary>Run by the factory (belts, arms, furnaces, assemblers, drills, generators, poles, accumulators, solar panels), not by itself.</summary>
         public bool InFactory => config != null && (config.kind == MachineKind.Conveyor || config.kind == MachineKind.Arm
-            || config.kind == MachineKind.Furnace || config.kind == MachineKind.Assembler || config.kind == MachineKind.Drill);
+            || config.kind == MachineKind.Furnace || config.kind == MachineKind.Assembler || config.kind == MachineKind.Drill
+            || config.kind == MachineKind.Generator || config.kind == MachineKind.PowerPole || config.kind == MachineKind.Accumulator
+            || config.kind == MachineKind.Solar);
+
+        /// <summary>Lamps and older machines that need power: the share of what they want that the power grid gives them (Building/Factory.cs).</summary>
+        public float PowerShare { get; set; }
+        /// <summary>Has enough power to work (half or more of what it wants).</summary>
+        public bool Powered => PowerShare >= 0.5f;
+        /// <summary>Uses electricity (lamps, and sawmills, quarries and producers marked Needs Power): the factory's power grid feeds it.</summary>
+        public bool UsesPower => config != null && (config.kind == MachineKind.Lamp
+            || (config.needsPower && (config.kind == MachineKind.Sawmill || config.kind == MachineKind.Quarry || config.kind == MachineKind.Producer)));
         float progress, lastWorked = -99f;
 
         /// <summary>A crafting table that needs a crafter: storage is short of what it makes and the ingredients are there.</summary>
@@ -81,8 +91,6 @@ namespace KingdomGame.Building
             int stored = kingdom.Store(config.makes, config.output, transform.position);
             if (stored < config.output) kingdom.Report($"Storage is full: {config.output - stored} {ResourceText.Name(config.makes)} were lost");
         }
-        /// <summary>A generator that's burning now.</summary>
-        public bool Burning => Time.time < poweredUntil;
 
         public void Setup(Furniture furniture, MachineConfig machine, SpriteRenderer picture, Kingdom owner)
         {
@@ -93,8 +101,7 @@ namespace KingdomGame.Building
             workAt = Time.time + config.workSeconds;
             if (config.kind == MachineKind.Conveyor) foreach (var c in furniture.Cells.allPositionsWithin) belts.Add(c);
             if (InFactory) enabled = false;   // (the factory runs it)
-            if (config.kind == MachineKind.Generator) generators.Add(this);
-            else if (config.kind == MachineKind.Lamp)
+            if (config.kind == MachineKind.Lamp)
             {
                 // A cold white electric light, off until there's power.
                 lamp = FireLight.Create(transform, Vector2.zero, new Color(0.9f, 0.95f, 1f),
@@ -109,16 +116,7 @@ namespace KingdomGame.Building
         {
             if (config == null) return;
             if (config.kind == MachineKind.Conveyor && piece != null) foreach (var c in piece.Cells.allPositionsWithin) belts.Remove(c);
-            generators.Remove(this);
             if (kingdom != null && kingdom.Factory != null) kingdom.Factory.Unregister(this);
-        }
-
-        /// <summary>Whether a generator's power reaches <paramref name="at"/>.</summary>
-        public static bool PoweredAt(Vector2 at)
-        {
-            foreach (var g in generators)
-                if (g != null && g.Burning && ((Vector2)g.transform.position - at).sqrMagnitude <= g.config.reach * g.config.reach) return true;
-            return false;
         }
 
         void Update()
@@ -129,8 +127,8 @@ namespace KingdomGame.Building
             {
                 if (now < workAt) return;
                 workAt = now + 0.5f;
-                // Inside a house (far off the map): powered if the house is in a generator's reach.
-                bool on = PoweredAt(PowerSpot);
+                // (inside a house, far off the map: powered if the house's door is in a generator's reach or a pole's area)
+                bool on = Powered;
                 if (lamp != null && lamp.gameObject.activeSelf != on) lamp.gameObject.SetActive(on);
                 if (look != null) look.color = on ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
                 return;
@@ -147,7 +145,7 @@ namespace KingdomGame.Building
                 working = Work();
             }
             if (held > 0) PushOut(now);
-            if (look != null) look.color = working || Burning ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
+            if (look != null) look.color = working ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
         }
 
         // One round of work; false if it couldn't (no power, nothing to use, full).
@@ -156,22 +154,6 @@ namespace KingdomGame.Building
             Vector2 at = transform.position;
             switch (config.kind)
             {
-                case MachineKind.Generator:
-                {
-                    // Coal first; wood also burns, but a load lasts only a third as long.
-                    var coal = new int[Inventory.TypeCount];
-                    coal[(int)ResourceType.Coal] = config.coalIn;
-                    float lasts = config.workSeconds;
-                    if (config.coalIn <= 0 || !kingdom.TrySpend(coal))
-                    {
-                        if (config.woodIn > 0 && !kingdom.TrySpend(config.woodIn, 0, 0)) return false;
-                        lasts = config.workSeconds / 3f;
-                        workAt = Time.time + lasts;
-                    }
-                    poweredUntil = Time.time + lasts + 0.5f;
-                    return true;
-                }
-
                 case MachineKind.Smelter:
                 {
                     if (kingdom.Available(ResourceType.Iron) < config.ironIn || kingdom.Available(ResourceType.Wood) < config.woodIn) return false;
@@ -189,7 +171,7 @@ namespace KingdomGame.Building
 
                 case MachineKind.Producer:
                 {
-                    if (config.needsPower && !PoweredAt(PowerSpot)) return false;
+                    if (config.needsPower && !Powered) return false;
                     // Auto-crafters stop when there's plenty; anything made to go out on belts waits while it's full.
                     if (config.keep > 0 && kingdom.Stock(config.makes) >= config.keep && config.inputs != null && config.inputs.Length > 0) return true;
                     if (config.toBelts && held >= config.holds) return false;
@@ -206,7 +188,7 @@ namespace KingdomGame.Building
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
                 {
-                    if (held >= config.holds || (config.needsPower && !PoweredAt(PowerSpot))) return false;
+                    if (held >= config.holds || (config.needsPower && !Powered)) return false;
                     if (config.kind == MachineKind.Quarry)
                     {
                         held += config.output;

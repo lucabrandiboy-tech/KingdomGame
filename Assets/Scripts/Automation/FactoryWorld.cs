@@ -82,7 +82,7 @@ namespace KingdomGame.Automation
     /// front. It takes from belts, chests and machines' finished goods, and gives to belts, chests and machines (only
     /// what a machine needs). Burner arms burn fuel as they move, and take fuel for themselves when they run out.
     /// </summary>
-    public sealed class Arm
+    public sealed class Arm : IPowerUser
     {
         public readonly Spot At;
         public readonly int Dir;
@@ -112,6 +112,10 @@ namespace KingdomGame.Automation
             At = at;
             Dir = Dirs.Wrap(dir);
         }
+
+        /// <summary>MW an electric arm wants: its use while it swings, a thirtieth of that while it waits.</summary>
+        public float PowerDemand() => Burner ? 0f : state == 1 || state == 3 ? EnergyUse : EnergyUse * PowerGrid.IdleShare;
+        public void SetPower(float share) => Power = share;
 
         public Spot From => At - Dirs.Step(Dir);
         public Spot To => At + Dirs.Step(Dir);

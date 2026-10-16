@@ -6,7 +6,7 @@ namespace KingdomGame.Economy
     {
         /// <summary>Turns iron and wood from storage into steel, straight into storage (Medieval, no power).</summary>
         Smelter,
-        /// <summary>Burns wood from storage; machines within its reach work while it burns.</summary>
+        /// <summary>Makes electricity (<see cref="MachineConfig.powerOutput"/>) burning coal or wood, for what's within its reach and the power poles wired to it.</summary>
         Generator,
         /// <summary>Cuts the trees within its reach (needs power); the wood goes out on conveyors.</summary>
         Sawmill,
@@ -30,6 +30,12 @@ namespace KingdomGame.Economy
         Assembler,
         /// <summary>A mining drill: digs the ore field under it and puts the ore out of its chute (Automation/Drill.cs).</summary>
         Drill,
+        /// <summary>A power pole: wired to the poles near it, it powers the electric things round it (Automation/PowerGrid.cs).</summary>
+        PowerPole,
+        /// <summary>An accumulator: stores spare electricity and gives it back when the network is short.</summary>
+        Accumulator,
+        /// <summary>A solar panel: electricity by day, none at night.</summary>
+        Solar,
     }
 
     /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
@@ -41,17 +47,17 @@ namespace KingdomGame.Economy
         [Min(0.5f)] public float workSeconds = 6f;
         [Tooltip("How much each round makes (wood, stone or steel).")]
         [Min(1)] public int output = 5;
-        [Tooltip("Sawmill: how far away it cuts trees. Generator: how far its power reaches. In tiles. Lamp: how big its light is (1 = a brazier's).")]
+        [Tooltip("Sawmill: how far away it cuts trees. Generator: how far round it its own wiring powers things (power poles take it further). In tiles. Lamp: how big its light is (1 = a brazier's).")]
         [Min(1)] public float reach = 8f;
         [Tooltip("How much it keeps before it stops (when nothing takes its output away).")]
         [Min(1)] public int holds = 60;
-        [Tooltip("Generator: wood burnt each round. Smelter: wood used for each batch.")]
+        [Tooltip("Smelter: wood used for each batch. (Generators burn coal or wood for what's used: see Power Output.)")]
         [Min(0)] public int woodIn = 1;
-        [Tooltip("Generator: coal burnt each round (it burns wood instead when there's no coal, and wood lasts a third as long).")]
+        [Tooltip("Not used by generators any more (they burn as much as the network uses).")]
         [Min(0)] public int coalIn = 1;
         [Tooltip("Smelter: iron used for each batch.")]
         [Min(0)] public int ironIn = 2;
-        [Tooltip("Sawmills and quarries: only works within a burning generator's reach (Iron Age water and treadwheel ones don't need it).")]
+        [Tooltip("Sawmills, quarries and producers: only works on electricity: a generator's reach or a power pole's area (Iron Age water and treadwheel ones don't need it).")]
         public bool needsPower = true;
         [Tooltip("Tree farm: what it plants (a tree that grows back when it's cut).")]
         public ResourceNodeConfig plant;
@@ -80,6 +86,18 @@ namespace KingdomGame.Economy
         [Min(0f)] public float energyUse = 0.1f;
         [Tooltip("Pollution made each minute while working.")]
         [Min(0f)] public float pollution;
+
+        [Header("Electricity")]
+        [Tooltip("Generators and solar panels: MW at most. Accumulators: MW in or out at most.")]
+        [Min(0f)] public float powerOutput = 0.9f;
+        [Tooltip("Lamps and older machines (sawmills, quarries, drills, farms that need power): MW they use.")]
+        [Min(0f)] public float powerUse = 0.1f;
+        [Tooltip("Power poles: how far their wires reach to other poles, in tiles.")]
+        [Min(0f)] public float wireReach = 7.5f;
+        [Tooltip("Power poles: the side of the square round them they power, in tiles.")]
+        [Min(0f)] public float supplyArea = 5f;
+        [Tooltip("Accumulators: how much they hold, in MJ.")]
+        [Min(0f)] public float storeMJ = 5f;
 
         [Header("Factory: drills")]
         [Tooltip("Drills: seconds to dig each item of ore at full power.")]

@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 29;
+        const int SettingsVersion = 30;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -106,6 +106,8 @@ namespace KingdomGame.EditorTools
             // Fire: what burns (wood walls, wooden furniture and doors), wells, flamethrowers, burning zombies. New settings get it too.
             bool fireUpdate = oldContent == null || oldContent.settingsVersion < 24;
             bool roomsUpdate = oldContent != null && oldContent.settingsVersion < 27;   // kinds of room: training dummies, medicine tables, tool benches
+            // Electricity as a network (power poles): generators' MW and what lamps use. New settings get it too.
+            bool powerUpdate = oldContent == null || oldContent.settingsVersion < 30;
 
             // ---- Destruction: 64 pixels = 1 tile. Stone shrugs off bullets (Rust-style).
             var settings = Asset<DestructionSettings>("Destruction/DestructionSettings", s => { });
@@ -292,6 +294,10 @@ namespace KingdomGame.EditorTools
             });
             // Each age's automation (machines), unlocked with the age; then each age's crafting table and the parts its things take.
             var machinesByAge = Machines(plantedTree);
+            if (powerUpdate)
+                foreach (var age in machinesByAge)
+                    foreach (var b in age)
+                        if (b != null && b.machine != null) PowerNumbers(b.machine);
             for (int i = 0; i < machinesByAge.Length && i < defensesByAge.Length; i++) defensesByAge[i].AddRange(machinesByAge[i]);
             // Each age's ten pieces of furniture (beds give homes; each kind boosts something once).
             var furnitureByAge = AgeFurniture();
@@ -1281,6 +1287,25 @@ namespace KingdomGame.EditorTools
             static ResourceAmount R(ResourceType t, int n) => new ResourceAmount(t, n);
         }
 
+        // Electricity's numbers for the older machines (settings from before power poles, and new ones): what each
+        // generator gives (MW) and what each lamp uses; the other machines that need power use the default 0.1 MW.
+        static void PowerNumbers(MachineConfig m)
+        {
+            float output = m.powerOutput, use = m.powerUse;
+            switch (m.name)
+            {
+                case "Generator": output = 0.9f; break;
+                case "DieselGenerator": output = 1.8f; break;
+                case "PowerPlant": output = 4f; break;
+                case "ElectricLamp": use = 0.005f; break;
+                case "Floodlight": use = 0.02f; break;
+            }
+            if (Mathf.Approximately(output, m.powerOutput) && Mathf.Approximately(use, m.powerUse)) return;
+            m.powerOutput = output;
+            m.powerUse = use;
+            EditorUtility.SetDirty(m);
+        }
+
         // Each age's machines (index = age: 0 Stone Age ... 7 World War 2).
         static List<BuildingConfig>[] Machines(ResourceNodeConfig plantedTree)
         {
@@ -1314,6 +1339,13 @@ namespace KingdomGame.EditorTools
                 {
                     m.kind = MachineKind.Generator; m.workSeconds = seconds; m.reach = reach; m.coalIn = coal; m.woodIn = 2; m.holds = 60;
                 });
+            // Electricity (Automation/PowerGrid.cs): poles wired together carry it; accumulators store it; solar panels make it by day.
+            MachineConfig Electric(string file, MachineKind kind, System.Action<MachineConfig> set) =>
+                Asset<MachineConfig>("Economy/Machines/" + file, m =>
+                {
+                    m.kind = kind; m.needsPower = false; m.burner = false; m.holds = 60; m.workSeconds = 1f; m.reach = 1f;
+                    set(m);
+                });
             string A(string name) => FurnitureArt.AgeMachine(name);
             ResourceAmount In(ResourceType t, int n) => new ResourceAmount(t, n);
             // The factory (Building/Factory.cs): arms, furnaces and assemblers. Burners until the Industrial age, then electric.
@@ -1332,6 +1364,10 @@ namespace KingdomGame.EditorTools
                     b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = true; b.flat = false;
                     b.dragToPlaceLines = false; b.roomTag = RoomTag.None; b.machine = machine;
                 });
+            BuildingConfig Pole(string file, string displayName, int style, int wood, int stone, int steel, float wire, float supply) =>
+                Factory(file, displayName, FurnitureArt.PoleArt(style), FurnitureArt.PoleSize(style), 1, wood, stone, steel,
+                    4f + style * 3f, 150f + style * 120f, style >= 2 ? 1.6f : 1.3f,
+                    Electric(file, MachineKind.PowerPole, m => { m.wireReach = wire; m.supplyArea = supply; }));
             BuildingConfig Arm(string file, string displayName, int style, int wood, int stone, int steel, float swing, bool burner, float energy) =>
                 Factory(file, displayName, FurnitureArt.ArmBase(style), 1, 4, wood, stone, steel, 3f, 80f, 0.35f,
                     Works(file, MachineKind.Arm, swing, 1f, burner, energy, 0f));
@@ -1419,6 +1455,7 @@ namespace KingdomGame.EditorTools
                 Arm("ElectricArm", "Electric arm", 2, 0, 2, 2, 0.42f, false, 0.013f),
                 Assembler("AssemblingMachine", "Assembling machine", 2, 0, 40, 30, 1f, false, 0.15f, 4f),
                 Drill("ElectricDrill", "Electric mining drill", 2, 0, 30, 20, 2f, 1, false, 0.09f, 6f),
+                Pole("WoodenPole", "Wooden power pole", 0, 6, 0, 0, 7.5f, 5f),
                 // Electric lights (Lights tab): they only shine while a generator's power reaches them.
                 Lamp(Item("ElectricLamp", "Electric lamp", FurnitureArt.ElectricLamp, 1, 5, 5, 3, 6f, 150f, 1.4f, false, Machine("ElectricLamp", MachineKind.Lamp, 1f, 0, 1.3f, 0, 0))),
                 Lamp(Item("Floodlight", "Floodlight", FurnitureArt.Floodlight, 1, 0, 10, 8, 10f, 250f, 1.5f, false, Machine("Floodlight", MachineKind.Lamp, 1f, 0, 2.6f, 0, 0))),
@@ -1432,6 +1469,10 @@ namespace KingdomGame.EditorTools
                 Item("TractorFarm", "Tractor farm", A("TractorFarm"), 2, 120, 60, 40, 34f, 700f, 0.6f, false, Producer("TractorFarm", ResourceType.Food, 10, 20f, true)),
                 Arm("FastArm", "Fast arm", 3, 0, 2, 4, 0.18f, false, 0.046f),
                 Furnace("ElectricFurnace", "Electric furnace", 2, 0, 40, 40, 2f, false, 0.18f, 1f),
+                Pole("MediumPole", "Medium power pole", 1, 0, 2, 2, 9f, 7f),
+                Pole("BigPole", "Big power pole", 2, 0, 5, 6, 30f, 4f),
+                Factory("Accumulator", "Accumulator", FurnitureArt.AccumulatorArt, 2, 1, 0, 5, 8, 10f, 300f, 0.8f,
+                    Electric("Accumulator", MachineKind.Accumulator, m => { m.storeMJ = 5f; m.powerOutput = 0.3f; })),
                 Belt(Item("FastBelt", "Fast belt", A("FastBelt"), 1, 0, 2, 2, 2f, 180f, 0.05f, true, Machine("FastBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 3f)), 5),
             };
             // World War 2: power plants and assembly lines.
@@ -1444,6 +1485,9 @@ namespace KingdomGame.EditorTools
                 Item("MechanizedFarm", "Mechanized farm", A("MechanizedFarm"), 2, 120, 120, 60, 40f, 900f, 0.9f, false, Producer("MechanizedFarm", ResourceType.Food, 15, 20f, true)),
                 Assembler("AssemblyRobot", "Assembly robot", 3, 0, 40, 80, 1.5f, false, 0.3f, 3f),
                 Drill("BigDrill", "Big mining drill", 3, 0, 60, 60, 1f, 2, false, 0.3f, 10f),
+                Pole("Substation", "Substation", 3, 0, 10, 12, 18f, 18f),
+                Factory("SolarPanel", "Solar panel", FurnitureArt.SolarArt, 3, 1, 0, 5, 10, 12f, 300f, 0.3f,
+                    Electric("SolarPanel", MachineKind.Solar, m => { m.powerOutput = 0.06f; })),
                 Belt(Item("ExpressBelt", "Express belt", A("ExpressBelt"), 1, 0, 2, 3, 2f, 220f, 0.05f, true, Machine("ExpressBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 4f)), 6),
             };
             return new[] { stone, bronze, iron, medieval, renaissance, industrial, ww1, ww2 };

@@ -86,6 +86,35 @@ namespace KingdomGame.UI
             if (crafter != null) DrawCrafter(crafter, x, ref y, inner, panel, font);
             else if (arm != null) DrawArm(arm, x, ref y, inner, panel, font);
             else if (drill != null) DrawDrill(drill, x, ref y, inner, font);
+            else DrawPower(x, ref y, inner, font);
+        }
+
+        // A generator, power pole, accumulator or solar panel: its state, its network's, and how electricity works.
+        void DrawPower(float x, ref float y, float inner, int font)
+        {
+            string state = factory.Describe(machine);
+            if (state != null)
+            {
+                GUI.Label(new Rect(x, y, inner, font * 4f), state, text);
+                y += font * 4.2f;
+            }
+            string how;
+            if (factory.GeneratorOf(machine) != null)
+                how = "It makes electricity for what's within its reach (the blue circle while you place something electric) and for every power pole wired to it. " +
+                      "It burns only for what's used: coal from storage first, or wood (which holds a third as much); an arm can put fuel straight in. " +
+                      "When more is wanted than all the network's generators give, every machine on it works slower.";
+            else if (factory.AccumulatorOf(machine) != null)
+                how = "It stores what its network has spare and gives it back when more is wanted than the generators and solar panels give (at night, for solar panels). " +
+                      "It has to be in a power pole's area or a generator's reach.";
+            else if (factory.SolarOf(machine) != null)
+                how = "It makes electricity by day (less under clouds) and none at night, without fuel. An accumulator keeps things going through the night. " +
+                      "It has to be in a power pole's area or a generator's reach.";
+            else
+                how = "A power pole wires itself to the nearest poles within its wire reach (up to five) and powers what's in the square round it. " +
+                      "Poles wired together, and generators near them, are one network: they share every generator, solar panel and accumulator on it. " +
+                      "While you place something electric, the blue areas show what's powered.";
+            GUI.Label(new Rect(x, y, inner, font * 6f), how, text);
+            y += font * 6.2f;
         }
 
         void DrawDrill(Drill d, float x, ref float y, float inner, int font)

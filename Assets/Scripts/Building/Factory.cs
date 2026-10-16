@@ -11,10 +11,12 @@ namespace KingdomGame.Building
     /// <summary>
     /// A kingdom's factory, Factorio-style: belts that carry items in their direction (you see each one ride), arms that
     /// move items between belts, chests, storehouses and machines, furnaces that smelt what's put in them,
-    /// assemblers that make the recipe you choose, and drills that dig the ore fields (Economy/OreMap.cs) under them.
-    /// The simulation is plain C# (Automation/FactoryWorld.cs, unit-tested);
+    /// assemblers that make the recipe you choose, and drills that dig the ore fields (Economy/OreMap.cs) under them;
+    /// and its electricity (Automation/PowerGrid.cs): generators, power poles wired together, accumulators and solar
+    /// panels, feeding the electric machines, lamps and older machines that need power.
+    /// The simulation is plain C# (Automation/FactoryWorld.cs and PowerGrid.cs, unit-tested);
     /// this runs it, keeps it in step with what's built (chests and storehouses are its ports, houses' belt holes link
-    /// belts through their walls), draws the items and the arms, and saves it.
+    /// belts through their walls), draws the items, the arms and the wires, and saves it.
     /// </summary>
     public sealed class Factory : MonoBehaviour
     {
@@ -36,6 +38,35 @@ namespace KingdomGame.Building
             public Drill Drill;
             public Transform Head;
             public float HeadAngle;
+            public Generator Generator;
+            public PowerPole Pole;
+            public Accumulator Accumulator;
+            public SolarPanel Solar;
+            public IPowerUser User;   // an electric arm, furnace, assembler or drill
+        }
+
+        // A lamp or an older machine on the power grid: it wants its Power Use while it can work.
+        sealed class LegacyUser : IPowerUser
+        {
+            public readonly Machine Machine;
+            readonly float use;
+
+            public LegacyUser(Machine machine, float megawatts)
+            {
+                Machine = machine;
+                use = megawatts;
+            }
+
+            public float PowerDemand()
+            {
+                if (Machine == null || Machine.Config == null) return 0f;
+                return Machine.Held >= Machine.Config.holds ? use * PowerGrid.IdleShare : use;   // (full: it waits)
+            }
+
+            public void SetPower(float share)
+            {
+                if (Machine != null) Machine.PowerShare = share;
+            }
         }
 
         // The ore in the ground (Economy/OreMap.cs), as drills see it.
@@ -110,6 +141,11 @@ namespace KingdomGame.Building
         Kingdom kingdom;
         readonly Dictionary<Machine, Piece> pieces = new Dictionary<Machine, Piece>();
         readonly Dictionary<Machine, HeldPort> heldPorts = new Dictionary<Machine, HeldPort>();
+        readonly Dictionary<Machine, LegacyUser> legacyUsers = new Dictionary<Machine, LegacyUser>();
+        readonly List<SpriteRenderer> wirePool = new List<SpriteRenderer>();
+        readonly List<SpriteRenderer> areaPool = new List<SpriteRenderer>();
+        int shownWires = -1, areasFrame = -1;
+        Sprite unit, disc;
         readonly Dictionary<Storage, StoragePort> storagePorts = new Dictionary<Storage, StoragePort>();
         readonly List<Recipe> furnaceRecipes = new List<Recipe>();
         readonly List<(Vector2Int Outside, Vector2Int Inside, bool In)> holes = new List<(Vector2Int, Vector2Int, bool)>();
@@ -120,6 +156,8 @@ namespace KingdomGame.Building
         int furnaceAge = -1;
 
         public FactoryWorld World { get; private set; }
+        /// <summary>The kingdom's electricity: poles, generators, accumulators, solar panels and what they power.</summary>
+        public PowerGrid Power { get; private set; }
         public FactoryConfig Config => config;
         /// <summary>Seconds between items an older machine puts out on a belt.</summary>
         public float OutputInterval => 1f / Mathf.Max(0.5f, config != null ? config.machineOutputRate : 4f);
@@ -139,6 +177,7 @@ namespace KingdomGame.Building
             config = factory;
             var fuels = new FuelTable(config != null ? config.fuels : RecipeBook.DefaultFuels());
             World = new FactoryWorld(fuels);
+            Power = new PowerGrid();
             // Anything built before the factory was there.
             foreach (var f in kingdom.AllFurniture)
             {
@@ -149,17 +188,53 @@ namespace KingdomGame.Building
 
         static Spot SpotOf(Vector2Int c) => new Spot(c.x, c.y);
 
+        // Where something electric is, for the power grid: its cells, or for something inside a house (far off the map)
+        // its door's cell outside.
+        Footprint PowerFootprint(Machine m, RectInt cells)
+        {
+            var place = kingdom != null ? kingdom.PlaceAt((Vector2)m.transform.position) : null;
+            if (place != null)
+            {
+                var door = place.OutsideCell;
+                return new Footprint(door.x, door.y, 1, 1);
+            }
+            return new Footprint(cells.x, cells.y, cells.width, cells.height);
+        }
+
+        // A generator's fuel when nobody has put any in: coal from storage, or wood.
+        bool TakeFuel(out ResourceType item)
+        {
+            foreach (var t in new[] { ResourceType.Coal, ResourceType.Wood })
+            {
+                var cost = new int[Inventory.TypeCount];
+                cost[(int)t] = 1;
+                if (kingdom == null || !kingdom.TrySpend(cost)) continue;
+                item = t;
+                return true;
+            }
+            item = default;
+            return false;
+        }
+
         // ------------------------------------------------------------ pieces --
 
         /// <summary>A machine was built: a belt, arm, furnace or assembler joins the factory; an older machine's goods become something arms can take.</summary>
         public void Register(Machine m)
         {
-            if (m == null || m.Config == null || World == null || pieces.ContainsKey(m) || heldPorts.ContainsKey(m)) return;
+            if (m == null || m.Config == null || World == null || pieces.ContainsKey(m) || heldPorts.ContainsKey(m) || legacyUsers.ContainsKey(m)) return;
             var furniture = m.GetComponent<Furniture>();
             if (furniture == null) return;
             var cfg = m.Config;
             var cells = furniture.Cells;
             var piece = new Piece { Machine = m, Config = cfg, Origin = SpotOf(cells.position) };
+            var foot = PowerFootprint(m, cells);
+            // Lamps and the older machines that need power: on the grid (and, below, maybe a port for their goods).
+            if (m.UsesPower)
+            {
+                var user = new LegacyUser(m, cfg.powerUse);
+                legacyUsers[m] = user;
+                Power.AddUser(user, foot);
+            }
             switch (cfg.kind)
             {
                 case MachineKind.Conveyor:
@@ -171,6 +246,7 @@ namespace KingdomGame.Building
                         SwingSeconds = cfg.swingSeconds, Burner = cfg.burner, EnergyUse = cfg.energyUse, Power = cfg.burner ? 1f : 0f,
                     };
                     World.Add(piece.Arm);
+                    if (!cfg.burner) Power.AddUser(piece.User = piece.Arm, foot);
                     MakeArmLook(piece, furniture);
                     break;
                 case MachineKind.Furnace:
@@ -184,6 +260,7 @@ namespace KingdomGame.Building
                     piece.Crafter = c;
                     foreach (var cell in cells.allPositionsWithin) World.SetPort(SpotOf(cell), c, false);
                     World.Add(c);
+                    if (!cfg.burner) Power.AddUser(piece.User = c, foot);
                     if (cfg.kind == MachineKind.Assembler) MakeIcon(piece, furniture);
                     break;
                 }
@@ -196,9 +273,33 @@ namespace KingdomGame.Building
                     piece.Drill = d;
                     foreach (var cell in cells.allPositionsWithin) World.SetPort(SpotOf(cell), d, false);
                     World.Add(d);
+                    if (!cfg.burner) Power.AddUser(piece.User = d, foot);
                     MakeDrillLook(piece, furniture);
                     break;
                 }
+                case MachineKind.Generator:
+                {
+                    // It powers what's within its reach itself (its own wiring: a circle), and power poles take it further.
+                    var g = new Generator(foot, World.Fuels) { MaxOutput = cfg.powerOutput, TakeFromStore = TakeFuel };
+                    piece.Generator = g;
+                    Power.Add(g);
+                    piece.Pole = new PowerPole(foot, cfg.reach, cfg.reach, true);
+                    Power.Add(piece.Pole);
+                    foreach (var cell in cells.allPositionsWithin) World.SetPort(SpotOf(cell), g, false);   // (arms can put fuel in)
+                    break;
+                }
+                case MachineKind.PowerPole:
+                    piece.Pole = new PowerPole(foot, cfg.wireReach, cfg.supplyArea);
+                    Power.Add(piece.Pole);
+                    break;
+                case MachineKind.Accumulator:
+                    piece.Accumulator = new Accumulator(foot) { Capacity = cfg.storeMJ, Rate = cfg.powerOutput };
+                    Power.Add(piece.Accumulator);
+                    break;
+                case MachineKind.Solar:
+                    piece.Solar = new SolarPanel(foot) { MaxOutput = cfg.powerOutput };
+                    Power.Add(piece.Solar);
+                    break;
                 case MachineKind.Sawmill:
                 case MachineKind.Quarry:
                 case MachineKind.Producer when cfg.toBelts:
@@ -221,6 +322,11 @@ namespace KingdomGame.Building
             // (not while the scene is closing: nothing goes back to storage then, and no bags are made)
             if (m == null || World == null || !m.gameObject.scene.isLoaded) return;
             var furniture = m.GetComponent<Furniture>();
+            if (legacyUsers.TryGetValue(m, out var legacy))
+            {
+                legacyUsers.Remove(m);
+                Power.RemoveUser(legacy);
+            }
             if (heldPorts.TryGetValue(m, out var port))
             {
                 heldPorts.Remove(m);
@@ -244,6 +350,16 @@ namespace KingdomGame.Building
                 World.Remove(piece.Drill);
                 if (furniture != null) foreach (var cell in furniture.Cells.allPositionsWithin) World.ClearPort(SpotOf(cell), piece.Drill);
             }
+            if (piece.User != null) Power.RemoveUser(piece.User);
+            if (piece.Generator != null)
+            {
+                piece.Generator.TakeAll(spill);
+                Power.Remove(piece.Generator);
+                if (furniture != null) foreach (var cell in furniture.Cells.allPositionsWithin) World.ClearPort(SpotOf(cell), piece.Generator);
+            }
+            if (piece.Pole != null) Power.Remove(piece.Pole);
+            if (piece.Accumulator != null) Power.Remove(piece.Accumulator);
+            if (piece.Solar != null) Power.Remove(piece.Solar);
             foreach (var t in list) spill[(int)t]++;
             GiveBack(spill, m.transform.position);
         }
@@ -273,10 +389,16 @@ namespace KingdomGame.Building
 
         public Crafter CrafterOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Crafter : null;
 
-        /// <summary>What a factory machine is doing, or why it's stopped, in a line (null: not a factory machine).</summary>
+        /// <summary>What a factory machine is doing, or why it's stopped, and how its power is (null: not a factory machine).</summary>
         public string Describe(Machine m)
         {
             if (m == null) return null;
+            string work = DescribeWork(m), power = PowerText(m);
+            return power == null ? work : work == null ? power : work + "\n" + power;
+        }
+
+        string DescribeWork(Machine m)
+        {
             if (heldPorts.ContainsKey(m)) return m.Held > 0 ? $"Holding {m.Held} {ResourceText.Name(m.Makes)} to put out on a belt or into a chest touching it" : null;
             if (!pieces.TryGetValue(m, out var p)) return null;
             if (p.Belt != null)
@@ -298,6 +420,63 @@ namespace KingdomGame.Building
         }
 
         public Drill DrillOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Drill : null;
+        public Generator GeneratorOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Generator : null;
+        public Accumulator AccumulatorOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Accumulator : null;
+        public SolarPanel SolarOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Solar : null;
+        public PowerPole PoleOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Pole : null;
+
+        /// <summary>Whether something uses or makes electricity (its power areas show while you place it).</summary>
+        public static bool IsElectric(MachineConfig c) => c != null && (c.kind == MachineKind.Generator || c.kind == MachineKind.PowerPole
+            || c.kind == MachineKind.Accumulator || c.kind == MachineKind.Solar || c.kind == MachineKind.Lamp
+            || (!c.burner && (c.kind == MachineKind.Arm || c.kind == MachineKind.Furnace || c.kind == MachineKind.Assembler || c.kind == MachineKind.Drill))
+            || (c.needsPower && (c.kind == MachineKind.Sawmill || c.kind == MachineKind.Quarry || c.kind == MachineKind.Producer)));
+
+        /// <summary>MW or kW, whichever reads better.</summary>
+        public static string Watts(float megawatts) => megawatts >= 1f ? $"{megawatts:0.##} MW" : $"{megawatts * 1000f:0} kW";
+
+        /// <summary>A network's state in a line: what's used of what it could give, what makes it, what's stored.</summary>
+        public static string NetworkText(PowerNetwork n)
+        {
+            if (n == null) return "<color=#ff8a80>Not on a power network: no generator or wired pole reaches it</color>";
+            var parts = new List<string>();
+            if (n.GeneratorCount > 0) parts.Add($"{n.GeneratorCount} generator{(n.GeneratorCount == 1 ? "" : "s")}");
+            if (n.PanelCount > 0) parts.Add($"{n.PanelCount} solar panel{(n.PanelCount == 1 ? "" : "s")}");
+            if (n.AccumulatorCount > 0) parts.Add($"{n.AccumulatorCount} accumulator{(n.AccumulatorCount == 1 ? "" : "s")} ({n.Stored:0.#} of {n.StoreCapacity:0.#} MJ stored)");
+            string makers = parts.Count > 0 ? string.Join(", ", parts) : "nothing making power";
+            string state = n.Satisfaction >= 0.999f ? "" : $"   <color=#ffcc80>only {n.Satisfaction * 100f:0}% of what's wanted: machines work slower</color>";
+            return $"Power network: {Watts(n.Supplied)} used of {Watts(n.Capacity)} ({makers}, {n.UserCount} using it){state}";
+        }
+
+        // How an electric thing's power is, or a generator's, pole's, accumulator's or panel's state (null: nothing to say).
+        string PowerText(Machine m)
+        {
+            if (legacyUsers.TryGetValue(m, out var legacy)) return UserPower(Power.NetworkOf(legacy));
+            if (!pieces.TryGetValue(m, out var p)) return null;
+            if (p.User != null) return UserPower(Power.NetworkOf(p.User));
+            if (p.Generator != null)
+            {
+                var g = p.Generator;
+                string fuel = g.FuelCount > 0 ? $", {g.FuelCount} {ResourceText.Name(g.FuelType)} in it" : ", burns coal (or wood) from storage";
+                return (g.Problem != null ? $"<color=#ffcc80>{g.Problem}</color>" : $"Giving {Watts(g.Output)} of {Watts(g.MaxOutput)}{fuel}") + "\n" + NetworkText(Power.NetworkOf(g));
+            }
+            if (p.Accumulator != null)
+            {
+                var a = p.Accumulator;
+                string flow = a.Flow > 0.0001f ? $", charging {Watts(a.Flow)}" : a.Flow < -0.0001f ? $", giving {Watts(-a.Flow)}" : "";
+                return $"Stored {a.Stored:0.##} of {a.Capacity:0.#} MJ{flow}\n" + NetworkText(Power.NetworkOf(a));
+            }
+            if (p.Solar != null) return $"Giving {Watts(p.Solar.Output)} of {Watts(p.Solar.MaxOutput)} (in full sun)\n" + NetworkText(Power.NetworkOf(p.Solar));
+            if (p.Pole != null) return NetworkText(p.Pole.Network);
+            return null;
+        }
+
+        static string UserPower(PowerNetwork n)
+        {
+            if (n == null) return "<color=#ff8a80>No power: put it within a generator's reach or a power pole's area</color>";
+            if (n.Satisfaction >= 0.999f) return null;
+            return n.Capacity <= 0f ? "<color=#ff8a80>No power: the network's generators have no fuel (coal or wood)</color>"
+                : $"<color=#ffcc80>Power {n.Satisfaction * 100f:0}%: more is wanted than the network gives, so it works slower</color>";
+        }
 
         /// <summary>
         /// The ore a drill would dig on <paramref name="cells"/> (and <paramref name="reach"/> tiles round them), like
@@ -340,11 +519,15 @@ namespace KingdomGame.Building
                 syncAt = now + 0.25f;
                 Sync();
             }
+            // Solar panels: the daylight, less under clouds.
+            var sky = kingdom.Clock;
+            Power.Daylight = sky != null ? sky.Daylight * (1f - 0.7f * Mathf.Clamp01(sky.Overcast)) : 1f;
             float step = 1f / Mathf.Clamp(config != null ? config.ticksPerSecond : 30, 10, 60);
             clock = Mathf.Min(clock + Time.deltaTime, step * 4f);
             while (clock >= step)
             {
                 clock -= step;
+                Power.Tick(step);
                 World.Tick(step);
             }
         }
@@ -353,11 +536,13 @@ namespace KingdomGame.Building
         {
             if (World == null) return;
             DrawItems();
+            DrawWires();
+            if (areasFrame != Time.frameCount) HideAreas(0);
             foreach (var p in pieces.Values) DrawPiece(p);
         }
 
-        // Keeps the factory in step with the kingdom: its chests and storehouses, houses' belt holes, which recipes
-        // furnaces know (by age), power for electric machines, and how belts look (straight or curved).
+        // Keeps the factory in step with the kingdom: its chests and storehouses, houses' belt holes, and which recipes
+        // furnaces know (by age).
         void Sync()
         {
             // Chests and storehouses: arms take from and put into them; belts ending at one unload into it.
@@ -401,16 +586,6 @@ namespace KingdomGame.Building
                 furnaceAge = age;
                 furnaceRecipes.Clear();
                 foreach (var r in Recipes) if (r.furnace && Allowed(r)) furnaceRecipes.Add(r);
-            }
-
-            // Electric machines work while a burning generator's power reaches them.
-            foreach (var p in pieces.Values)
-            {
-                if (p.Config.burner || p.Machine == null) continue;
-                float power = p.Config.needsPower ? (Machine.PoweredAt(p.Machine.PowerSpot) ? 1f : 0f) : 1f;
-                if (p.Arm != null) p.Arm.Power = power;
-                if (p.Crafter != null) p.Crafter.Power = power;
-                if (p.Drill != null) p.Drill.Power = power;
             }
         }
 
@@ -487,6 +662,119 @@ namespace KingdomGame.Building
         /// <summary>How far an arm's hand reaches from its middle, in tiles (to the middle of the next tile, nearly).</summary>
         public const float ArmReach = FurnitureArt.ArmReach;
 
+        Sprite Unit()
+        {
+            if (unit == null) unit = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
+            return unit;
+        }
+
+        // A soft-edged white circle a tile across (a generator's reach).
+        Sprite Disc()
+        {
+            if (disc != null) return disc;
+            const int n = 128;
+            var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "Power reach", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = (x + 0.5f) / n - 0.5f, dy = (y + 0.5f) / n - 0.5f;
+                    float a = Mathf.Clamp01((0.5f - Mathf.Sqrt(dx * dx + dy * dy)) * n * 0.5f);
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
+                }
+            texture.SetPixels32(px);
+            texture.Apply(false, true);
+            disc = Sprite.Create(texture, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n);
+            return disc;
+        }
+
+        static readonly Color WireColor = new Color(0.17f, 0.13f, 0.1f, 1f), WireShadow = new Color(0f, 0f, 0f, 0.3f);
+        static readonly Color AreaColor = new Color(0.45f, 0.7f, 1f, 0.12f), PlacingArea = new Color(0.55f, 0.85f, 1f, 0.2f);
+
+        // The wires between poles (high up, over roofs), and their shadows on the ground. Only laid out again when they change.
+        void DrawWires()
+        {
+            var wires = Power.Wires;
+            if (Power.Version == shownWires) return;
+            shownWires = Power.Version;
+            int used = 0;
+            var shadow = new Vector2(0.45f, -0.55f);
+            foreach (var (a, b) in wires)
+            {
+                var pa = new Vector2(a.At.CenterX, a.At.CenterY);
+                var pb = new Vector2(b.At.CenterX, b.At.CenterY);
+                Line(wirePool, used++, "Wire", pa, pb, 0.035f, WireColor, SortOrder.Roofs + 10);
+                Line(wirePool, used++, "Wire shadow", pa + shadow, pb + shadow, 0.05f, WireShadow, SortOrder.Shadows);
+            }
+            for (int i = used; i < wirePool.Count; i++)
+                if (wirePool[i].enabled) wirePool[i].enabled = false;
+        }
+
+        void Line(List<SpriteRenderer> pool, int i, string what, Vector2 from, Vector2 to, float width, Color color, int order)
+        {
+            var r = Pooled(pool, i, what, order);
+            var d = to - from;
+            r.sprite = Unit();
+            r.color = color;
+            r.sortingOrder = order;
+            r.transform.position = (from + to) * 0.5f;
+            r.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+            r.transform.localScale = new Vector3(d.magnitude, width, 1f);
+        }
+
+        SpriteRenderer Pooled(List<SpriteRenderer> pool, int i, string what, int order)
+        {
+            while (pool.Count <= i)
+            {
+                var go = new GameObject(what);
+                go.transform.SetParent(transform, false);
+                var r = go.AddComponent<SpriteRenderer>();
+                r.sortingOrder = order;
+                pool.Add(r);
+            }
+            var pooled = pool[i];
+            if (!pooled.enabled) pooled.enabled = true;
+            return pooled;
+        }
+
+        /// <summary>
+        /// Shows what's powered while something electric is being placed (Factorio's blue areas): every pole's supply
+        /// square and every generator's reach, and the one being placed at <paramref name="placingAt"/> (its cells).
+        /// The build controller calls it every frame it wants them; they go by themselves on a frame it doesn't.
+        /// </summary>
+        public void ShowPowerAreas(RectInt placingAt, MachineConfig placing)
+        {
+            areasFrame = Time.frameCount;
+            int used = 0;
+            if (Power != null)
+            {
+                foreach (var pole in Power.Poles) Area(used++, pole.At.CenterX, pole.At.CenterY, pole.Supply, pole.Round, AreaColor);
+                if (placing != null && (placing.kind == MachineKind.PowerPole || placing.kind == MachineKind.Generator))
+                {
+                    bool round = placing.kind == MachineKind.Generator;
+                    Area(used++, placingAt.center.x, placingAt.center.y, round ? placing.reach : placing.supplyArea, round, PlacingArea);
+                }
+            }
+            HideAreas(used);
+        }
+
+        void HideAreas(int from)
+        {
+            for (int i = from; i < areaPool.Count; i++)
+                if (areaPool[i].enabled) areaPool[i].enabled = false;
+        }
+
+        void Area(int i, float x, float y, float size, bool round, Color color)
+        {
+            var r = Pooled(areaPool, i, "Power area", SortOrder.Markers - 2);
+            r.sprite = round ? Disc() : Unit();
+            r.color = color;
+            r.transform.position = new Vector3(x, y, 0f);
+            r.transform.rotation = Quaternion.identity;
+            float across = round ? size * 2f : size;
+            r.transform.localScale = new Vector3(across, across, 1f);
+        }
+
         // A drill's bit, turning while it digs (in the middle of its picture).
         void MakeDrillLook(Piece p, Furniture furniture)
         {
@@ -543,6 +831,16 @@ namespace KingdomGame.Building
                 if (holding) p.Hand.sprite = ItemSprite(p.Arm.Held);
                 return;
             }
+            if (p.Generator != null)
+            {
+                bool on = p.Generator.Output > 0.0001f;
+                if (on != p.ShownWorking && p.Machine.Look != null)
+                {
+                    p.ShownWorking = on;
+                    p.Machine.Look.color = on ? Color.white : new Color(0.62f, 0.62f, 0.62f, 1f);
+                }
+                return;
+            }
             if (p.Drill != null)
             {
                 bool digging = p.Drill.Working;
@@ -586,6 +884,7 @@ namespace KingdomGame.Building
             public List<CrafterSave> crafters = new List<CrafterSave>();
             public List<HeldSave> held = new List<HeldSave>();
             public List<DrillSave> drills = new List<DrillSave>();
+            public List<PowerSave> power = new List<PowerSave>();
         }
 
         [Serializable]
@@ -618,6 +917,14 @@ namespace KingdomGame.Building
         public sealed class HeldSave
         {
             public int x, y, held;
+        }
+
+        /// <summary>A generator's fuel and energy, or an accumulator's charge.</summary>
+        [Serializable]
+        public sealed class PowerSave
+        {
+            public int x, y, fuelType, fuelCount;
+            public float energy, stored;
         }
 
         [Serializable]
@@ -661,6 +968,9 @@ namespace KingdomGame.Building
                         fuelType = (int)c.FuelType, fuelCount = c.FuelCount, energy = c.Energy,
                     });
                 }
+                if (p.Generator != null)
+                    s.power.Add(new PowerSave { x = p.Origin.X, y = p.Origin.Y, energy = p.Generator.Energy, fuelType = (int)p.Generator.FuelType, fuelCount = p.Generator.FuelCount });
+                if (p.Accumulator != null) s.power.Add(new PowerSave { x = p.Origin.X, y = p.Origin.Y, stored = p.Accumulator.Stored });
                 if (p.Drill != null)
                 {
                     var d = p.Drill;
@@ -713,6 +1023,13 @@ namespace KingdomGame.Building
                 {
                     if (c == null || !at.TryGetValue(new Spot(c.x, c.y), out var p) || p.Crafter == null) continue;
                     p.Crafter.Restore(Named(c.recipe), c.inputs, Type(c.outputType), c.output, c.crafting, c.progress, Type(c.fuelType), c.fuelCount, c.energy);
+                }
+            if (s.power != null)
+                foreach (var e in s.power)
+                {
+                    if (e == null || !at.TryGetValue(new Spot(e.x, e.y), out var p)) continue;
+                    p.Generator?.Restore(e.energy, Type(e.fuelType), e.fuelCount);
+                    if (p.Accumulator != null) p.Accumulator.Stored = Mathf.Clamp(e.stored, 0f, p.Accumulator.Capacity);
                 }
             if (s.drills != null)
                 foreach (var d in s.drills)

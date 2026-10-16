@@ -46,6 +46,11 @@ static partial class Tests
         Run(nameof(DrillsWaitWhenBlocked), DrillsWaitWhenBlocked);
         Run(nameof(BurnerDrillsFeedEachOther), BurnerDrillsFeedEachOther);
         Run(nameof(DrillsFeedAFurnace), DrillsFeedAFurnace);
+        Run(nameof(PolesWireUpWithinReach), PolesWireUpWithinReach);
+        Run(nameof(PolesPowerTheirSupplyArea), PolesPowerTheirSupplyArea);
+        Run(nameof(GeneratorsShareTheLoad), GeneratorsShareTheLoad);
+        Run(nameof(BrownoutsSlowMachines), BrownoutsSlowMachines);
+        Run(nameof(AccumulatorsCarryTheNight), AccumulatorsCarryTheNight);
 
         Run(nameof(RanksComeWithExperience), RanksComeWithExperience);
         Run(nameof(SoldiersGetTougherAndFaster), SoldiersGetTougherAndFaster);

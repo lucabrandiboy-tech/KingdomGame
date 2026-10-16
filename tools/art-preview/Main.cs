@@ -15,6 +15,7 @@
 //   game_autumn.png, game_winter.png  the normal view in autumn (orange leaves) and winter (bare snowy trees, snow lying)
 //   ore.png, ore_close.png  drills on the start's iron field putting ore onto a belt; ore_fields.png  the map zoomed out
 //                   (the start's stone and copper fields); ore_coal.png  its coal field
+//   power.png, power_night.png  power poles and their wires, a generator, an accumulator, a solar panel, a substation
 // The mock lights sprites the way URP's 2D lights do (color times light, normal
 // maps for point lights) and adds bloom, vignette and color grading like the game's
 // post-processing. It's an approximation: Unity's own result will differ a little.
@@ -120,6 +121,8 @@ static class Program
         Render(castle, Path.Combine(dir, "ore_close.png"), 1920, 1080, new Vector2(-15.5f, -37f), 2.5f, Time.Day);
         Render(castle, Path.Combine(dir, "ore_fields.png"), 1920, 1080, new Vector2(0f, 0f), 26f, Time.Day);
         Render(castle, Path.Combine(dir, "ore_coal.png"), 1920, 1080, new Vector2(8f, 36f), 6f, Time.Day);
+        Render(castle, Path.Combine(dir, "power.png"), 1920, 1080, new Vector2(3.5f, -38.5f), 6f, Time.Day);
+        Render(castle, Path.Combine(dir, "power_night.png"), 1920, 1080, new Vector2(3.5f, -38.5f), 6f, Time.Night);
         Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
         Render(world, Path.Combine(dir, "game_winter.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 2);
         Render(world, Path.Combine(dir, "ruins_village.png"), 1920, 1080, new Vector2(-20f, 30f), 8f, Time.Day);
@@ -290,6 +293,8 @@ static class Program
         public readonly Color32[] Tint = new Color32[MapSize * TintDetail * MapSize * TintDetail];
         // The ore fields' masks (GroundStreamer: one per kind of ore, null where there's none), from the real ore map.
         public readonly byte[][] OreMasks = new byte[4][];
+        // Wires between power poles (Factory.DrawWires): from one pole's middle to another's.
+        public readonly List<(Vector2 A, Vector2 B)> Wires = new List<(Vector2, Vector2)>();
 
         public MockWorld(uint seed, bool castle)
         {
@@ -515,6 +520,37 @@ static class Program
             FactoryDrill(2, -13, -40, 1, 100f);
             FactoryDrill(1, -9, -39, 1, 250f);
             for (int y = -41; y <= -33; y++) for (int x = -22; x <= -2; x++) used.Add((x, y));
+            BuildPower();
+        }
+
+        // East of the drills (power.png): wooden poles carrying a generator's power to the electric drills, a medium pole
+        // with an accumulator and a solar panel, and a big pole and a substation; wires between them like Factory.DrawWires.
+        void BuildPower()
+        {
+            var poles = new List<Vector2>();
+            Vector2 Pole(int style, int x, int y)
+            {
+                int size = FurnitureArt.PoleSize(style);
+                FactoryPiece(ArtKeys.Turned(FurnitureArt.PoleArt(style), 0), x, y, size, size, style >= 2 ? 1.6f : 1.3f);
+                return new Vector2(x + size / 2f, y + size / 2f);
+            }
+            var a = Pole(0, -14, -38);
+            var b = Pole(0, -7, -38);
+            var c = Pole(0, 0, -38);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.Generator, 0), 2, -41, 2, 2, 1f);
+            var generator = new Vector2(3f, -40f);
+            var d = Pole(1, 6, -38);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.AccumulatorArt, 0), 5, -41, 2, 2, 0.8f);
+            FactoryPiece(ArtKeys.Turned(FurnitureArt.SolarArt, 0), 8, -42, 3, 3, 0.3f);
+            var e = Pole(2, 12, -38);
+            var f = Pole(3, 12, -42);
+            Wires.Add((a, b));
+            Wires.Add((b, c));
+            Wires.Add((c, generator));
+            Wires.Add((c, d));
+            Wires.Add((d, e));
+            Wires.Add((e, f));
+            for (int y = -43; y <= -35; y++) for (int x = -2; x <= 15; x++) used.Add((x, y));
         }
 
         // A drill facing `dir` and its bit turned `bit` degrees, like Factory.MakeDrillLook.
@@ -883,12 +919,42 @@ static class Program
             Draw(world, thing, color, w, h, center, ppt, ambient, fire);
         }
 
+        // Wires between power poles: a dark line high up, and its shadow on the ground.
+        foreach (var (a, b) in world.Wires)
+        {
+            var off = new Vector2(0.45f, -0.55f);
+            WireLine(color, w, h, center, ppt, a + off, b + off, 0.05f, new Vector3(0f, 0f, 0f), 0.3f);
+            WireLine(color, w, h, center, ppt, a, b, 0.035f, Lin(new Vector3(0.17f, 0.13f, 0.1f)) * (night ? NightBrightness : DayBrightness), 1f);
+        }
+
         PostProcess(color, w, h);
         Save(path, color, w, h);
         Console.WriteLine($"wrote {path}");
     }
 
     static bool Night;
+
+    // A straight line `width` tiles wide blended over the picture (linear color).
+    static void WireLine(float[] color, int w, int h, Vector2 center, float ppt, Vector2 a, Vector2 b, float width, Vector3 c, float alpha)
+    {
+        float ax = (a.x - center.x) * ppt + w / 2f, ay = h / 2f - (a.y - center.y) * ppt;
+        float bx = (b.x - center.x) * ppt + w / 2f, by = h / 2f - (b.y - center.y) * ppt;
+        float half = MathF.Max(0.6f, width * ppt * 0.5f);
+        int x0 = Math.Max(0, (int)(MathF.Min(ax, bx) - half - 1)), x1 = Math.Min(w - 1, (int)(MathF.Max(ax, bx) + half + 1));
+        int y0 = Math.Max(0, (int)(MathF.Min(ay, by) - half - 1)), y1 = Math.Min(h - 1, (int)(MathF.Max(ay, by) + half + 1));
+        float dx = bx - ax, dy = by - ay, len2 = MathF.Max(1e-4f, dx * dx + dy * dy);
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++)
+            {
+                float px = x + 0.5f - ax, py = y + 0.5f - ay;
+                float k = Math.Clamp((px * dx + py * dy) / len2, 0f, 1f);
+                float ex = px - dx * k, ey = py - dy * k;
+                float cover = Math.Clamp(half - MathF.Sqrt(ex * ex + ey * ey) + 0.5f, 0f, 1f) * alpha;
+                if (cover <= 0f) continue;
+                int i = (y * w + x) * 3;
+                color[i] += (c.x - color[i]) * cover; color[i + 1] += (c.y - color[i + 1]) * cover; color[i + 2] += (c.z - color[i + 2]) * cover;
+            }
+    }
 
     // The DayNightConfig defaults.
     static readonly Vector3 DayColor = new Vector3(0.96f, 0.91f, 0.8f), NightColor = new Vector3(0.52f, 0.64f, 0.95f);

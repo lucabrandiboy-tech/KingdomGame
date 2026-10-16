@@ -138,6 +138,13 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   touching belts (`Machine.PushOut`). E at an arm/furnace/assembler/drill: `UI/FactoryPanel.cs`. Art in `Art/FactoryArt.cs`
   (belts per facing with left/right curves, arms, furnaces, assemblers, drills and their bits, `ArtKeys.Item` icons). Belts
   point the way they're dragged (`BuildController.Placing`); nothing may sit on a belt (`Kingdom.CanPlace`).
+- **Electricity** (`Automation/PowerGrid.cs`, plain C#, `tools/tests/PowerTests.cs`): `PowerPole`s (supply square, wire reach,
+  wired to their 5 nearest in reach) make `PowerNetwork`s; `Generator`s (MW, burn coal/wood only for what's used, from
+  storage via `TakeFromStore` or put in by arms; each has a built-in round pole of its `reach`), `Accumulator`s,
+  `SolarPanel`s (`PowerGrid.Daylight`) feed `IPowerUser`s (electric arms/crafters/drills; lamps and older machines via
+  `Factory.LegacyUser` setting `Machine.PowerShare`). Short networks give everyone the same share (brownout). Ticked in
+  `Factory.Update` before the factory; a machine inside a house is on the grid at its door's cell. Wires and the blue supply
+  areas (`Factory.ShowPowerAreas`, while placing something electric) are drawn by `Factory`; art in `Art/PowerArt.cs`.
 - **Ore fields** (`Economy/OreMap.cs`, plain C#, checked by `tools/world-tests`): iron, copper, coal and stone patches
   worked out from the seed (`OreMap.Generate`, pure: four round the start, then at most one per 96-tile square, inside
   it), richer further out; only what drills took is kept (`OreMap.Save`, `SaveData.ore`). Ore tiles have no trees or

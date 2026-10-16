@@ -435,6 +435,9 @@ namespace KingdomGame.Building
 
             string cost = good > 1 ? $"{good} x {b.displayName}: {b.CostText(good)}" : $"{b.displayName}: {b.CostText()}";
             if (b.rotations > 1) cost += belt ? "   (R: turn it, or drag: it points the way you drag)" : "   (R: turn it)";
+            // Something electric: Factorio's blue areas (what poles and generators power), and the new pole's or generator's.
+            if (kingdom.Factory != null && Factory.IsElectric(b.machine) && placements.Count > 0)
+                kingdom.Factory.ShowPowerAreas(new RectInt(placements[0], size), b.machine);
             // A drill: the ore it would dig there.
             if (b.machine != null && b.machine.kind == Economy.MachineKind.Drill && placements.Count > 0)
             {

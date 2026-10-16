@@ -10,7 +10,7 @@ namespace KingdomGame.Automation
     /// copper ore copper, iron steel); an assembler makes the recipe you choose. It holds ingredients for two batches.
     /// Plain C# (unit-tested); Building/Factory.cs runs it.
     /// </summary>
-    public sealed class Crafter : IItemPort, ITicking
+    public sealed class Crafter : IItemPort, ITicking, IPowerUser
     {
         public const int MaxFuel = 5;
 
@@ -50,6 +50,9 @@ namespace KingdomGame.Automation
         }
 
         public int Input(ResourceType t) => inputs[(int)t];
+        /// <summary>MW an electric one wants: its use while it makes a batch, a thirtieth of that while it waits.</summary>
+        public float PowerDemand() => Burner ? 0f : Crafting ? EnergyUse : EnergyUse * PowerGrid.IdleShare;
+        public void SetPower(float share) => Power = share;
         /// <summary>The most finished goods it keeps before it stops.</summary>
         public int OutputCap => Recipe != null ? Math.Max(Recipe.amount * 2, 10) : 10;
 

@@ -45,6 +45,9 @@ static partial class Tests
         Run(nameof(VillagersAreSentOnlyToThoseNear), VillagersAreSentOnlyToThoseNear);
         Run(nameof(HostAndPlayersSeeEachOthersKingdoms), HostAndPlayersSeeEachOthersKingdoms);
         Run(nameof(BigKingdomArrivesInPieces), BigKingdomArrivesInPieces);
+        Run(nameof(DirectMessagesReachOnlyTheirTarget), DirectMessagesReachOnlyTheirTarget);
+        Run(nameof(TradesAndZombiesReadBackTheSame), TradesAndZombiesReadBackTheSame);
+        Run(nameof(OversizedDirectMessagesAreDropped), OversizedDirectMessagesAreDropped);
         Console.WriteLine(failed == 0 ? "All network tests passed." : $"{failed} network test(s) FAILED.");
         return failed == 0 ? 0 : 1;
     }
@@ -88,9 +91,12 @@ static partial class Tests
         /// <summary>Where each kingdom's villagers are, as heard.</summary>
         public readonly Dictionary<int, Dictionary<int, Motion>> Folk = new Dictionary<int, Dictionary<int, Motion>>();
         public byte[] YourSave;
+        /// <summary>Messages other players sent this one (from, kind, message).</summary>
+        public readonly List<(int From, DirectKind Kind, byte[] Bytes)> Direct = new List<(int, DirectKind, byte[])>();
 
         public Player(int port, string key, string name)
         {
+            Core.Direct += (from, kind, bytes) => Direct.Add((from, kind, bytes));
             Core.Welcomed += w => Welcome = w;
             Core.Failed += why => FailedWhy = why;
             Core.Disconnected += why => DisconnectedWhy = why;

@@ -75,6 +75,8 @@ namespace KingdomGame.Character
         public bool Busy { get; private set; }
         /// <summary>Typing in the chat: stands still.</summary>
         public bool Typing { get; set; }
+        /// <summary>Riding to a friend's kingdom or home (online): stands still meanwhile.</summary>
+        public bool Riding { get; set; }
         /// <summary>The kingdom's weapons: the one in hand is fired (null: the weapons given in Setup).</summary>
         public Combat.Armory Armory { get; set; }
         /// <summary>Opens the weapons screen (E at an anvil).</summary>
@@ -174,7 +176,7 @@ namespace KingdomGame.Character
                 if (look != null) look.Show(Vector2.zero, Vector2.down, config.moveSpeed, config.stepsPerSecond, holdingGun: false);
                 return;
             }
-            if (Typing)
+            if (Typing || Riding)
             {
                 wantedVelocity = Vector2.zero;
                 if (look != null) look.Show(Velocity, aim, config.moveSpeed, config.stepsPerSecond);

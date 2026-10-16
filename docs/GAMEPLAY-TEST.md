@@ -265,3 +265,45 @@ Try it:
 3. Free build: once the Stone Age goals are done, the Bronze Age ones show.
 
 Tell me if goals are too easy, too slow, or the rewards too small.
+
+## 9. Playing together: trading and defending friends
+
+Online (hosting, or joined), press **O** for the new *Playing together* panel.
+
+- **Trading:** next to each player, **Trade**: set what you give and what you want (wood,
+  stone, food, copper, iron, gold, steel, coal; **+**/**-** in tens, hold **Shift** for
+  hundreds) and **Send the offer**. What you give leaves your storage straight away and is
+  held until they answer. They get a message (and a reminder on the right): **O**, then
+  **Accept** (only if they have what you asked for) or **Decline**. Taken: what you asked
+  for goes into your storage. Turned down, unanswered after a minute, or they leave: your
+  goods come back. If you save and quit with an offer still out, the held goods are saved
+  as a bag by your throne.
+- **Every player has their own hordes now** (survival): before, only the host's kingdom
+  had zombies. Each night every kingdom is attacked, run on its own player's computer.
+- **Defending a friend:** **Ride there** (next to their name) takes you to their kingdom in
+  about 7 seconds (the screen goes dark on the way; nothing can hurt you on the road).
+  **Ride home** brings you back. At their kingdom you see their zombies, your shots and
+  blows hit them (the damage is sent to their game, where the zombies really are), and
+  their zombies come for you and bite (that damage is sent to yours). Their towers shoot
+  the zombies as usual. Your own kingdom carries on without you meanwhile (your towers,
+  villagers and walls).
+- Online, falling isn't the end of the game for anyone, the host included: you get up
+  again at your throne.
+
+What doesn't work yet (honestly): they don't see your bullets fly (only the zombies
+getting hit); walls the zombies break in your friend's kingdom break in their game, but
+your screen shows their walls as they were built (destruction isn't sent yet); ruins and
+wild animals are each player's own.
+
+Try it (two computers, or two copies of the game on one: see docs/ONLINE-TEST.md):
+
+1. Host a **survival** game; join it from the other copy.
+2. Host: **O**, **Trade** next to the other player, give 50 wood, want 20 stone, **Send**.
+   Your wood goes down by 50. On the other: the reminder appears; **O**, **Accept**. Both
+   storages change. Try **Decline** too: the wood comes back.
+3. At night both kingdoms get a horde. On the joined copy: **O**, **Ride there** next to the
+   host. You arrive by their throne, see their zombies, shoot them (they die on the host's
+   screen too) and get bitten (your health goes down).
+4. **O**, **Ride home**.
+
+Tell me what feels laggy or wrong (zombies jumping about, hits not landing).

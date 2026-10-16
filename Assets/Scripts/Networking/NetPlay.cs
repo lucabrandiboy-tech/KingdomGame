@@ -40,7 +40,7 @@ namespace KingdomGame.Networking
     /// each other, each other's kingdoms and villagers, and chat. Your kingdom is sent to them by
     /// a <see cref="KingdomMirror"/>; theirs are shown here by <see cref="RemoteKingdoms"/>.
     /// </summary>
-    public sealed class NetHost : MonoBehaviour
+    public sealed class NetHost : MonoBehaviour, ICoopLink
     {
         ServerCore core;
         PlayerSession me;
@@ -53,6 +53,26 @@ namespace KingdomGame.Networking
         GUIStyle style;
 
         public ServerCore Core => core;
+
+        // ---- For playing together (Coop): who's on, and messages to and from one of them.
+        public int MyId => me != null ? me.Id : 0;
+        public IEnumerable<PlayerInfo> Others
+        {
+            get
+            {
+                if (core == null) yield break;
+                foreach (var p in core.Players)
+                    if (p != me) yield return new PlayerInfo { Id = p.Id, Name = p.Name, KingdomId = p.KingdomId };
+            }
+        }
+        public KingdomInfo KingdomOf(int kingdomId)
+        {
+            if (core != null) foreach (var k in core.Kingdoms) if (k.Id == kingdomId) return k;
+            return null;
+        }
+        public void SendDirect(int to, DirectKind kind, byte[] bytes, bool reliable) => core?.LocalDirect(me, to, kind, bytes, reliable);
+        public event Action<int, DirectKind, byte[]> Direct;
+        public event Action<int> PlayerGone;
 
         /// <summary><paramref name="others"/>: the players who joined before, from the saved game (null: nobody yet).</summary>
         public void Setup(ServerSettings settings, Kingdom kingdom, RulerController rulerController, RemotePlayers remotePlayers, ChatBox chatBox,
@@ -84,7 +104,9 @@ namespace KingdomGame.Networking
             {
                 remotes.Remove(p.Id);
                 chat.Notice($"{p.Name} left");
+                PlayerGone?.Invoke(p.Id);
             };
+            core.DirectReceived += (from, kind, bytes) => Direct?.Invoke(from, kind, bytes);
             core.PositionTaken += (p, time) => remotes.Heard(p.Id, time, p.Motion);
             core.Said += (p, text) => chat.Add(p.Name, text);
             // The players who were here before (a saved game): their kingdoms are where they were, and each
@@ -157,11 +179,13 @@ namespace KingdomGame.Networking
     /// the host keeps it for you (saved there every few minutes and when you leave) and hands
     /// it back when you join again; the others see it. If the connection goes, it says why.
     /// </summary>
-    public sealed class NetClient : MonoBehaviour
+    public sealed class NetClient : MonoBehaviour, ICoopLink
     {
         ClientCore core;
         readonly ServerClock clock = new ServerClock();
         readonly Dictionary<int, string> players = new Dictionary<int, string>();
+        readonly Dictionary<int, int> playerKingdoms = new Dictionary<int, int>();
+        readonly List<KingdomInfo> known = new List<KingdomInfo>();
         RulerController ruler;
         RemotePlayers remotes;
         RemoteKingdoms kingdoms;
@@ -179,6 +203,26 @@ namespace KingdomGame.Networking
 
         /// <summary>The host answered: make the world (seed, size, kingdoms) and then call <see cref="Enter"/>.</summary>
         public Action<WelcomeInfo> WorldReady { get; set; }
+
+        // ---- For playing together (Coop): who's on, and messages to and from one of them.
+        public int MyId => core != null && core.Welcome != null ? core.Welcome.YourId : 0;
+        public IEnumerable<PlayerInfo> Others
+        {
+            get
+            {
+                foreach (var pair in players)
+                    if (pair.Key != MyId)
+                        yield return new PlayerInfo { Id = pair.Key, Name = pair.Value, KingdomId = playerKingdoms.TryGetValue(pair.Key, out int k) ? k : 0 };
+            }
+        }
+        public KingdomInfo KingdomOf(int kingdomId)
+        {
+            foreach (var k in known) if (k.Id == kingdomId) return k;
+            return null;
+        }
+        public void SendDirect(int to, DirectKind kind, byte[] bytes, bool reliable) => core?.SendDirect(to, kind, bytes, reliable);
+        public event Action<int, DirectKind, byte[]> Direct;
+        public event Action<int> PlayerGone;
         /// <summary>The host's copy of our kingdom couldn't be read: start a new kingdom instead.</summary>
         public Action SaveUnreadable { get; set; }
 
@@ -190,9 +234,11 @@ namespace KingdomGame.Networking
             core.Welcomed += w => WorldReady?.Invoke(w);
             core.Failed += why => failure = why;
             core.Disconnected += why => failure = why;
+            core.Direct += (from, kind, bytes) => { if (inWorld) Direct?.Invoke(from, kind, bytes); };
             core.PlayerJoined += p =>
             {
                 players[p.Id] = p.Name;
+                playerKingdoms[p.Id] = p.KingdomId;
                 if (inWorld)
                 {
                     remotes.Add(p.Id, p.Name);
@@ -203,12 +249,16 @@ namespace KingdomGame.Networking
             {
                 string name = players.TryGetValue(id, out var n) ? n : "Someone";
                 players.Remove(id);
+                playerKingdoms.Remove(id);
                 if (!inWorld) return;
                 remotes.Remove(id);
                 chat.Notice($"{name} left");
+                PlayerGone?.Invoke(id);
             };
             core.KingdomPlaced += k =>
             {
+                known.RemoveAll(o => o.Id == k.Id);
+                known.Add(k);
                 if (!inWorld) return;
                 KingdomGround.Clear(nature, k);
                 remotes.AddKingdom(k);
@@ -280,9 +330,12 @@ namespace KingdomGame.Networking
             kingdomBack = !welcome.HasSave;
             mirror.enabled = kingdomBack;
             if (!kingdomBack) saves.Waiting = "Your kingdom from last time is still on its way";
+            known.Clear();
+            known.AddRange(welcome.Kingdoms);
             foreach (var p in welcome.Players)
             {
                 players[p.Id] = p.Name;
+                playerKingdoms[p.Id] = p.KingdomId;
                 if (p.Id != welcome.YourId) remotes.Add(p.Id, p.Name);
             }
             chat.Send = text => core.SendChat(text);

@@ -34,7 +34,11 @@ computer runs their kingdom (`docs/DECISIONS.md` section 16): `Networking/Kingdo
 what's built (`BuiltPiece` changes) and where its villagers are; the server relays them and keeps
 each joined player's whole kingdom (`SaveSystem.Upload`, handed back as `Msg.YourSave`);
 `Networking/RemoteKingdoms.cs` shows the others' (walls with `DestructibleStructure.Remote`: not
-damaged, not saved, not torn down). Zombies are only in the host's game so far (stage 4).
+damaged, not saved, not torn down). Every player's computer runs its own kingdom's hordes (survival);
+`Networking/Coop.cs` shares them: zombies near another player are sent to them (`Msg.Direct`, `DirectKind.Zombies`,
+payloads in `Core/CoopMessages.cs`) and shown as stand-ins whose hits go back to the owner; others' rulers are
+stand-in `Health`s in `RemotePlayers` whose hurts go to their game. Coop also does trading (goods held until
+answered) and riding to a friend's kingdom (O). Walls and their destruction still aren't synced (stage 4).
 `ServerCore` remembers each player (`PlayerRecord`: key, kingdom, last position) and kingdom;
 hosted saves keep them (`SaveData.others`) and a dedicated server keeps its world in
 `saves/server-world.json` (`ServerWorldFile`). Bump `Protocol.Version` when messages change.

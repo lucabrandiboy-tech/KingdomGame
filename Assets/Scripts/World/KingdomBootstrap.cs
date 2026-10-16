@@ -104,7 +104,8 @@ namespace KingdomGame.World
 
             // Survival: the zombies, and the waves they come in. Falling ends the game.
             SurvivalDirector waves = null;
-            rulerController.RespawnOnDeath = !survival;
+            // (Hosting, falling isn't the end either: you get up again at your throne, like the players who joined.)
+            rulerController.RespawnOnDeath = !survival || hosting;
             // Zombies: waves in survival; in free build only the test horde (F9) for trying traps and towers.
             ZombieDirector zombies = null;
             if (content.survival != null)
@@ -118,7 +119,7 @@ namespace KingdomGame.World
             {
                 waves = gameObject.AddComponent<SurvivalDirector>();
                 waves.Setup(content.survival, zombies, kingdom, dayNight);
-                rulerController.Health.Died += _ => waves.RulerFell();
+                if (!hosting) rulerController.Health.Died += _ => waves.RulerFell();
             }
             // Zombie bases out in the wild (survival): camps, sieges, and XP when they're destroyed.
             ZombieBases zombieBases = null;
@@ -173,6 +174,8 @@ namespace KingdomGame.World
                 host.Setup(Settings(network, seed), kingdom, rulerController, remotes, chat, parts.Nature, dayNight, saved != null ? saved.others : null,
                     others, mirror, survival);
                 saves.Host = host;
+                // Trading, and helping each other on horde nights (O).
+                gameObject.AddComponent<Coop>().Setup(host, kingdom, rulerController, remotes, zombies, chat, network);
             }
             gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves, host, null);
             AddDebug();
@@ -255,9 +258,33 @@ namespace KingdomGame.World
             var rig = Follow(parts, kingdom, ruler);
 
             // The ages as the host's game has them: researched in survival, all open in free build.
-            // (No zombies here yet: they come with a later online stage.)
             var unlocking = welcome.Survival ? Research.Unlocking.ByResearch : Research.Unlocking.Everything;
             var (research, builder) = KingdomTools(kingdom, rulerController, rig, parts, unlocking);
+
+            // Zombies: in survival your own kingdom has its hordes at night, run on this computer like the host's
+            // (the players near you see yours, and you theirs: Networking/Coop.cs). Falling online isn't the end: you
+            // get up again at your throne. Free build has none of its own (the director shows the others').
+            ZombieDirector zombies = null;
+            SurvivalDirector waves = null;
+            ZombieBases zombieBases = null;
+            if (content.survival != null)
+            {
+                zombies = new GameObject("Zombies").AddComponent<ZombieDirector>();
+                zombies.transform.SetParent(transform, false);
+                zombies.Setup(content.survival, world, kingdom, rulerController, dayNight, kingdom.Nav.Cells);
+                zombies.TestHordeKey = false;
+                if (welcome.Survival)
+                {
+                    waves = gameObject.AddComponent<SurvivalDirector>();
+                    waves.Setup(content.survival, zombies, kingdom, dayNight);
+                    zombieBases = new GameObject("Zombie bases").AddComponent<ZombieBases>();
+                    zombieBases.transform.SetParent(transform, false);
+                    zombieBases.Setup(content.survival, zombies, kingdom, dayNight, waves);
+                    var gate = new GameObject("Survivors").AddComponent<Villagers.Survivors>();
+                    gate.transform.SetParent(transform, false);
+                    gate.Setup(content.survival, kingdom, dayNight, true);
+                }
+            }
 
             var remotes = new GameObject("Other players").AddComponent<RemotePlayers>();
             remotes.transform.SetParent(transform, false);
@@ -269,20 +296,23 @@ namespace KingdomGame.World
 
             AddSeasons(welcome.Seed);   // (the same seasons and weather as the host: from the seed and the host's clock)
             var hud = gameObject.AddComponent<GameHud>();
-            hud.Setup(rulerController, dayNight, kingdom, builder, rig, null);
+            hud.Setup(rulerController, dayNight, kingdom, builder, rig, waves);
             gameObject.AddComponent<Audio.Ambience>().Setup(dayNight);
             var goals = gameObject.AddComponent<Progression.Goals>();
-            goals.Setup(content.progression, kingdom, research, dayNight, null, null);
+            goals.Setup(content.progression, kingdom, research, dayNight, zombies, waves);
             // Saving sends your kingdom to the host (it keeps it for you), not to a file here.
             var saves = gameObject.AddComponent<SaveSystem>();
             saves.Goals = goals;
-            saves.Setup(content, Mode, welcome.Seed, kingdom, rulerController, research, dayNight, null, null, world);
+            saves.Bases = zombieBases;
+            saves.Setup(content, Mode, welcome.Seed, kingdom, rulerController, research, dayNight, waves, zombies, world);
             parts.Streamer.ShowNow();
             rulerController.ShowWeapon();
             // If the host's copy of your kingdom can't be read: start a new one (it isn't saved over unless you save).
             client.SaveUnreadable = () => StartKingdom(kingdom, survival);
             client.Enter(welcome, rulerController, remotes, chat, dayNight, parts.Nature, others, mirror, saves);
-            gameObject.AddComponent<PauseMenu>().Setup(builder, null, saves, null, client);
+            // Trading, and helping each other on horde nights (O).
+            gameObject.AddComponent<Coop>().Setup(client, kingdom, rulerController, remotes, zombies, chat, content.network);
+            gameObject.AddComponent<PauseMenu>().Setup(builder, waves, saves, null, client);
             AddDebug();
         }
 

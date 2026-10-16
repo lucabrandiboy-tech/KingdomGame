@@ -8,7 +8,9 @@ namespace KingdomGame.Networking
     /// The other players, as they're shown here: each one's ruler (moving smoothly between
     /// the positions heard, a moment in the past), a name over their head, and a marker
     /// with their name on each kingdom that isn't a real one on this computer.
-    /// Used by the host and by players who joined.
+    /// Each has a stand-in <see cref="Health"/> on the friendly side, so this game's zombies (and wolves) go for
+    /// them like anyone else: what they'd take is reported (<see cref="Hurt"/>) and sent to that player's game, which
+    /// decides whether they fall. Used by the host and by players who joined.
     /// </summary>
     public sealed class RemotePlayers : MonoBehaviour
     {
@@ -20,6 +22,7 @@ namespace KingdomGame.Networking
             public readonly MotionBuffer Buffer = new MotionBuffer();
             public Vector2 Last;
             public bool Shown, Dead;
+            public Health Stand;   // the stand-in this game's zombies hit
         }
 
         sealed class Marker
@@ -35,6 +38,22 @@ namespace KingdomGame.Networking
 
         /// <summary>The time to show others at (server seconds), set each frame by whoever runs the network.</summary>
         public double RenderTime { get; set; }
+        /// <summary>A player was hurt here (by this game's zombies or wolves): who, how much, and where from.</summary>
+        public event System.Action<int, float, Vector2> Hurt;
+
+        /// <summary>Every other player shown here.</summary>
+        public IEnumerable<int> Ids => remotes.Keys;
+
+        /// <summary>Where a player was last heard to be (and whether they're out on the map, alive). False if nothing was heard.</summary>
+        public bool Latest(int id, out Vector2 at, out bool outside)
+        {
+            at = default;
+            outside = false;
+            if (!remotes.TryGetValue(id, out var r) || !r.Buffer.Newest(out var m)) return false;
+            at = new Vector2(m.X, m.Y);
+            outside = (m.Flags & (MotionFlags.Dead | MotionFlags.Inside)) == 0;
+            return true;
+        }
 
         public void Setup(PlayerConfig player)
         {
@@ -56,8 +75,15 @@ namespace KingdomGame.Networking
             go.transform.SetParent(transform, false);
             var look = go.AddComponent<RulerLook>();
             look.Build();
+            var stand = go.AddComponent<Health>();
+            stand.Setup(Team.Friendly, 1e6f, 0.15f, true);
+            stand.Hurt += (h, amount, from) =>
+            {
+                Hurt?.Invoke(id, amount, from);
+                h.Heal(amount);   // (it never falls here: their own game decides)
+            };
             go.SetActive(false);
-            remotes[id] = new Remote { Name = playerName, Body = go.transform, Look = look };
+            remotes[id] = new Remote { Name = playerName, Body = go.transform, Look = look, Stand = stand };
         }
 
         public void Remove(int id)
@@ -113,6 +139,13 @@ namespace KingdomGame.Networking
                 r.Last = at;
                 r.Body.position = at;
                 bool dead = (m.Flags & MotionFlags.Dead) != 0;
+                // Zombies can only go for them out on the map, alive, and not up on a wall.
+                if (r.Stand != null)
+                {
+                    bool target = !dead && (m.Flags & MotionFlags.Inside) == 0;
+                    if (r.Stand.enabled != target) r.Stand.enabled = target;
+                    r.Stand.OutOfReach = (m.Flags & MotionFlags.OnWalls) != 0;
+                }
                 if (dead != r.Dead)
                 {
                     r.Dead = dead;

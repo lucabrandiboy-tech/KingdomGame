@@ -171,7 +171,9 @@ namespace KingdomGame.Zombies
             var want = Snap(new Rect(center.x - r, center.y - r, r * 2f, r * 2f));
             // Zombie bases and their camps (they live out there, so the ground there has to be known).
             foreach (var p in KeepInView) want = Union(want, Snap(new Rect(p.x - 16f, p.y - 16f, 32f, 32f)));
-            if (ruler != null && rulerHealth != null && !rulerHealth.Dead && (kingdom == null || kingdom.PlaceAt((Vector2)ruler.transform.position) == null))
+            // (Not when they're out past the lands, at a friend's kingdom online: the paths can't reach them there anyway.)
+            if (ruler != null && rulerHealth != null && !rulerHealth.Dead && fullMap.Contains(CellOf(ruler.transform.position))
+                && (kingdom == null || kingdom.PlaceAt((Vector2)ruler.transform.position) == null))
             {
                 var at = CellOf(ruler.transform.position);
                 if (!new RectInt(want.x + 8, want.y + 8, want.width - 16, want.height - 16).Contains(at))
@@ -240,11 +242,41 @@ namespace KingdomGame.Zombies
             go.transform.SetParent(transform, false);
             var z = go.AddComponent<Zombie>();
             z.Setup(this, kind, SpritesOf(kind), toughness, at);
+            if (++nextNetId == 0) nextNetId = 1;
+            z.NetId = nextNetId;
             zombies.Add(z);
             return z;
         }
 
         int testKind;   // the next kind the test horde sends
+        ushort nextNetId;
+
+        /// <summary>The zombie with this number (<see cref="Zombie.NetId"/>), or null.</summary>
+        public Zombie WithNetId(ushort id)
+        {
+            foreach (var z in zombies) if (z != null && z.NetId == id) return z;
+            return null;
+        }
+
+        /// <summary>A kind's number for other players (its place in the Survival Config's list; the boss: <see cref="Networking.ZombieBatch.BossKind"/>).</summary>
+        public byte KindNumber(ZombieConfig kind)
+        {
+            if (config != null && kind == config.boss) return Networking.ZombieBatch.BossKind;
+            var kinds = Kinds;
+            for (int i = 0; i < kinds.Count && i < 250; i++) if (kinds[i] == kind) return (byte)i;
+            return 0;
+        }
+
+        /// <summary>The kind with this number (see <see cref="KindNumber"/>), or null.</summary>
+        public ZombieConfig KindOf(byte number)
+        {
+            if (number == Networking.ZombieBatch.BossKind) return BossKind;
+            var kinds = Kinds;
+            return number < kinds.Count ? kinds[number] : null;
+        }
+
+        /// <summary>The pictures of a kind (another player's zombies are shown with them too).</summary>
+        public ZombieSprites Pictures(ZombieConfig kind) => kind != null ? SpritesOf(kind) : null;
 
         // Eight zombies from a random side of the map (free build, F9): every kind in turn, to try them all out.
         void TestHorde()

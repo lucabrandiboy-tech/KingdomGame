@@ -89,6 +89,11 @@ namespace KingdomGame.Zombies
         public ZombieConfig Config { get; private set; }
         public Health Health { get; private set; }
         public Vector2 Position => position;
+        /// <summary>Its number in this game (shown to other players online: they say which one they hit by it).</summary>
+        public ushort NetId { get; internal set; }
+        /// <summary>Which way it faces, in degrees, and the picture it shows (for other players online).</summary>
+        public float Angle => angle;
+        public int Frame { get; private set; }
         public float Radius => Config.radius;
         /// <summary>Caught in a trap: it can't move or hit anything.</summary>
         public bool Held => Time.time < heldUntil;
@@ -433,6 +438,7 @@ namespace KingdomGame.Zombies
                 angle = Mathf.MoveTowardsAngle(angle, Mathf.Atan2(look.y, look.x) * Mathf.Rad2Deg, TurnSpeed * Mathf.Max(dt, 0.02f));
 
             int direction = RulerLook.Direction(angle, sprites.Frames.GetLength(0));
+            Frame = frame;
             bodyRenderer.sprite = sprites.Frames[direction, frame];
             if (eyes != null) eyes.localPosition = sprites.EyesAt[frame] * sprites.Scale;
             bodyRenderer.color = hurtFlash > 0f ? new Color(1f, 0.55f, 0.5f)

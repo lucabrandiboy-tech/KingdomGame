@@ -33,5 +33,13 @@ namespace KingdomGame.Networking
         [Range(5, 60)] public float sendRate = 15f;
         [Tooltip("Moves faster than the ruler's walking speed times this are put back (a little slack for lag).")]
         [Range(1f, 4f)] public float speedSlack = 1.6f;
+
+        [Header("Playing together")]
+        [Tooltip("Your zombies within this many tiles of another player are shown in their game (they can shoot them, and be bitten).")]
+        [Range(16, 96)] public float shareZombiesWithin = 40f;
+        [Tooltip("Seconds the ride to a friend's kingdom (or home) takes (O: the online panel).")]
+        [Range(0, 60)] public float rideSeconds = 6f;
+        [Tooltip("Seconds a trade offer waits for an answer before it's turned down by itself.")]
+        [Range(10, 300)] public float tradeSeconds = 60f;
     }
 }

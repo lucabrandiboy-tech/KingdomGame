@@ -122,6 +122,8 @@ namespace KingdomGame.Networking
         public event Action<int, bool, List<BuiltPiece>, List<BuiltPiece>> KingdomBuilt;
         /// <summary>Where a joined player's villagers are (kingdom, server time, villagers). The list is reused.</summary>
         public event Action<int, double, List<(int Index, Motion Motion)>> FolkMoved;
+        /// <summary>A player sent the host something (from whom, what kind, the message).</summary>
+        public event Action<int, DirectKind, byte[]> DirectReceived;
 
         /// <summary>The host's game: survival or free build (told to players joining).</summary>
         public bool Survival { get; set; }
@@ -386,6 +388,34 @@ namespace KingdomGame.Networking
             }
         }
 
+        /// <summary>The host sends one player something (a trade, zombies near them, a hit): <paramref name="reliable"/> or not.</summary>
+        public void LocalDirect(PlayerSession host, int to, DirectKind kind, byte[] bytes, bool reliable)
+        {
+            if (host == null || bytes == null) return;
+            Relay(host, to, kind, bytes, reliable ? DeliveryMethod.ReliableOrdered : DeliveryMethod.Unreliable);
+        }
+
+        // Passes a message from one player on to another (to the host's game if it's for the host). Too big: dropped.
+        void Relay(PlayerSession from, int to, DirectKind kind, byte[] bytes, DeliveryMethod method)
+        {
+            bool reliable = method == DeliveryMethod.ReliableOrdered || method == DeliveryMethod.ReliableUnordered;
+            if (bytes.Length > (reliable ? Protocol.MaxDirectBytes : Protocol.MaxUnreliableDirectBytes)) return;
+            PlayerSession target = null;
+            foreach (var p in players) if (p.Id == to) { target = p; break; }
+            if (target == null || target == from) return;
+            if (target.IsLocal)
+            {
+                DirectReceived?.Invoke(from.Id, kind, bytes);
+                return;
+            }
+            writer.Reset();
+            writer.Put((byte)Msg.Direct);
+            writer.Put(from.Id);
+            writer.Put((byte)kind);
+            writer.Put(bytes);
+            target.Peer?.Send(writer, reliable ? DeliveryMethod.ReliableOrdered : DeliveryMethod.Unreliable);
+        }
+
         /// <summary>The key of whoever owns a kingdom (for saving), or null.</summary>
         public string OwnerKey(int kingdomId)
         {
@@ -590,6 +620,17 @@ namespace KingdomGame.Networking
                         if (session.KingdomId <= 0) break;
                         SendFolk(session, session.KingdomId, folkIn);
                         FolkMoved?.Invoke(session.KingdomId, now, folkIn);
+                        break;
+                    }
+                    case Msg.Direct:
+                    {
+                        int to = reader.GetInt();
+                        var kind = (DirectKind)reader.GetByte();
+                        int length = reader.AvailableBytes;
+                        if (length > Protocol.MaxDirectBytes) break;
+                        var bytes = new byte[length];
+                        reader.GetBytes(bytes, length);
+                        Relay(session, to, kind, bytes, method);
                         break;
                     }
                     case Msg.KingdomSave:

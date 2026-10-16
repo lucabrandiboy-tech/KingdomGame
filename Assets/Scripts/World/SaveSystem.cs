@@ -302,6 +302,10 @@ namespace KingdomGame.World
                 for (int i = 0; i < amounts.Length; i++) amounts[i] = bag.Amount((ResourceType)i);
                 data.bags.Add(new BagSave { position = bag.Position, amounts = amounts });
             }
+            // Goods held for a trade nobody has answered yet (online): saved as a bag by the throne, so a game
+            // loaded from this save has them back (the trade itself isn't saved).
+            var held = Networking.Coop.Current != null ? Networking.Coop.Current.HeldBack() : null;
+            if (held != null && kingdom.Throne != null) data.bags.Add(new BagSave { position = kingdom.Throne.Front, amounts = held });
 
             // On the throne the ruler sits inside it: they come back standing in front of it.
             data.ruler.position = ruler.Seated && kingdom.Throne != null ? kingdom.Throne.Front : (Vector2)ruler.transform.position;

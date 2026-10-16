@@ -185,6 +185,7 @@ namespace KingdomGame
                 case KeyCode.Y: return k.yKey;
                 case KeyCode.K: return k.kKey;
                 case KeyCode.J: return k.jKey;
+                case KeyCode.O: return k.oKey;
                 case KeyCode.LeftShift: return k.leftShiftKey;
                 case KeyCode.RightShift: return k.rightShiftKey;
                 case KeyCode.Escape: return k.escapeKey;

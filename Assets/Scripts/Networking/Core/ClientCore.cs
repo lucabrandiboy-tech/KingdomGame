@@ -49,6 +49,8 @@ namespace KingdomGame.Networking
         public event Action<int, double, List<(int Index, Motion Motion)>> Folk;
         /// <summary>Our kingdom as we last saved it on this server (empty the first time), straight after the welcome.</summary>
         public event Action<byte[]> YourSave;
+        /// <summary>Another player sent us something (from whom, what kind, the message).</summary>
+        public event Action<int, DirectKind, byte[]> Direct;
 
         public ClientCore()
         {
@@ -138,6 +140,18 @@ namespace KingdomGame.Networking
             server.Send(writer, DeliveryMethod.ReliableOrdered);
         }
 
+        /// <summary>Sends one other player something (a trade, zombies near them, a hit): <paramref name="reliable"/> or not.</summary>
+        public void SendDirect(int to, DirectKind kind, byte[] bytes, bool reliable)
+        {
+            if (!Connected || bytes == null || bytes.Length > (reliable ? Protocol.MaxDirectBytes : Protocol.MaxUnreliableDirectBytes)) return;
+            writer.Reset();
+            writer.Put((byte)Msg.Direct);
+            writer.Put(to);
+            writer.Put((byte)kind);
+            writer.Put(bytes);
+            server.Send(writer, reliable ? DeliveryMethod.ReliableOrdered : DeliveryMethod.Unreliable);
+        }
+
         public void SendChat(string text)
         {
             text = Protocol.CleanChat(text);
@@ -205,6 +219,15 @@ namespace KingdomGame.Networking
                         folkIn.Clear();
                         for (int i = 0; i < n; i++) folkIn.Add((reader.GetUShort(), Motion.Read(reader)));
                         Folk?.Invoke(kingdom, time, folkIn);
+                        break;
+                    }
+                    case Msg.Direct:
+                    {
+                        int from = reader.GetInt();
+                        var what = (DirectKind)reader.GetByte();
+                        var bytes = new byte[reader.AvailableBytes];
+                        reader.GetBytes(bytes, bytes.Length);
+                        Direct?.Invoke(from, what, bytes);
                         break;
                     }
                     case Msg.YourSave:
@@ -290,6 +313,13 @@ namespace KingdomGame.Networking
 
         public bool Empty => count == 0;
         public double NewestTime => count > 0 ? times[newest] : 0;
+
+        /// <summary>The last position heard. False if nothing was heard yet.</summary>
+        public bool Newest(out Motion motion)
+        {
+            motion = count > 0 ? motions[newest] : default;
+            return count > 0;
+        }
 
         public void Add(double time, Motion motion)
         {

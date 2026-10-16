@@ -37,6 +37,28 @@ namespace KingdomGame.Networking
         KingdomSave,
         /// <summary>Server → a player who just joined: their kingdom as they last saved it here (empty the first time).</summary>
         YourSave,
+        /// <summary>
+        /// A player → server: something for one other player (a trade, zombies near them, a hit; see <see cref="DirectKind"/>).
+        /// Server → that player: the same, saying who it's from.
+        /// </summary>
+        Direct,
+    }
+
+    /// <summary>What a <see cref="Msg.Direct"/> message between two players is (the server only passes it on).</summary>
+    public enum DirectKind : byte
+    {
+        /// <summary>"I give you this for that" (<see cref="TradeOffer"/>).</summary>
+        TradeOffer = 1,
+        /// <summary>Yes or no to an offer (<see cref="TradeReply"/>).</summary>
+        TradeReply,
+        /// <summary>The sender's zombies near the one it's for, many times a second (<see cref="ZombieBatch"/>).</summary>
+        Zombies,
+        /// <summary>The sender hit one of the receiver's zombies (<see cref="ZombieHit"/>).</summary>
+        ZombieHit,
+        /// <summary>One of the sender's zombies (or wolves) hurt the receiver's ruler (<see cref="PlayerHit"/>).</summary>
+        PlayerHit,
+        /// <summary>Some of the sender's zombies died near the one it's for (<see cref="ZombieBatch"/> with only gone ones).</summary>
+        ZombiesGone,
     }
 
     /// <summary>What a player's character is doing, sent with its position.</summary>
@@ -298,7 +320,11 @@ namespace KingdomGame.Networking
     public static class Protocol
     {
         /// <summary>Goes up whenever messages change: a game and a server must have the same one.</summary>
-        public const int Version = 4;
+        public const int Version = 5;
+        /// <summary>Biggest <see cref="Msg.Direct"/> message the server passes on (bytes after its header)...</summary>
+        public const int MaxDirectBytes = 1100;
+        /// <summary>...and the biggest sent unreliably (those can't be split up: one packet of the smallest size).</summary>
+        public const int MaxUnreliableDirectBytes = 900;
         /// <summary>Longest name of a building or wall material in a Built message.</summary>
         public const int MaxPieceName = 64;
         /// <summary>Most pieces in one Built message (so each is a modest size).</summary>

@@ -51,6 +51,7 @@ static partial class Tests
         Run(nameof(GeneratorsShareTheLoad), GeneratorsShareTheLoad);
         Run(nameof(BrownoutsSlowMachines), BrownoutsSlowMachines);
         Run(nameof(AccumulatorsCarryTheNight), AccumulatorsCarryTheNight);
+        Run(nameof(BigGridsStayQuick), BigGridsStayQuick);
         Run(nameof(PollutionCloudsSpreadAndSettle), PollutionCloudsSpreadAndSettle);
         Run(nameof(PollutionSpreadsOnlyWhenThick), PollutionSpreadsOnlyWhenThick);
         Run(nameof(TreesAndBasesTakePollution), TreesAndBasesTakePollution);

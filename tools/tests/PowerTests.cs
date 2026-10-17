@@ -208,4 +208,57 @@ static partial class Tests
         RunGrid(g, 400f);
         Check(Math.Abs(store.Stored - store.Capacity) < 1e-3f, "by day it fills up to its capacity, and no further");
     }
+
+    // A big factory: thousands of poles and machines are wired up quickly, and a machine built or torn down joins or
+    // leaves its network at once without the wires being worked out again (no hitch every time something is built).
+    static void BigGridsStayQuick()
+    {
+        // (a small one first, so the timing below isn't the code being compiled)
+        var warm = new PowerGrid();
+        for (int i = 0; i < 50; i++) warm.Add(new PowerPole(Foot(i * 7, 0), 7.5f, 7f));
+        for (int i = 0; i < 50; i++) warm.AddUser(new TestUser { Wants = 0.01f }, Foot(i * 7, 1));
+        warm.Tick(1f / 30f);
+
+        var g = new PowerGrid();
+        const int side = 60;   // 3600 medium poles, 7 tiles apart (their 7x7 squares meet)
+        for (int y = 0; y < side; y++)
+            for (int x = 0; x < side; x++) g.Add(new PowerPole(Foot(x * 7, y * 7), 9f, 7f));
+        var gen = new Generator(Foot(-2, -2), Fuels()) { MaxOutput = 1000f, TakeFromStore = (out ResourceType item) => { item = ResourceType.Coal; return true; } };
+        g.Add(gen);
+        g.Add(new PowerPole(gen.At, 3f, 3f, true));
+        var users = new List<TestUser>();
+        for (int i = 0; i < 7200; i++)
+        {
+            var u = new TestUser { Wants = 0.01f };
+            users.Add(u);
+            g.AddUser(u, Foot((i % 120) * 3 + 1, (i / 120) * 7 + 1));
+        }
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        g.Tick(1f / 30f);
+        double first = watch.Elapsed.TotalMilliseconds;
+        Console.WriteLine($"        (3,600 poles and 7,200 machines wired up in {first:0} ms)");
+        Check(first < 250, $"wiring a big factory took {first:0} ms");
+        Check(g.Networks.Count == 1 && users.All(u => u.Got == 1f), "it's one network, and everything on it has power");
+        int version = g.Version;
+        watch.Restart();
+        var extra = new List<TestUser>();
+        for (int i = 0; i < 200; i++)
+        {
+            var u = new TestUser { Wants = 0.01f };
+            extra.Add(u);
+            g.AddUser(u, Foot(i * 2 + 1, 3));
+            g.Tick(1f / 30f);
+        }
+        foreach (var u in extra) g.RemoveUser(u);
+        g.Tick(1f / 30f);
+        double each = watch.Elapsed.TotalMilliseconds / 200;
+        Console.WriteLine($"        (building a machine on it and a tick: {each:0.00} ms)");
+        Check(g.Version == version, "building machines didn't make the wires be worked out again");
+        Check(extra.All(u => u.Got == 1f), "each new machine had power straight away");
+        Check(each < 20, $"a machine built and a tick took {each:0.0} ms");
+        Check(g.NetworkOf(users[0]).UserCount == users.Count, "torn down machines left the network");
+        g.Remove(gen);
+        g.Tick(1f / 30f);
+        Check(users[0].Got == 0f, "with its only generator gone, the network has no power");
+    }
 }

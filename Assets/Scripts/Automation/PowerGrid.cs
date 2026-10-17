@@ -211,6 +211,7 @@ namespace KingdomGame.Automation
         internal readonly List<Accumulator> Accumulators = new List<Accumulator>();
         internal readonly List<SolarPanel> Panels = new List<SolarPanel>();
         internal readonly List<IPowerUser> Users = new List<IPowerUser>();
+        internal float[] Available = new float[4];   // (each generator's share this tick, reused)
 
         /// <summary>MW wanted, MW given (from generators, panels and accumulators), MW it could give, and the share of what was wanted that it got.</summary>
         public float Demand { get; internal set; }
@@ -249,7 +250,11 @@ namespace KingdomGame.Automation
             public PowerNetwork Network;
         }
 
+        /// <summary>The grid poles are kept in (tiles a square), so wiring and finding the pole that powers something only look nearby.</summary>
+        const int Bucket = 16;
+
         readonly List<PowerPole> poles = new List<PowerPole>();
+        readonly Dictionary<long, List<PowerPole>> buckets = new Dictionary<long, List<PowerPole>>();
         readonly List<Generator> generators = new List<Generator>();
         readonly List<Accumulator> accumulators = new List<Accumulator>();
         readonly List<SolarPanel> panels = new List<SolarPanel>();
@@ -258,6 +263,9 @@ namespace KingdomGame.Automation
         readonly List<PowerNetwork> networks = new List<PowerNetwork>();
         readonly List<(PowerPole A, PowerPole B)> wires = new List<(PowerPole, PowerPole)>();
         readonly Dictionary<object, PowerNetwork> producerNetwork = new Dictionary<object, PowerNetwork>();
+        readonly List<PowerPole> nearby = new List<PowerPole>();
+        float farthestSupply;   // the most any pole's supply area reaches from its middle
+        // Poles came or went: the wires and networks are worked out again (everything else is kept up to date as it comes and goes).
         bool dirty;
 
         /// <summary>How bright the day is (0 night to 1 noon): solar panels give that share.</summary>
@@ -285,16 +293,28 @@ namespace KingdomGame.Automation
 
         // ------------------------------------------------------------ pieces --
 
+        static long BucketKey(int bx, int by) => ((long)bx << 32) | (uint)by;
+        static int BucketOf(float v) => (int)Math.Floor(v / Bucket);
+
         public void Add(PowerPole pole)
         {
             if (pole == null || poles.Contains(pole)) return;
             poles.Add(pole);
+            long key = BucketKey(BucketOf(pole.At.CenterX), BucketOf(pole.At.CenterY));
+            if (!buckets.TryGetValue(key, out var list)) buckets[key] = list = new List<PowerPole>();
+            list.Add(pole);
             dirty = true;
         }
 
         public void Remove(PowerPole pole)
         {
             if (pole == null || !poles.Remove(pole)) return;
+            long key = BucketKey(BucketOf(pole.At.CenterX), BucketOf(pole.At.CenterY));
+            if (buckets.TryGetValue(key, out var list))
+            {
+                list.Remove(pole);
+                if (list.Count == 0) buckets.Remove(key);
+            }
             pole.Network = null;
             dirty = true;
         }
@@ -303,28 +323,52 @@ namespace KingdomGame.Automation
         {
             if (g == null || generators.Contains(g)) return;
             generators.Add(g);
-            dirty = true;
+            if (!dirty) Join(g, g.At, n => n.Generators);
         }
 
-        public void Remove(Generator g) => dirty |= generators.Remove(g);
+        public void Remove(Generator g)
+        {
+            if (g == null || !generators.Remove(g)) return;
+            if (producerNetwork.TryGetValue(g, out var n)) n.Generators.Remove(g);
+            producerNetwork.Remove(g);
+        }
 
         public void Add(Accumulator a)
         {
             if (a == null || accumulators.Contains(a)) return;
             accumulators.Add(a);
-            dirty = true;
+            if (!dirty) Join(a, a.At, n => n.Accumulators);
         }
 
-        public void Remove(Accumulator a) => dirty |= accumulators.Remove(a);
+        public void Remove(Accumulator a)
+        {
+            if (a == null || !accumulators.Remove(a)) return;
+            if (producerNetwork.TryGetValue(a, out var n)) n.Accumulators.Remove(a);
+            producerNetwork.Remove(a);
+        }
 
         public void Add(SolarPanel p)
         {
             if (p == null || panels.Contains(p)) return;
             panels.Add(p);
-            dirty = true;
+            if (!dirty) Join(p, p.At, n => n.Panels);
         }
 
-        public void Remove(SolarPanel p) => dirty |= panels.Remove(p);
+        public void Remove(SolarPanel p)
+        {
+            if (p == null || !panels.Remove(p)) return;
+            if (producerNetwork.TryGetValue(p, out var n)) n.Panels.Remove(p);
+            producerNetwork.Remove(p);
+        }
+
+        // A generator, accumulator or panel joins the network whose pole powers where it stands (if any).
+        void Join<T>(T producer, Footprint at, Func<PowerNetwork, List<T>> listOf)
+        {
+            var n = FirstPowering(at)?.Network;
+            if (n == null) return;
+            listOf(n).Add(producer);
+            producerNetwork[producer] = n;
+        }
 
         /// <summary>Something electric standing on <paramref name="at"/> (a machine inside a house: its door's cell).</summary>
         public void AddUser(IPowerUser user, Footprint at)
@@ -333,7 +377,9 @@ namespace KingdomGame.Automation
             var e = new UserEntry { User = user, At = at };
             users.Add(e);
             userIndex[user] = e;
-            dirty = true;
+            if (dirty) return;   // (the networks are being worked out again anyway)
+            e.Network = FirstPowering(at)?.Network;
+            e.Network?.Users.Add(user);
         }
 
         public void RemoveUser(IPowerUser user)
@@ -341,7 +387,8 @@ namespace KingdomGame.Automation
             if (user == null || !userIndex.TryGetValue(user, out var e)) return;
             userIndex.Remove(user);
             users.Remove(e);
-            dirty = true;
+            e.Network?.Users.Remove(user);
+            e.Network = null;
         }
 
         /// <summary>The network powering something electric (null: none reaches it).</summary>
@@ -365,11 +412,24 @@ namespace KingdomGame.Automation
             return FirstPowering(at)?.Network;
         }
 
+        // The poles whose middles are within <reach> of the box (x0, y0)-(x1, y1), into `nearby`.
+        void PolesNear(float x0, float y0, float x1, float y1, float reach)
+        {
+            nearby.Clear();
+            int bx0 = BucketOf(x0 - reach), bx1 = BucketOf(x1 + reach), by0 = BucketOf(y0 - reach), by1 = BucketOf(y1 + reach);
+            for (int by = by0; by <= by1; by++)
+                for (int bx = bx0; bx <= bx1; bx++)
+                    if (buckets.TryGetValue(BucketKey(bx, by), out var list)) nearby.AddRange(list);
+        }
+
+        // The pole that powers <at> (the first built, of those that do), or null.
         PowerPole FirstPowering(Footprint at)
         {
-            foreach (var p in poles)
-                if (p.Powers(at)) return p;
-            return null;
+            PolesNear(at.X, at.Y, at.X + at.W, at.Y + at.H, farthestSupply);
+            PowerPole best = null;
+            foreach (var p in nearby)
+                if (p.Powers(at) && (best == null || p.Index < best.Index)) best = p;
+            return best;
         }
 
         // ------------------------------------------------------------ wiring --
@@ -385,7 +445,14 @@ namespace KingdomGame.Automation
         {
             dirty = false;
             Version++;
-            for (int i = 0; i < poles.Count; i++) poles[i].Index = i;
+            farthestSupply = 0f;
+            for (int i = 0; i < poles.Count; i++)
+            {
+                var p = poles[i];
+                p.Index = i;
+                // (a square's corner is half its side times the square root of two from its middle)
+                farthestSupply = Math.Max(farthestSupply, p.Round ? p.Supply : p.Supply * 0.7072f);
+            }
             wires.Clear();
             var parent = new int[poles.Count];
             for (int i = 0; i < parent.Length; i++) parent[i] = i;
@@ -399,7 +466,8 @@ namespace KingdomGame.Automation
             foreach (var a in poles)
             {
                 near.Clear();
-                foreach (var b in poles)
+                PolesNear(a.At.CenterX, a.At.CenterY, a.At.CenterX, a.At.CenterY, a.WireReach);
+                foreach (var b in nearby)
                 {
                     if (b == a) continue;
                     float d = Distance(a, b);
@@ -430,27 +498,9 @@ namespace KingdomGame.Automation
                 n.Poles.Add(p);
             }
             producerNetwork.Clear();
-            foreach (var g in generators)
-            {
-                var n = FirstPowering(g.At)?.Network;
-                if (n == null) continue;
-                n.Generators.Add(g);
-                producerNetwork[g] = n;
-            }
-            foreach (var a in accumulators)
-            {
-                var n = FirstPowering(a.At)?.Network;
-                if (n == null) continue;
-                n.Accumulators.Add(a);
-                producerNetwork[a] = n;
-            }
-            foreach (var s in panels)
-            {
-                var n = FirstPowering(s.At)?.Network;
-                if (n == null) continue;
-                n.Panels.Add(s);
-                producerNetwork[s] = n;
-            }
+            foreach (var g in generators) Join(g, g.At, n => n.Generators);
+            foreach (var a in accumulators) Join(a, a.At, n => n.Accumulators);
+            foreach (var s in panels) Join(s, s.At, n => n.Panels);
             foreach (var u in users)
             {
                 u.Network = FirstPowering(u.At)?.Network;
@@ -480,7 +530,8 @@ namespace KingdomGame.Automation
             foreach (var u in n.Users) demand += Math.Max(0f, u.PowerDemand());
             float solar = 0f;
             foreach (var s in n.Panels) solar += s.MaxOutput * daylight;
-            var available = n.Generators.Count > 0 ? new float[n.Generators.Count] : Array.Empty<float>();
+            if (n.Available.Length < n.Generators.Count) n.Available = new float[n.Generators.Count * 2];
+            var available = n.Available;
             float genCap = 0f;
             for (int i = 0; i < n.Generators.Count; i++) genCap += available[i] = n.Generators[i].Available(dt);
             float discharge = 0f, charge = 0f, stored = 0f, storeCap = 0f;

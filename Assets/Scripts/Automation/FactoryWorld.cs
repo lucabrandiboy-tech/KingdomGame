@@ -242,7 +242,8 @@ namespace KingdomGame.Automation
 
         public FactoryWorld(FuelTable fuels) => Fuels = fuels ?? new FuelTable(null);
 
-        public IEnumerable<Belt> Belts => belts.Values;
+        /// <summary>Every belt (a collection a foreach goes through without making garbage: it's drawn every frame).</summary>
+        public Dictionary<Spot, Belt>.ValueCollection Belts => belts.Values;
         public int BeltCount => belts.Count;
         public IReadOnlyList<Arm> Arms => arms;
         public Belt BeltAt(Spot s) => belts.TryGetValue(s, out var b) ? b : null;

@@ -31,6 +31,7 @@ namespace KingdomGame.Automation
         readonly List<Spot> area = new List<Spot>();
         int next;
         float idle;
+        readonly int[] oreCounts = new int[Inventory.TypeCount];   // (OreLeft, reused: it's asked every frame while pointed at)
         bool wanting;   // it has ore to dig and room to put it (only power or fuel is missing, if anything)
 
         /// <summary>Its bottom-left cell, its size (it's square), the way its chute faces, and how many tiles round itself it mines.</summary>
@@ -101,16 +102,16 @@ namespace KingdomGame.Automation
         {
             most = ResourceType.IronOre;
             int total = 0, best = 0;
-            var counts = new Dictionary<ResourceType, int>();
-            foreach (var s in area)
+            Array.Clear(oreCounts, 0, oreCounts.Length);
+            for (int i = 0; i < area.Count; i++)
             {
+                var s = area[i];
                 if (ground == null || !ground.OreAt(s.X, s.Y, out var item, out int left)) continue;
                 total += left;
-                counts.TryGetValue(item, out int n);
-                counts[item] = n + left;
-                if (n + left > best)
+                int n = oreCounts[(int)item] += left;
+                if (n > best)
                 {
-                    best = n + left;
+                    best = n;
                     most = item;
                 }
             }

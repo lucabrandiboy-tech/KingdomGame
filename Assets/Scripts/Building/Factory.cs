@@ -144,6 +144,9 @@ namespace KingdomGame.Building
         readonly Dictionary<Machine, Piece> pieces = new Dictionary<Machine, Piece>();
         readonly Dictionary<Machine, HeldPort> heldPorts = new Dictionary<Machine, HeldPort>();
         readonly Dictionary<Machine, LegacyUser> legacyUsers = new Dictionary<Machine, LegacyUser>();
+        // Where what's in a machine goes when it goes: by it, or for one inside a house by the house's door (the house's
+        // inside may be gone by then).
+        readonly Dictionary<Machine, Vector2> homes = new Dictionary<Machine, Vector2>();
         readonly List<SpriteRenderer> wirePool = new List<SpriteRenderer>();
         readonly List<SpriteRenderer> areaPool = new List<SpriteRenderer>();
         int shownWires = -1, areasFrame = -1;
@@ -253,6 +256,7 @@ namespace KingdomGame.Building
             var piece = new Piece { Machine = m, Config = cfg, Origin = SpotOf(cells.position) };
             var foot = PowerFootprint(m, cells);
             piece.Spot = new Vector2(foot.CenterX, foot.CenterY);
+            homes[m] = piece.Spot;
             // Lamps and the older machines that need power: on the grid (and, below, maybe a port for their goods).
             if (m.UsesPower)
             {
@@ -347,6 +351,8 @@ namespace KingdomGame.Building
             // (not while the scene is closing: nothing goes back to storage then, and no bags are made)
             if (m == null || World == null || !m.gameObject.scene.isLoaded) return;
             var furniture = m.GetComponent<Furniture>();
+            var home = homes.TryGetValue(m, out var h) ? h : (Vector2)m.transform.position;
+            homes.Remove(m);
             if (legacyUsers.TryGetValue(m, out var legacy))
             {
                 legacyUsers.Remove(m);
@@ -356,6 +362,14 @@ namespace KingdomGame.Building
             {
                 heldPorts.Remove(m);
                 if (furniture != null) foreach (var cell in furniture.Cells.allPositionsWithin) World.ClearPort(SpotOf(cell), port);
+                // What it made and still held (a sawmill's wood, a quarry's stone) goes back too.
+                if (m.Held > 0)
+                {
+                    var goods = new int[Inventory.TypeCount];
+                    goods[(int)m.Makes] = m.Held;
+                    m.SetHeld(0);
+                    GiveBack(goods, home);
+                }
             }
             if (!pieces.TryGetValue(m, out var piece)) return;
             pieces.Remove(m);
@@ -386,7 +400,7 @@ namespace KingdomGame.Building
             if (piece.Accumulator != null) Power.Remove(piece.Accumulator);
             if (piece.Solar != null) Power.Remove(piece.Solar);
             foreach (var t in list) spill[(int)t]++;
-            GiveBack(spill, m.transform.position);
+            GiveBack(spill, home);
         }
 
         // Things taken out of the factory go into storage; what doesn't fit is left in a bag on the ground.
@@ -564,7 +578,7 @@ namespace KingdomGame.Building
                 recounts = 24;
                 Pollution.Tick(1f);
             }
-            if (GameInput.Pressed(KeyCode.P)) ShowingPollution = !ShowingPollution;
+            if (!UiFocus.PanelOpen && GameInput.Pressed(KeyCode.P)) ShowingPollution = !ShowingPollution;
         }
 
         void LateUpdate()
@@ -868,7 +882,8 @@ namespace KingdomGame.Building
             int used = 0;
             if (Power != null)
             {
-                foreach (var pole in Power.Poles) Area(used++, pole.At.CenterX, pole.At.CenterY, pole.Supply, pole.Round, AreaColor);
+                var poles = Power.Poles;
+                for (int i = 0; i < poles.Count; i++) Area(used++, poles[i].At.CenterX, poles[i].At.CenterY, poles[i].Supply, poles[i].Round, AreaColor);
                 if (placing != null && (placing.kind == MachineKind.PowerPole || placing.kind == MachineKind.Generator))
                 {
                     bool round = placing.kind == MachineKind.Generator;

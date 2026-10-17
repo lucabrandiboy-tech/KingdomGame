@@ -120,7 +120,7 @@ namespace KingdomGame.Art
         /// <summary>Detail of the baked art when nothing else is set: pixels per tile.</summary>
         public const int DefaultPixelsPerTile = 1024;
         /// <summary>Bump this whenever any art changes, so Build Game Scenes bakes again.</summary>
-        public const int Version = 26;
+        public const int Version = 27;
         /// <summary>How many different pictures each kind of floor has.</summary>
         public const int FloorVariants = 4;
         /// <summary>Blood splatter pictures.</summary>
@@ -268,6 +268,15 @@ namespace KingdomGame.Art
                     Add(items, ArtKeys.Turned(art, r), "Belts", p => FurnitureArt.BeltPiece(p, st, 0, rot), false, quarter);
                     Add(items, ArtKeys.Turned(art + "/CurveL", r), "Belts", p => FurnitureArt.BeltPiece(p, st, 1, rot), false, quarter);
                     Add(items, ArtKeys.Turned(art + "/CurveR", r), "Belts", p => FurnitureArt.BeltPiece(p, st, 2, rot), false, quarter);
+                }
+            // Underground belts (entrance and exit) and splitters, for the conveyor, fast and express belts, each way they face.
+            foreach (int style in FurnitureArt.BeltPartStyles)
+                for (int r = 0; r < 4; r++)
+                {
+                    int st = style, rot = r;
+                    Add(items, ArtKeys.Turned(FurnitureArt.UndergroundArt(style, false), r), "Belts", p => FurnitureArt.UndergroundPiece(p, st, false, rot), false, quarter);
+                    Add(items, ArtKeys.Turned(FurnitureArt.UndergroundArt(style, true), r), "Belts", p => FurnitureArt.UndergroundPiece(p, st, true, rot), false, quarter);
+                    Add(items, ArtKeys.Turned(FurnitureArt.SplitterArt(style), r), "Belts", p => FurnitureArt.SplitterPiece(p, st, rot), false, quarter);
                 }
             const float factory = 0.35f;
             for (int style = 0; style < FurnitureArt.ArmStyles; style++)

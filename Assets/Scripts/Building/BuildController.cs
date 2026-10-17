@@ -445,6 +445,9 @@ namespace KingdomGame.Building
                 cost += ore != null ? $"\nIt would dig {ore}   (what it digs comes out of its chute: R turns it)"
                     : "\n<color=#ff8a80>No ore here: drills go on ore fields (bare patches of ore on the ground)</color>";
             }
+            // An underground belt: whether it would be an entrance or the exit of one behind it.
+            if (belt && b.machine.beltPiece == Economy.BeltPiece.Underground && kingdom.Factory != null && placements.Count > 0)
+                cost += "\n" + kingdom.Factory.UndergroundHint(placements[0], rotation, b.machine);
             Hover = firstProblem != null ? $"{cost}\n<color=#ff8a80>{firstProblem}</color>" : cost;
 
             if (dragging && (GameInput.FireReleased || !GameInput.FireHeld))

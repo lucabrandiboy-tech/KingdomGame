@@ -83,8 +83,16 @@ namespace KingdomGame.UI
                 case MachineKind.Solar:
                     text.Append($"Solar panel: {Factory.Watts(m.powerOutput)} in full sun, none at night, no fuel\n");
                     break;
+                case MachineKind.Conveyor when m.beltPiece == BeltPiece.Underground:
+                    text.Append($"Underground belt ({m.beltSpeed:0.#} tiles a second): things go under the ground at an entrance and come up at its exit, " +
+                                $"the next one ahead facing the same way, up to {m.undergroundReach} tiles on (anything can be built between)\n");
+                    break;
+                case MachineKind.Conveyor when m.beltPiece == BeltPiece.Splitter:
+                    text.Append($"Splitter ({m.beltSpeed:0.#} tiles a second, 2 tiles across): what comes in on either belt is shared out between both going out, " +
+                                "in turn (all one way when the other is full or leads nowhere)\n");
+                    break;
                 case MachineKind.Conveyor:
-                    text.Append($"Conveyor belt: carries things along at {m.beltSpeed:0.#} tiles a second\n");
+                    text.Append($"Conveyor belt: carries things along at {m.beltSpeed:0.#} tiles a second on two lanes (arms drop on the far lane; a belt joining from the side fills the near one)\n");
                     break;
                 case MachineKind.Lamp:
                     text.Append($"Electric light ({Factory.Watts(m.powerUse)})\n");

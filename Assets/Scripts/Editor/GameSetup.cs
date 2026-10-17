@@ -45,7 +45,7 @@ namespace KingdomGame.EditorTools
         /// 8: a bigger map (256 tiles across instead of 96).
         /// 9: mines (an entrance on the map, an underground to dig out, ores).
         /// </summary>
-        const int SettingsVersion = 31;
+        const int SettingsVersion = 32;
 
         public const string MenuScenePath = "Assets/Scenes/MainMenu.unity";
         public const string KingdomScenePath = "Assets/Scenes/Kingdom.unity";
@@ -1429,6 +1429,27 @@ namespace KingdomGame.EditorTools
                     b.buildSeconds = seconds; b.health = health; b.height = height; b.blocksMovement = true; b.flat = false;
                     b.dragToPlaceLines = false; b.roomTag = RoomTag.None; b.machine = machine;
                 });
+            // Underground belts and splitters (Automation/FactoryWorld.cs) for the belt of style `style` (as fast as it): placed
+            // one at a time, turned with R (or dragged the way things go). An underground belt pairs with the next one ahead
+            // within `reach` tiles; a splitter is two tiles across the way things go.
+            BuildingConfig BeltPart(string file, string displayName, int style, BeltPiece piece, float speed, int reach, int stone, int steel)
+            {
+                var machine = Asset<MachineConfig>("Economy/Machines/" + file, m =>
+                {
+                    m.kind = MachineKind.Conveyor; m.beltSpeed = speed; m.beltPiece = piece; m.undergroundReach = reach;
+                    m.needsPower = false; m.holds = 60; m.workSeconds = 1f; m.output = 1; m.reach = 1f;
+                });
+                bool splitter = piece == BeltPiece.Splitter;
+                return Asset<BuildingConfig>("Building/Machines/" + file, b =>
+                {
+                    b.displayName = displayName; b.kind = BuildingKind.Furniture; b.category = BuildCategory.Industry;
+                    b.art = splitter ? FurnitureArt.SplitterArt(style) : FurnitureArt.UndergroundArt(style, false);
+                    b.size = splitter ? new Vector2Int(1, 2) : Vector2Int.one; b.rotations = 4;
+                    b.stoneCost = stone; b.steelCost = steel; b.buildSeconds = splitter ? 6f : 4f; b.health = 150f + 30f * (style - 4);
+                    b.height = 0.05f; b.flat = true; b.blocksMovement = false; b.dragToPlaceLines = false; b.roomTag = RoomTag.None;
+                    b.machine = machine;
+                });
+            }
             BuildingConfig Pole(string file, string displayName, int style, int wood, int stone, int steel, float wire, float supply) =>
                 Factory(file, displayName, FurnitureArt.PoleArt(style), FurnitureArt.PoleSize(style), 1, wood, stone, steel,
                     4f + style * 3f, 150f + style * 120f, style >= 2 ? 1.6f : 1.3f,
@@ -1516,6 +1537,8 @@ namespace KingdomGame.EditorTools
                 Item("Sawmill", "Sawmill", FurnitureArt.Sawmill, 2, 80, 20, 30, 30f, 600f, 0.7f, false, Machine("Sawmill", MachineKind.Sawmill, 8f, 5, 8f, 0, 0)),
                 Item("Quarry", "Quarry", FurnitureArt.Quarry, 2, 40, 60, 40, 30f, 700f, 1f, false, Machine("Quarry", MachineKind.Quarry, 10f, 4, 1f, 0, 0)),
                 Belt(Item("Conveyor", "Conveyor belt", FurnitureArt.Conveyor, 1, 0, 2, 1, 2f, 150f, 0.05f, true, Machine("Conveyor", MachineKind.Conveyor, 1f, 1, 1f, 0, 0)), 4),
+                BeltPart("UndergroundBelt", "Underground belt", 4, BeltPiece.Underground, 2f, 5, 10, 6),
+                BeltPart("BeltSplitter", "Splitter", 4, BeltPiece.Splitter, 2f, 5, 8, 10),
                 Item("SteamDrill", "Steam drill", A("SteamDrill"), 2, 60, 80, 40, 34f, 900f, 1.1f, false, Producer("SteamDrill", ResourceType.Coal, 2, 20f, true, true)),
                 Arm("ElectricArm", "Electric arm", 2, 0, 2, 2, 0.42f, false, 0.013f),
                 Assembler("AssemblingMachine", "Assembling machine", 2, 0, 40, 30, 1f, false, 0.15f, 4f),
@@ -1539,6 +1562,8 @@ namespace KingdomGame.EditorTools
                 Factory("Accumulator", "Accumulator", FurnitureArt.AccumulatorArt, 2, 1, 0, 5, 8, 10f, 300f, 0.8f,
                     Electric("Accumulator", MachineKind.Accumulator, m => { m.storeMJ = 5f; m.powerOutput = 0.3f; })),
                 Belt(Item("FastBelt", "Fast belt", A("FastBelt"), 1, 0, 2, 2, 2f, 180f, 0.05f, true, Machine("FastBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 3f)), 5),
+                BeltPart("FastUndergroundBelt", "Fast underground belt", 5, BeltPiece.Underground, 3f, 7, 10, 12),
+                BeltPart("FastSplitter", "Fast splitter", 5, BeltPiece.Splitter, 3f, 7, 10, 16),
             };
             // World War 2: power plants and assembly lines.
             var ww2 = new List<BuildingConfig>
@@ -1554,6 +1579,8 @@ namespace KingdomGame.EditorTools
                 Factory("SolarPanel", "Solar panel", FurnitureArt.SolarArt, 3, 1, 0, 5, 10, 12f, 300f, 0.3f,
                     Electric("SolarPanel", MachineKind.Solar, m => { m.powerOutput = 0.06f; })),
                 Belt(Item("ExpressBelt", "Express belt", A("ExpressBelt"), 1, 0, 2, 3, 2f, 220f, 0.05f, true, Machine("ExpressBelt", MachineKind.Conveyor, 1f, 1, 1f, 0, 0, true, 4f)), 6),
+                BeltPart("ExpressUndergroundBelt", "Express underground belt", 6, BeltPiece.Underground, 4f, 9, 15, 20),
+                BeltPart("ExpressSplitter", "Express splitter", 6, BeltPiece.Splitter, 4f, 9, 15, 25),
             };
             return new[] { stone, bronze, iron, medieval, renaissance, industrial, ww1, ww2 };
 

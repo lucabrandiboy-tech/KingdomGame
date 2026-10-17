@@ -26,6 +26,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using KingdomGame.Art;
+using KingdomGame.Automation;
 using KingdomGame.World;
 using UnityEngine;
 
@@ -123,6 +124,9 @@ static class Program
         Render(castle, Path.Combine(dir, "ore_fields.png"), 1920, 1080, new Vector2(0f, 0f), 26f, Time.Day);
         Render(castle, Path.Combine(dir, "ore_coal.png"), 1920, 1080, new Vector2(8f, 36f), 6f, Time.Day);
         Render(castle, Path.Combine(dir, "power.png"), 1920, 1080, new Vector2(3.5f, -38.5f), 6f, Time.Day);
+        Render(castle, Path.Combine(dir, "belts.png"), 1920, 1080, new Vector2(37f, -6f), 7.5f, Time.Day);
+        Render(castle, Path.Combine(dir, "belts_close.png"), 1920, 1080, new Vector2(37f, -2f), 2.2f, Time.Day);
+        Render(castle, Path.Combine(dir, "belts_kinds.png"), 1920, 1080, new Vector2(41f, -11f), 3.2f, Time.Day);
         Render(castle, Path.Combine(dir, "power_night.png"), 1920, 1080, new Vector2(3.5f, -38.5f), 6f, Time.Night);
         Render(castle, Path.Combine(dir, "craftables.png"), 1920, 1080, new Vector2(3f, -44.5f), 1.6f, Time.Day);
         Render(world, Path.Combine(dir, "game_autumn.png"), 1920, 1080, new Vector2(1.5f, 0.5f), 12f, Time.Day, 1);
@@ -496,6 +500,7 @@ static class Program
             for (int y = -27; y < -19; y++) for (int x = -9; x <= 9; x++) used.Add((x, y));
             BuildFactory();
             BuildMine();
+            BuildBelts();
         }
 
         // On the iron field south-west of the castle (ore.png, the start's iron field for this seed): a conveyor running
@@ -509,7 +514,7 @@ static class Program
             for (int x = -19; x <= -3; x++)
             {
                 along = (along + 0.37f) % 1f;
-                if (x % 3 != 0) OnBelt(x, -37, 0, along, KingdomGame.Economy.ResourceType.IronOre);
+                if (x % 3 != 0) OnBelt(x, -37, 0, along, KingdomGame.Economy.ResourceType.IronOre, lane: (x & 1));   // (on both lanes: the drills above and below each put onto their near one)
             }
             // Above the belt, facing down (their chutes on the belt), and below it facing up.
             FactoryDrill(0, -20, -36, 3, 20f);
@@ -584,9 +589,9 @@ static class Program
             FactoryBelt(conveyor, 18, -3, 1, 1);
             FactoryBelt(conveyor, 18, -2, 1, 0);
             FactoryBelt(conveyor, 18, -1, 1, 0);
-            foreach (var (x, y, dir, pos) in new[] { (12, -1, 3, 0.4f), (12, -2, 3, 0.2f), (12, -2, 3, 0.7f), (13, -3, 0, 0.3f), (14, -3, 0, 0.1f), (14, -3, 0, 0.8f), (15, -3, 0, 0.5f), (16, -3, 0, 0.2f), (17, -3, 0, 0.6f), (18, -2, 1, 0.3f), (18, -1, 1, 0.9f) })
-                OnBelt(x, y, dir, pos, KingdomGame.Economy.ResourceType.IronOre);
-            OnBelt(18, -3, 1, 0.5f, KingdomGame.Economy.ResourceType.Coal, true, 0);
+            foreach (var (x, y, dir, pos, lane) in new[] { (12, -1, 3, 0.4f, 1), (12, -2, 3, 0.2f, 1), (12, -2, 3, 0.7f, 1), (13, -3, 0, 0.3f, 0), (14, -3, 0, 0.1f, 1), (14, -3, 0, 0.8f, 0), (15, -3, 0, 0.5f, 1), (16, -3, 0, 0.2f, 0), (17, -3, 0, 0.6f, 1), (18, -2, 1, 0.3f, 0), (18, -1, 1, 0.9f, 1) })
+                OnBelt(x, y, dir, pos, KingdomGame.Economy.ResourceType.IronOre, lane: lane);
+            OnBelt(18, -3, 1, 0.5f, KingdomGame.Economy.ResourceType.Coal, true, 0, 0);
             // A wooden arm (facing down) puts ore into the stone furnace below the line.
             FactoryArm(0, 14, -4, 3, 0.55f, KingdomGame.Economy.ResourceType.IronOre);
             FactoryPiece(ArtKeys.Turned(FurnitureArt.FurnaceArt(0), 0), 13, -6, 2, 2, 0.7f);
@@ -603,8 +608,8 @@ static class Program
             var mixed = new[] { KingdomGame.Economy.ResourceType.Copper, KingdomGame.Economy.ResourceType.Gear, KingdomGame.Economy.ResourceType.Wire, KingdomGame.Economy.ResourceType.Electronics, KingdomGame.Economy.ResourceType.Steel, KingdomGame.Economy.ResourceType.CopperOre, KingdomGame.Economy.ResourceType.Coal, KingdomGame.Economy.ResourceType.Wood };
             for (int i = 0; i < 8; i++)
             {
-                OnBelt(25, -8 + i, 1, 0.3f, mixed[i]);
-                OnBelt(26, -1 - i, 3, 0.6f, mixed[(i + 3) % mixed.Length]);
+                OnBelt(25, -8 + i, 1, 0.3f, mixed[i], lane: i & 1);
+                OnBelt(26, -1 - i, 3, 0.6f, mixed[(i + 3) % mixed.Length], lane: (i + 1) & 1);
             }
             FactoryPiece(ArtKeys.Turned(FurnitureArt.FurnaceArt(1), 0), 13, -9, 2, 2, 0.7f);
             FactoryPiece(ArtKeys.Turned(FurnitureArt.FurnaceArt(2), 0), 16, -9, 2, 2, 0.7f);
@@ -630,19 +635,92 @@ static class Program
             Things.Add(new Inst { Key = ArtKeys.Turned(turn == 0 ? art : art + (turn == 1 ? "/CurveL" : "/CurveR"), dir), X = x + 0.5f, Y = y + 0.5f, Order = -900 });
         }
 
-        // An item on a belt `pos` along it (straight, or round a curve coming in travelling `from`), like Belt.Place.
-        void OnBelt(int x, int y, int dir, float pos, KingdomGame.Economy.ResourceType item, bool curve = false, int from = 0)
+        // An item on lane `lane` (0 left, 1 right) of a belt, `pos` along it (straight, or round a curve coming in
+        // travelling `from`): Belt.Place itself.
+        void OnBelt(int x, int y, int dir, float pos, KingdomGame.Economy.ResourceType item, bool curve = false, int from = 0, int lane = 1)
         {
-            var d = Step(dir);
-            float ox = d.x * (pos - 0.5f), oy = d.y * (pos - 0.5f);
-            if (curve)
-            {
-                var i = Step(from);
-                float a = pos * MathF.PI / 2f, c = MathF.Cos(a), sn = MathF.Sin(a);
-                ox = (-i.x + d.x) * 0.5f + (-d.x * c + i.x * sn) * 0.5f;
-                oy = (-i.y + d.y) * 0.5f + (-d.y * c + i.y * sn) * 0.5f;
-            }
+            var belt = new Belt(new Spot(x, y), dir, 1f) { Curve = curve, CurveFrom = from };
+            belt.Place(pos, lane, out float ox, out float oy);
             Things.Add(new Inst { Key = ArtKeys.Item(item), X = x + 0.5f + ox, Y = y + 0.5f + oy, Order = -880 });
+        }
+
+        // East of the factory (belts.png): a real FactoryWorld run for a while, drawn as Factory.DrawPiece and DrawItems do:
+        // iron on the left lane and copper on the right going under a fast belt through an underground pair, into a
+        // splitter sharing them out; a curve and side-loading onto a near lane; the fast and express underground belts
+        // and splitters.
+        void BuildBelts()
+        {
+            var w = new FactoryWorld(new FuelTable(null));
+            var styles = new Dictionary<Belt, int>();
+            void Line(int style, float speed, int x0, int y0, int dir, int count)
+            {
+                var d = Dirs.Step(dir);
+                for (int k = 0; k < count; k++) styles[w.AddBelt(new Spot(x0 + d.X * k, y0 + d.Y * k), dir, speed)] = style;
+            }
+            void Under(int style, float speed, int reach, int x, int y, int dir) => styles[w.AddUnderground(new Spot(x, y), dir, speed, style, reach)] = style;
+            void Split(int style, float speed, int x, int y, int dir)
+            {
+                var a = w.AddSplitter(new Spot(x, y), dir, speed);
+                styles[a] = style;
+                styles[a.Partner] = style;
+            }
+            // The main line: under the fast belt, then the splitter.
+            Line(4, 2f, 30, -2, 0, 3);
+            Under(4, 2f, 5, 33, -2, 0);
+            Under(4, 2f, 5, 37, -2, 0);
+            Line(4, 2f, 38, -2, 0, 2);
+            Split(4, 2f, 40, -2, 0);
+            Line(4, 2f, 41, -2, 0, 4);
+            Line(4, 2f, 41, -1, 0, 4);
+            Line(5, 3f, 35, 2, 3, 8);   // the fast belt crossing over the gap, going down
+            // A curve: right, then up round the corner; a belt joining it from the side below.
+            Line(4, 2f, 30, -8, 0, 4);
+            Line(4, 2f, 34, -8, 1, 3);
+            Line(4, 2f, 35, -7, 2, 1);   // (into the side of the line going up: its near lane is the right one)
+            Line(4, 2f, 36, -7, 2, 1);
+            // The fast and express ones.
+            Line(5, 3f, 38, -10, 0, 1);
+            Under(5, 3f, 7, 39, -10, 0);
+            Under(5, 3f, 7, 43, -10, 0);
+            Split(5, 3f, 44, -10, 0);
+            Line(6, 4f, 38, -13, 0, 1);
+            Under(6, 4f, 9, 39, -13, 0);
+            Under(6, 4f, 9, 42, -13, 0);
+            Split(6, 4f, 43, -13, 1);
+            for (int t = 0; t < 30 * 9; t++)
+            {
+                if (t % 5 == 0)
+                {
+                    w.PutInto(new Spot(30, -2), KingdomGame.Economy.ResourceType.Iron, 1);     // (an arm below: the far, left lane)
+                    w.PutInto(new Spot(30, -2), KingdomGame.Economy.ResourceType.Copper, 3);   // (an arm above: the right lane)
+                }
+                if (t % 9 == 0) w.PutInto(new Spot(35, 2), KingdomGame.Economy.ResourceType.Coal, 3, true);
+                if (t % 7 == 0) w.PutInto(new Spot(30, -8), KingdomGame.Economy.ResourceType.IronOre, 1);
+                if (t % 11 == 0) w.PutInto(new Spot(36, -7), KingdomGame.Economy.ResourceType.Stone, 2, true);
+                if (t % 6 == 0)
+                {
+                    w.PutInto(new Spot(38, -10), KingdomGame.Economy.ResourceType.Gear, 1);
+                    w.PutInto(new Spot(38, -13), KingdomGame.Economy.ResourceType.Electronics, 3);
+                }
+                w.Tick(1f / 30f);
+            }
+            foreach (var b in w.Belts)
+            {
+                int style = styles[b];
+                if (b.Kind == BeltKind.Underground)
+                    Things.Add(new Inst { Key = ArtKeys.Turned(FurnitureArt.UndergroundArt(style, b.Exit), b.Dir), X = b.At.X + 0.5f, Y = b.At.Y + 0.5f, Order = -900 });
+                else if (b.Kind == BeltKind.Splitter && b.Partner != null && (b.At.X < b.Partner.At.X || b.At.Y < b.Partner.At.Y))
+                    Things.Add(new Inst { Key = ArtKeys.Turned(FurnitureArt.SplitterArt(style), b.Dir), X = (b.At.X + b.Partner.At.X) / 2f + 0.5f, Y = (b.At.Y + b.Partner.At.Y) / 2f + 0.5f, Order = -900 });
+                else if (b.Kind == BeltKind.Belt)
+                    FactoryBelt(style, b.At.X, b.At.Y, b.Dir, b.Curve ? (b.Dir == Dirs.Wrap(b.CurveFrom + 1) ? 1 : 2) : 0);
+                for (int lane = 0; lane < 2; lane++)
+                    foreach (var it in b.Lanes[lane])
+                    {
+                        if (!b.Shows(it.Pos)) continue;
+                        b.Place(it.Pos, lane, out float ox, out float oy);
+                        Things.Add(new Inst { Key = ArtKeys.Item(it.Type), X = b.At.X + 0.5f + ox, Y = b.At.Y + 0.5f + oy, Order = -880 });
+                    }
+            }
         }
 
         static Vector2 Step(int dir) => dir == 0 ? new Vector2(1, 0) : dir == 1 ? new Vector2(0, 1) : dir == 2 ? new Vector2(-1, 0) : new Vector2(0, -1);

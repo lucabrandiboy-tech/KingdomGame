@@ -2,10 +2,20 @@
 
 The kingdom now has a factory you build like the rest (builders build it from blueprints):
 
-- **Belts** carry items one way: you see every item ride along. Drag a line of belts from the throne and they point the
-  way you drag (or press **R** to turn one). A belt fed from one side only turns the corner; a belt fed from behind and
-  from the side merges both lines (side-loading). Two belts pointing at each other stop. A belt that ends pointing at a
-  chest or storehouse unloads into it.
+- **Belts** carry items one way, on **two lanes** (left and right, as in Factorio): you see every item ride along. Drag a
+  line of belts from the throne and they point the way you drag (or press **R** to turn one). A belt fed from one side
+  only turns the corner, each lane staying on its side. A belt joining another from the side puts everything onto the
+  near lane of the one it joins (side-loading), so two belts joining from both sides fill both lanes. Arms drop onto the
+  **far** lane; drills and the older machines drop onto the **near** one. Two belts pointing at each other stop. A belt
+  that ends pointing at a chest or storehouse unloads both lanes into it.
+- **Underground belts** (from the Industrial age, one for each of the conveyor, fast and express belts) carry things
+  under whatever is built over them. Place one, facing the way things go: that's an **entrance**. Place another of the
+  same kind ahead of it, facing the same way, within its reach (5 tiles for the plain one, 7 for the fast, 9 for the
+  express): that's its **exit**. While you place one, the text says which it will be. In a line of them they pair up from
+  the back: in, out, in, out. An entrance with no exit keeps things waiting at its mouth.
+- **Splitters** (Industrial, fast and express; two tiles across the way things go) share what comes in on either belt
+  between their two belts going out, in turn, each lane staying on its side. When one way out is full, or leads nowhere,
+  everything goes the other way. Their sides are closed: belts can't join them from the side.
 - **Arms** (like Factorio's inserters) pick an item up from the tile behind them and put it down on the tile in front
   (the arrow on the base): belts, chests, storehouses and machines. They only put into a machine what it needs. The
   wooden and iron arms burn wood or coal; when they run out they take some for themselves from where they pick up.
@@ -53,20 +63,25 @@ What's where, by age (Industry tab):
 | Iron Age | roller track, iron arm, burner drill (2x2, 15 a minute) |
 | Medieval | brick furnace (twice as fast) |
 | Renaissance | canvas belt, clockwork assembler |
-| Industrial | conveyor belt, electric arm, assembling machine, electric mining drill (3x3, digs 5x5 tiles, 30 a minute), wooden power pole (wires 7.5 tiles, powers 5x5); generator 0.9 MW |
-| World War 1 | fast belt, fast arm, electric furnace, medium power pole (wires 9, powers 7x7), big power pole (2x2, wires 30, powers 4x4), accumulator (5 MJ); diesel generator 1.8 MW |
-| World War 2 | express belt, assembly robot, big mining drill (3x3, digs 7x7 tiles, 60 a minute), substation (2x2, wires 18, powers 18x18), solar panel (60 kW by day); power plant 4 MW |
+| Industrial | conveyor belt, underground belt (reach 5), splitter, electric arm, assembling machine, electric mining drill (3x3, digs 5x5 tiles, 30 a minute), wooden power pole (wires 7.5 tiles, powers 5x5); generator 0.9 MW |
+| World War 1 | fast belt, fast underground belt (reach 7), fast splitter, fast arm, electric furnace, medium power pole (wires 9, powers 7x7), big power pole (2x2, wires 30, powers 4x4), accumulator (5 MJ); diesel generator 1.8 MW |
+| World War 2 | express belt, express underground belt (reach 9), express splitter, assembly robot, big mining drill (3x3, digs 7x7 tiles, 60 a minute), substation (2x2, wires 18, powers 18x18), solar panel (60 kW by day); power plant 4 MW |
 
 None of this has been run in Unity yet. The belts, arms, furnaces, assemblers, drills and electricity are plain code that
 the unit tests run (tools/tests/FactoryTests.cs: lines, packing, curves, side-loading, head-on belts, chests, loops, arms,
 assemblers, furnaces, burner fuel, drills digging onto a belt, waiting when blocked, feeding each other and a furnace;
+tools/tests/BeltTests.cs: the two lanes (arms on the far lane, chutes on the near one, side-loading, curves keeping
+lanes, a fast belt into a slow one keeping its gaps), underground belts (pairing, carrying under a crossing belt, giving
+back what was under the ground when a pair is cut, saving), splitters (sharing evenly, the other way when one is
+blocked, merging), and random factories built and torn down while running, checking nothing is ever lost or overlaps;
 tools/tests/PowerTests.cs: poles wiring up, supply areas, generators sharing the load and burning for what's used,
 brownouts slowing machines, accumulators and solar panels through day and night; tools/tests/PollutionTests.cs: clouds
 spreading and settling, trees and bases taking it in, saving, the hordes' sizes and toughness, the Craftables' recipes);
 the ore fields
 are checked by tools/world-tests (the same everywhere, one of each round the start, mining and saving, the ground showing
-ore exactly where it is); the pictures were checked in the art preview. Run **KingdomGame > Build Game Scenes** after
-`git pull` (the art changed, so it bakes again; the new drills join the build bar).
+ore exactly where it is); the pictures were checked in the art preview (belts.png: a factory run by the real belt code).
+Run **KingdomGame > Build Game Scenes** after `git pull` (the art changed, so it bakes again; the underground belts and
+splitters join the build bar).
 
 ## Try it (free build is easiest: every age is open)
 
@@ -88,6 +103,24 @@ ore exactly where it is); the pictures were checked in the art preview. Run **Ki
    line: it curves round the corner.
 7. **E** beside an arm: pick **Coal**. It moves only coal now.
 8. Save, load: the items on the belts, what's in the machines, the arms' filters and the assemblers' recipes are kept.
+
+## Two lanes, underground belts and splitters
+
+1. Free build, **F10**: **+10,000 of everything**. A line of **conveyor belt** (about 10 tiles) into a storehouse.
+2. Two chests (or storehouses) with iron and copper, one on each side of the start of the line, each with an **electric
+   arm** (and a generator's power) dropping onto the belt, filtered (**E**) to iron and to copper. You should see the
+   iron ride on one lane and the copper on the other, side by side, round any corner too.
+3. A belt joining the line from the side: what it carries goes onto the lane on its side only.
+4. An **underground belt** a few tiles along the line, facing the way it goes (take that belt away first): the text says
+   "It will be an entrance". Another one 3 tiles further on, facing the same way: "It will be the exit of the
+   underground belt 3 tiles behind it". Build them, then put anything between them (a wall, another belt crossing):
+   things go into the entrance, out of sight, and come up out of the exit. Point at each from the throne: entrance / exit.
+5. Take the exit away: what was under the ground comes back to storage. The entrance says it has no exit, and things
+   wait at its mouth.
+6. A **splitter** on the line (two tiles across it; R turns it), and a line of belt out of each of its halves into a
+   storehouse each: half the items go each way, each lane on its side. Block one way out (take away the storehouse at its
+   end and let it fill up): everything goes the other way.
+7. Save, load: the items on both lanes, and under the ground, are where they were.
 
 ## Ore fields and drills
 
@@ -159,7 +192,8 @@ Survival (free build has every age open, so it doesn't need them):
 
 Things that aren't done yet (honestly):
 
-- One lane of items per belt (Factorio has two).
+- Splitters have no settings yet (Factorio's input and output priority and filter).
+- Saves from before the two lanes put every item on the right lane.
 - Belts placed before this update all point right after it (they had no direction before): turn them by tearing them
   down and dragging them again.
 - Other players online see your belts and machines but not the items moving on them.

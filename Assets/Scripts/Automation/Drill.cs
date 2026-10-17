@@ -165,11 +165,11 @@ namespace KingdomGame.Automation
             return true;
         }
 
-        // Out of the chute: onto a belt there (coming in the way the chute faces), or into what's there.
+        // Out of the chute: onto the near lane of a belt there (coming in the way the chute faces), or into what's there.
         bool PutOut()
         {
             if (!Holding) return true;
-            if (world == null || !world.PutInto(Output, Held, Dir)) return false;
+            if (world == null || !world.PutInto(Output, Held, Dir, true)) return false;
             Holding = false;
             return true;
         }

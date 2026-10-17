@@ -22,5 +22,6 @@
     <Compile Include="../../Assets/Scripts/Economy/OreMap.cs" />
     <Compile Include="../../Assets/Scripts/Destruction/DamageShape.cs" />
     <Compile Include="../../Assets/Scripts/World/RuinLayout.cs" />
+    <Compile Include="../../Assets/Scripts/Automation/*.cs" />
   </ItemGroup>
 </Project>

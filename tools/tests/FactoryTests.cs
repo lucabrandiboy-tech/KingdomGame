@@ -43,13 +43,32 @@ static partial class Tests
         for (float t = 0f; t < seconds; t += dt) w.Tick(dt);
     }
 
-    static int ItemsOnBelts(FactoryWorld w) => w.Belts.Sum(b => b.Items.Count);
+    // Every item on the belts, under the ground too.
+    static int ItemsOnBelts(FactoryWorld w)
+    {
+        var all = new List<(Spot, int, int, BeltItem)>();
+        w.SaveItems(all);
+        return all.Count;
+    }
 
+    static IEnumerable<BeltItem> ItemsOn(Belt b) => b.Lanes[0].Concat(b.Lanes[1]);
+
+    // The belts and the stretches under the ground between underground pairs.
+    static IEnumerable<Belt> EveryBelt(FactoryWorld w) => w.Belts.Concat(w.Belts.Where(b => b.Tunnel != null).SelectMany(b => b.Tunnel));
+
+    // On every lane the items are a gap apart, and across each join a gap from the front item on the belt behind.
     static void CheckSpacing(FactoryWorld w)
     {
-        foreach (var b in w.Belts)
-            for (int i = 1; i < b.Items.Count; i++)
-                Check(b.Items[i].Pos - b.Items[i - 1].Pos >= FactoryWorld.Gap - 1e-4f, $"items too close on the belt at {b.At}");
+        foreach (var b in EveryBelt(w))
+            for (int lane = 0; lane < 2; lane++)
+            {
+                var items = b.Lanes[lane];
+                for (int i = 1; i < items.Count; i++)
+                    Check(items[i].Pos - items[i - 1].Pos >= FactoryWorld.Gap - 1e-4f, $"items too close on lane {lane} of the belt at {b.At}");
+                var ahead = b.Next != null && !b.SideEntry ? b.Next.Lanes[lane] : null;
+                if (items.Count > 0 && ahead != null && ahead.Count > 0)
+                    Check(1f - items[items.Count - 1].Pos + ahead[0].Pos >= FactoryWorld.Gap - 1e-4f, $"items too close across the join after {b.At} (lane {lane})");
+            }
     }
 
     static void BeltsCarryItemsAlongALine()
@@ -57,11 +76,12 @@ static partial class Tests
         var w = NewFactory();
         for (int x = 0; x < 5; x++) w.AddBelt(new Spot(x, 0), 0, 2f);
         Check(w.PutInto(new Spot(0, 0), ResourceType.Iron, 0), "an item goes onto the start of the line");
+        Check(w.BeltAt(new Spot(0, 0)).Lanes[1].Count == 1, "on its right lane (it came along the belt)");
         Run(w, 2.3f);
-        Check(w.BeltAt(new Spot(4, 0)).Items.Count == 1 && w.BeltAt(new Spot(4, 0)).Items[0].Pos < 1f, "after 2.3 s (4.6 tiles at 2 a second) it's on the last belt, not yet at its end");
+        Check(w.BeltAt(new Spot(4, 0)).Count == 1 && w.BeltAt(new Spot(4, 0)).Lanes[1][0].Pos < 1f, "after 2.3 s (4.6 tiles at 2 a second) it's on the last belt, not yet at its end");
         Run(w, 0.4f);
         var last = w.BeltAt(new Spot(4, 0));
-        Check(last.Items.Count == 1 && Math.Abs(last.Items[0].Pos - 1f) < 1e-4f, "then it waits at the end of the line");
+        Check(last.Count == 1 && Math.Abs(last.Lanes[1][0].Pos - 1f) < 1e-4f, "then it waits at the end of the line");
         Check(ItemsOnBelts(w) == 1, "nothing lost or made");
     }
 
@@ -77,10 +97,10 @@ static partial class Tests
             CheckSpacing(w);
         }
         Check(ItemsOnBelts(w) == put, "every item put on is still there");
-        Check(put >= 15 && put <= 17, $"4 tiles hold about 16 items packed tight (got {put})");
+        Check(put >= 15 && put <= 17, $"4 tiles hold about 16 items packed tight on a lane (got {put})");
         // Across the joins between tiles they're a gap apart too.
         var all = new List<float>();
-        for (int x = 0; x < 4; x++) foreach (var it in w.BeltAt(new Spot(x, 0)).Items) all.Add(x + it.Pos);
+        for (int x = 0; x < 4; x++) foreach (var it in w.BeltAt(new Spot(x, 0)).Lanes[1]) all.Add(x + it.Pos);
         all.Sort();
         for (int i = 1; i < all.Count; i++) Check(all[i] - all[i - 1] >= FactoryWorld.Gap - 1e-3f, "a gap between items across tiles");
     }
@@ -95,34 +115,44 @@ static partial class Tests
         Run(w, 0.05f);
         var corner = w.BeltAt(new Spot(1, 0));
         Check(corner.Curve && corner.CurveFrom == 0, "the corner belt is a curve coming in from the left");
-        corner.Place(0f, out float x0, out float y0);
-        corner.Place(1f, out float x1, out float y1);
-        Check(Math.Abs(x0 + 0.5f) < 1e-4f && Math.Abs(y0) < 1e-4f && Math.Abs(x1) < 1e-4f && Math.Abs(y1 - 0.5f) < 1e-4f, "items are drawn from its left edge round to its top edge");
+        // A left turn: the left lane goes round the inside, the right lane round the outside.
+        float o = Belt.LaneOffset;
+        corner.Place(0f, 0, out float x0, out float y0);
+        corner.Place(1f, 0, out float x1, out float y1);
+        Check(Near(x0, -0.5f) && Near(y0, o) && Near(x1, -o) && Near(y1, 0.5f), "the left lane is drawn from its left edge round to its top edge, on the inside");
+        corner.Place(0f, 1, out x0, out y0);
+        corner.Place(1f, 1, out x1, out y1);
+        Check(Near(x0, -0.5f) && Near(y0, -o) && Near(x1, o) && Near(y1, 0.5f), "and the right lane round the outside");
         Run(w, 2f);
         var top = w.BeltAt(new Spot(1, 1));
-        Check(top.Items.Count == 1 && top.Items[0].Pos > 0.99f, "the item went round the corner to the end");
+        Check(top.Count == 1 && top.Lanes[1].Count == 1 && top.Lanes[1][0].Pos > 0.99f, "the item went round the corner to the end, on the lane it was on");
     }
 
     static void SideLoadingMergesTwoLines()
     {
         var w = NewFactory();
         for (int x = 0; x < 4; x++) w.AddBelt(new Spot(x, 0), 0, 2f);   // the main line, going right
-        w.AddBelt(new Spot(2, -2), 1, 2f);                              // a side line coming up into (2, 0)
+        w.AddBelt(new Spot(2, -2), 1, 2f);                              // a side line coming up into (2, 0): its right side
         w.AddBelt(new Spot(2, -1), 1, 2f);
+        w.AddBelt(new Spot(1, 2), 3, 2f);                               // one coming down into (1, 0): its left side
+        w.AddBelt(new Spot(1, 1), 3, 2f);
         int put = 0;
         for (int i = 0; i < 60; i++)
         {
             if (w.PutInto(new Spot(0, 0), ResourceType.Iron, 0)) put++;
             if (w.PutInto(new Spot(2, -2), ResourceType.Copper, 1)) put++;
+            if (w.PutInto(new Spot(1, 2), ResourceType.Gold, 3)) put++;
             w.Tick(1f / 30f);
             CheckSpacing(w);
         }
         Run(w, 4f);
         Check(ItemsOnBelts(w) == put, "nothing lost where the lines meet");
-        Check(!w.BeltAt(new Spot(2, 0)).Curve, "a belt fed from behind isn't a curve");
+        Check(!w.BeltAt(new Spot(2, 0)).Curve && !w.BeltAt(new Spot(1, 0)).Curve, "a belt fed from behind isn't a curve");
         var end = w.BeltAt(new Spot(3, 0));
-        Check(end.Items.Any(i => i.Type == ResourceType.Copper), "side-loaded copper got onto the main line");
-        Check(w.Belts.SelectMany(b => b.Items).Any(i => i.Type == ResourceType.Iron), "iron is still on the main line");
+        Check(end.Lanes[1].Any(i => i.Type == ResourceType.Copper), "copper coming in on the right went onto the right lane");
+        Check(end.Lanes[0].Count > 0 && end.Lanes[0].All(i => i.Type == ResourceType.Gold), "gold coming in on the left went onto the left lane, alone");
+        Check(w.Belts.SelectMany(b => b.Lanes[1]).Any(i => i.Type == ResourceType.Iron), "iron is still on the main line's right lane");
+        Check(!w.Belts.SelectMany(b => b.Lanes[0]).Any(i => i.Type != ResourceType.Gold), "and nothing else ever got onto its left lane");
     }
 
     static void HeadOnBeltsBlock()
@@ -133,8 +163,9 @@ static partial class Tests
         w.PutInto(new Spot(0, 0), ResourceType.Iron, 0);
         Run(w, 3f);
         var a = w.BeltAt(new Spot(0, 0));
-        Check(a.Items.Count == 1 && a.Items[0].Pos > 0.99f, "belts pointing at each other: it stops at the end");
-        Check(!w.PutInto(new Spot(1, 0), ResourceType.Iron, 0), "nothing goes onto a belt from the way it's pointing");
+        Check(a.Count == 1 && a.Lanes[1][0].Pos > 0.99f, "belts pointing at each other: it stops at the end");
+        Check(!w.PutInto(new Spot(1, 0), ResourceType.Iron, 0, true), "nothing comes out of a chute onto a belt pointing back into it");
+        Check(w.PutInto(new Spot(1, 0), ResourceType.Iron, 0), "but an arm can put things on it");
     }
 
     static void BeltsUnloadIntoAChest()
@@ -170,7 +201,7 @@ static partial class Tests
         w.PutInto(new Spot(1, 1), ResourceType.Gold, 2);
         // Where an item is round the loop, in tiles from the start.
         var loop = new[] { new Spot(0, 0), new Spot(1, 0), new Spot(1, 1), new Spot(0, 1) };
-        List<float> Where() => loop.SelectMany((s, i) => w.BeltAt(s).Items.Select(it => i + it.Pos)).OrderBy(v => v).ToList();
+        List<float> Where() => loop.SelectMany((s, i) => ItemsOn(w.BeltAt(s)).Select(it => i + it.Pos)).OrderBy(v => v).ToList();
         Run(w, 10f);
         Check(ItemsOnBelts(w) == 2, "a loop keeps its items");
         var before = Where();
@@ -308,8 +339,8 @@ static partial class Tests
         w.AddBelt(new Spot(-1, 0), 0, 2f);   // to its left, pointing into it
         int turn = 0;
         Check(w.PushOut(0, 0, 2, 2, ResourceType.Wood, ref turn), "it puts the wood on the belt going away");
-        Check(w.BeltAt(new Spot(2, 0)).Items.Count == 1 && w.BeltAt(new Spot(-1, 0)).Items.Count == 0, "not on the belt pointing into it");
-        Check(w.BeltAt(new Spot(2, 0)).Items[0].Pos < 0.01f, "onto the start of the belt");
+        Check(w.BeltAt(new Spot(2, 0)).Count == 1 && w.BeltAt(new Spot(-1, 0)).Count == 0, "not on the belt pointing into it");
+        Check(w.BeltAt(new Spot(2, 0)).Lanes[1][0].Pos < 0.01f, "onto the start of the belt");
         Check(!w.PushOut(0, 0, 2, 2, ResourceType.Wood, ref turn), "no room right at the start: it waits");
     }
 

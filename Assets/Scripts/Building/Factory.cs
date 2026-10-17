@@ -160,6 +160,8 @@ namespace KingdomGame.Building
         readonly List<(Vector2Int Outside, Vector2Int Inside, bool In)> holes = new List<(Vector2Int, Vector2Int, bool)>();
         readonly List<(Spot From, Spot To)> links = new List<(Spot, Spot)>();
         readonly List<SpriteRenderer> itemPool = new List<SpriteRenderer>();
+        readonly List<(Spot At, ResourceType Item)> lost = new List<(Spot, ResourceType)>();
+        readonly List<(Spot At, int Lane, int Under, BeltItem Item)> beltItems = new List<(Spot, int, int, BeltItem)>();
         readonly Dictionary<ResourceType, Sprite> itemSprites = new Dictionary<ResourceType, Sprite>();
         float clock, syncAt;
         int furnaceAge = -1;
@@ -215,6 +217,14 @@ namespace KingdomGame.Building
 
         static Spot SpotOf(Vector2Int c) => new Spot(c.x, c.y);
 
+        // Where a cell is in the world; for a cell inside a house (far off the map), its door outside.
+        Vector2 PositionOf(Spot s)
+        {
+            var p = new Vector2(s.X + 0.5f, s.Y + 0.5f);
+            var place = kingdom != null ? kingdom.PlaceAt(p) : null;
+            return place != null ? place.Outside : p;
+        }
+
         // Where something electric is, for the power grid: its cells, or for something inside a house (far off the map)
         // its door's cell outside.
         Footprint PowerFootprint(Machine m, RectInt cells)
@@ -267,7 +277,11 @@ namespace KingdomGame.Building
             switch (cfg.kind)
             {
                 case MachineKind.Conveyor:
-                    piece.Belt = World.AddBelt(piece.Origin, furniture.Rotation, cfg.beltSpeed);
+                    // (underground belts pair only with ones of the same speed: the same belt kind)
+                    piece.Belt = cfg.beltPiece == BeltPiece.Underground
+                        ? World.AddUnderground(piece.Origin, furniture.Rotation, cfg.beltSpeed, Mathf.RoundToInt(cfg.beltSpeed * 100f), cfg.undergroundReach)
+                        : cfg.beltPiece == BeltPiece.Splitter ? World.AddSplitter(piece.Origin, furniture.Rotation, cfg.beltSpeed)
+                        : World.AddBelt(piece.Origin, furniture.Rotation, cfg.beltSpeed);
                     break;
                 case MachineKind.Arm:
                     piece.Arm = new Arm(piece.Origin, furniture.Rotation)
@@ -375,7 +389,7 @@ namespace KingdomGame.Building
             pieces.Remove(m);
             var spill = new int[Inventory.TypeCount];
             var list = new List<ResourceType>();
-            if (piece.Belt != null) World.RemoveBelt(piece.Origin, list);
+            if (piece.Belt != null && World.BeltAt(piece.Origin) == piece.Belt) World.RemoveBelt(piece.Origin, list);
             if (piece.Arm != null) World.Remove(piece.Arm, list);
             if (piece.Crafter != null)
             {
@@ -440,9 +454,7 @@ namespace KingdomGame.Building
         {
             if (heldPorts.ContainsKey(m)) return m.Held > 0 ? $"Holding {m.Held} {ResourceText.Name(m.Makes)} to put out on a belt or into a chest touching it" : null;
             if (!pieces.TryGetValue(m, out var p)) return null;
-            if (p.Belt != null)
-                return $"Carries {p.Belt.Speed:0.#} tiles a second, {p.Belt.Items.Count} on it now" +
-                       (p.Belt.Next == null ? ": the end of the line (a chest or storehouse it points at takes things in)" : "");
+            if (p.Belt != null) return DescribeBelt(p.Belt);
             if (p.Arm != null)
                 return (p.Arm.Problem != null ? $"<color=#ffcc80>{p.Arm.Problem}</color>" : p.Arm.Holding ? $"Moving {ResourceText.Name(p.Arm.Held)}" : "Waiting for something to pick up") +
                        (p.Arm.HasFilter ? $"  (only {ResourceText.Name(p.Arm.Filter)})" : "") + "   E beside it: choose what it moves";
@@ -456,6 +468,49 @@ namespace KingdomGame.Building
                        (left > 0 ? $"  ({left:N0} {ResourceText.Name(most)} left to dig)" : "") + "   E beside it: see what it's doing";
             }
             return null;
+        }
+
+        static string DescribeBelt(Belt b)
+        {
+            string load = $"{b.Speed:0.#} tiles a second, two lanes";
+            switch (b.Kind)
+            {
+                case BeltKind.Underground when b.Exit:
+                    return $"Underground belt exit: things come up here from its entrance {Distance(b)} behind ({load})";
+                case BeltKind.Underground:
+                    return b.Pair != null ? $"Underground belt entrance: things go under the ground to its exit {Distance(b)} ahead ({load})"
+                        : $"<color=#ffcc80>Underground belt entrance with no exit: things wait at its mouth. Build another of the same kind ahead of it, facing the same way, within {b.Reach} tiles</color>";
+                case BeltKind.Splitter:
+                {
+                    int count = b.Count + (b.Partner != null ? b.Partner.Count : 0);
+                    return $"Splitter: shares what comes in between its two belts going out, in turn, each lane its own ({load}, {count} in it now)";
+                }
+                default:
+                    return $"Carries {load}: {b.Lanes[0].Count} on the left lane, {b.Lanes[1].Count} on the right" +
+                           (b.Next == null ? ". The end of the line (a chest or storehouse it points at takes things in)" : "");
+            }
+        }
+
+        /// <summary>What an underground belt built on <paramref name="cell"/> facing <paramref name="dir"/> would be: the exit of an entrance behind it, or an entrance.</summary>
+        public string UndergroundHint(Vector2Int cell, int dir, MachineConfig m)
+        {
+            if (World == null || m == null) return null;
+            var step = Dirs.Step(dir);
+            int tier = Mathf.RoundToInt(m.beltSpeed * 100f);
+            for (int k = 1; k <= m.undergroundReach; k++)
+            {
+                var b = World.BeltAt(new Spot(cell.x - step.X * k, cell.y - step.Y * k));
+                if (b == null || b.Kind != BeltKind.Underground || b.Tier != tier || b.Dir != Dirs.Wrap(dir)) continue;
+                if (!b.Exit) return $"It will be the exit of the underground belt {k} tile{(k == 1 ? "" : "s")} behind it";
+                break;
+            }
+            return $"It will be an entrance: things go under the ground here. Put its exit ahead of it, facing the same way, up to {m.undergroundReach} tiles on";
+        }
+
+        static string Distance(Belt b)
+        {
+            int d = b.Pair == null ? 0 : Mathf.Abs(b.Pair.At.X - b.At.X) + Mathf.Abs(b.Pair.At.Y - b.At.Y);
+            return d == 1 ? "1 tile" : $"{d} tiles";
         }
 
         public Drill DrillOf(Machine m) => m != null && pieces.TryGetValue(m, out var p) ? p.Drill : null;
@@ -568,6 +623,19 @@ namespace KingdomGame.Building
                 clock -= step;
                 Power.Tick(step);
                 World.Tick(step);
+            }
+            // Things that fell off the belts by themselves (under the ground between an underground pair that building
+            // or taking away another one broke up) go back to storage.
+            if (World.TakeLost(lost) > 0)
+            {
+                var one = new int[Inventory.TypeCount];
+                foreach (var (at, item) in lost)
+                {
+                    one[(int)item] = 1;
+                    GiveBack(one, PositionOf(at));
+                    Array.Clear(one, 0, one.Length);
+                }
+                lost.Clear();
             }
             // Pollution: once a second, what the machines working now put out, then it spreads and is absorbed.
             pollutionClock += Time.deltaTime;
@@ -745,16 +813,22 @@ namespace KingdomGame.Building
                 float size = config != null ? config.itemSize : 0.3f;
                 foreach (var b in World.Belts)
                 {
-                    if (b.Items.Count == 0) continue;
+                    if (b.Count == 0) continue;
                     float bx = b.At.X + 0.5f, by = b.At.Y + 0.5f;
                     if (Mathf.Abs(bx - c.x) > halfW || Mathf.Abs(by - c.y) > halfH) continue;
-                    foreach (var it in b.Items)
+                    for (int lane = 0; lane < 2; lane++)
                     {
-                        b.Place(it.Pos, out float ox, out float oy);
-                        var r = Pooled(used++);
-                        r.sprite = ItemSprite(it.Type);
-                        r.transform.position = new Vector3(bx + ox, by + oy, 0f);
-                        r.transform.localScale = Vector3.one * size / 0.3f;
+                        var items = b.Lanes[lane];
+                        for (int i = 0; i < items.Count; i++)
+                        {
+                            var it = items[i];
+                            if (!b.Shows(it.Pos)) continue;   // (under an underground belt's hood or a splitter's housing)
+                            b.Place(it.Pos, lane, out float ox, out float oy);
+                            var r = Pooled(used++);
+                            r.sprite = ItemSprite(it.Type);
+                            r.transform.position = new Vector3(bx + ox, by + oy, 0f);
+                            r.transform.localScale = Vector3.one * size / 0.3f;
+                        }
                     }
                 }
             }
@@ -935,13 +1009,18 @@ namespace KingdomGame.Building
             p.Icon.enabled = false;
         }
 
+        // An underground belt's exit picture, from its entrance's (FurnitureArt.UndergroundArt).
+        static string ExitArt(string entrance) => entrance.EndsWith("In") ? entrance.Substring(0, entrance.Length - 2) + "Out" : entrance;
+
         void DrawPiece(Piece p)
         {
             if (p.Machine == null) return;
             if (p.Belt != null)
             {
-                // Straight or curved (a belt fed only from one side turns the corner).
-                int turn = p.Belt.Curve ? (p.Belt.Dir == Dirs.Wrap(p.Belt.CurveFrom + 1) ? 1 : 2) : 0;
+                // Straight or curved (a belt fed only from one side turns the corner); an underground belt an entrance or
+                // an exit (worked out from the others in its line).
+                int turn = p.Belt.Kind == BeltKind.Underground ? (p.Belt.Exit ? 3 : 0)
+                    : p.Belt.Curve ? (p.Belt.Dir == Dirs.Wrap(p.Belt.CurveFrom + 1) ? 1 : 2) : 0;
                 if (turn != p.ShownTurn || !p.ShownCurve)
                 {
                     p.ShownCurve = true;
@@ -950,7 +1029,8 @@ namespace KingdomGame.Building
                     var art = p.Machine.GetComponent<Furniture>()?.Config.art;
                     if (look != null && art != null)
                     {
-                        var sprite = ArtSprites.Get(ArtKeys.Turned(turn == 0 ? art : art + (turn == 1 ? "/CurveL" : "/CurveR"), p.Belt.Dir));
+                        string key = turn == 0 ? art : turn == 3 ? ExitArt(art) : art + (turn == 1 ? "/CurveL" : "/CurveR");
+                        var sprite = ArtSprites.Get(ArtKeys.Turned(key, p.Belt.Dir));
                         if (sprite != null) look.sprite = sprite;
                     }
                 }
@@ -1027,12 +1107,18 @@ namespace KingdomGame.Building
             public double smogMade;
         }
 
+        /// <summary>
+        /// The items on a belt: each one's kind, how far along, its lane (0 left, 1 right) and how many tiles under the
+        /// ground past the belt it is (an underground entrance's; 0: on the belt). Older saves have no lanes (everything
+        /// goes on the right lane).
+        /// </summary>
         [Serializable]
         public sealed class BeltSave
         {
             public int x, y;
             public int[] types;
             public float[] pos;
+            public int[] lanes, under;
         }
 
         [Serializable]
@@ -1078,18 +1164,30 @@ namespace KingdomGame.Building
         public Saved Save()
         {
             var s = new Saved();
+            // The items on the belts and under the ground, a list for each belt (they come a belt at a time).
+            beltItems.Clear();
+            World.SaveItems(beltItems);
+            for (int i = 0; i < beltItems.Count;)
+            {
+                var at = beltItems[i].At;
+                int end = i;
+                while (end < beltItems.Count && beltItems[end].At == at) end++;
+                int n = end - i;
+                var b = new BeltSave { x = at.X, y = at.Y, types = new int[n], pos = new float[n], lanes = new int[n], under = new int[n] };
+                for (int k = 0; k < n; k++)
+                {
+                    var e = beltItems[i + k];
+                    b.types[k] = (int)e.Item.Type;
+                    b.pos[k] = e.Item.Pos;
+                    b.lanes[k] = e.Lane;
+                    b.under[k] = e.Under;
+                }
+                s.belts.Add(b);
+                i = end;
+            }
+            beltItems.Clear();
             foreach (var p in pieces.Values)
             {
-                if (p.Belt != null && p.Belt.Items.Count > 0)
-                {
-                    var b = new BeltSave { x = p.Origin.X, y = p.Origin.Y, types = new int[p.Belt.Items.Count], pos = new float[p.Belt.Items.Count] };
-                    for (int i = 0; i < p.Belt.Items.Count; i++)
-                    {
-                        b.types[i] = (int)p.Belt.Items[i].Type;
-                        b.pos[i] = p.Belt.Items[i].Pos;
-                    }
-                    s.belts.Add(b);
-                }
                 if (p.Arm != null)
                     s.arms.Add(new ArmSave
                     {
@@ -1145,13 +1243,28 @@ namespace KingdomGame.Building
                 return null;
             }
             if (s.belts != null)
+            {
+                // (what can't go back where it was, its belt gone or no room there, goes back to storage)
+                var left = new int[Inventory.TypeCount];
                 foreach (var b in s.belts)
                 {
-                    if (b == null || b.types == null || b.pos == null || !at.TryGetValue(new Spot(b.x, b.y), out var p) || p.Belt == null) continue;
-                    var items = new List<BeltItem>();
-                    for (int i = 0; i < b.types.Length && i < b.pos.Length; i++) items.Add(new BeltItem { Type = Type(b.types[i]), Pos = b.pos[i] });
-                    World.SetItems(p.Origin, items);
+                    if (b == null || b.types == null || b.pos == null) continue;
+                    var spot = new Spot(b.x, b.y);
+                    bool any = false;
+                    for (int i = 0; i < b.types.Length && i < b.pos.Length; i++)
+                    {
+                        int lane = b.lanes != null && i < b.lanes.Length ? b.lanes[i] : 1;
+                        int under = b.under != null && i < b.under.Length ? b.under[i] : 0;
+                        var item = new BeltItem { Type = Type(b.types[i]), Pos = b.pos[i] };
+                        if (World.LoadItem(spot, lane, under, item)) continue;
+                        left[(int)item.Type]++;
+                        any = true;
+                    }
+                    if (!any) continue;
+                    GiveBack(left, PositionOf(spot));
+                    Array.Clear(left, 0, left.Length);
                 }
+            }
             if (s.arms != null)
                 foreach (var a in s.arms)
                 {

@@ -38,6 +38,20 @@ namespace KingdomGame.Economy
         Solar,
     }
 
+    /// <summary>What kind of belt piece a conveyor is (Automation/FactoryWorld.cs).</summary>
+    public enum BeltPiece
+    {
+        /// <summary>A plain belt (it turns corners by itself).</summary>
+        Belt,
+        /// <summary>
+        /// An underground belt: things go under the ground at an entrance and come up at its exit. In a line of them
+        /// facing the same way they pair up from the back: an entrance, the next one ahead within its reach its exit, and so on.
+        /// </summary>
+        Underground,
+        /// <summary>A splitter, two tiles across the way it goes: shares what comes in between its two belts going out.</summary>
+        Splitter,
+    }
+
     /// <summary>What a machine does by itself, and how fast. Set on a Building Config (Machines).</summary>
     [CreateAssetMenu(menuName = "KingdomGame/Economy/Machine", fileName = "Machine")]
     public sealed class MachineConfig : ScriptableObject
@@ -74,6 +88,10 @@ namespace KingdomGame.Economy
         public bool toBelts;
         [Tooltip("How fast things ride the conveyor belts, in tiles a second.")]
         [Min(0.2f)] public float beltSpeed = 2f;
+        [Tooltip("Conveyors: a plain belt, an underground belt or a splitter (2 tiles across, so its Size is 1 x 2).")]
+        public BeltPiece beltPiece = BeltPiece.Belt;
+        [Tooltip("Underground belts: how far ahead of an entrance its exit may be, in tiles (5: up to 4 tiles between them). They pair only with ones of the same Belt Speed.")]
+        [Min(1)] public int undergroundReach = 5;
 
         [Header("Factory: arms, furnaces, assemblers")]
         [Tooltip("Arms: seconds to swing from where they pick up to where they drop (back takes as long).")]

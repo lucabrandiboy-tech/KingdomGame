@@ -128,7 +128,11 @@ The tool projects' `.csproj` files are committed (the root `.gitignore` ignores 
   crafting room (`Villager.toolBench`). Tools add to `Kingdom.Boost(Gathering)`/`BuildBoost`; bandages (C heals the ruler,
   soldiers use one instead of retreating) and cures (a bitten villager's, before turning) are kept as supplies. Saved.
 - **Factory** (Factorio-style, the user's wish: "really close to Factorio"). The simulation is plain C# in
-  `Assets/Scripts/Automation` (`FactoryWorld`: belts carrying `BeltItem`s one way, one lane, curves and side-loading,
+  `Assets/Scripts/Automation` (`FactoryWorld`: belts carrying `BeltItem`s one way on two lanes (`Belt.Lanes`, 0 left), curves
+  keeping lanes, side-loading onto the near lane, arms dropping on the far lane and chutes on the near one; underground belts
+  (`AddUnderground`: a line of the same tier pairs up from the back, hidden `BeltKind.Tunnel` belts between, their items handed
+  back through `TakeLost` when a pair breaks) and splitters (`AddSplitter`: two halves, items switch halves in the middle,
+  in turn), saved with `SaveItems`/`LoadItem`; `MachineConfig.beltPiece`; tested in `tools/tests/BeltTests.cs`),
   `Arm`s (inserters), ports (`IItemPort`: chests, machines); `Crafter`: furnaces and assemblers with `Recipe`s and
   burner fuel; `Drill`: digs the ore under it (`IOreGround`) out of its chute, `Drill.OutputOf`), unit-tested in
   `tools/tests/FactoryTests.cs`. `Building/Factory.cs` runs it per kingdom

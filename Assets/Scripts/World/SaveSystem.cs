@@ -330,7 +330,7 @@ namespace KingdomGame.World
             data.xp = kingdom.Xp;
             data.upgrades = kingdom.UpgradeLevels();
             if (Bases != null)
-                foreach (var (at, health) in Bases.Saved()) data.zombieBases.Add(new ZombieBaseSave { position = at, health = health });
+                foreach (var (at, health, breathed) in Bases.Saved()) data.zombieBases.Add(new ZombieBaseSave { position = at, health = health, breathed = breathed });
             if (Ruins != null) data.ruins = Ruins.Save();
             if (Goals != null) data.goals = Goals.Save();
             if (waves != null)
@@ -506,7 +506,7 @@ namespace KingdomGame.World
 
             kingdom.RestoreUpgrades(data.xp, data.upgrades);
             if (Bases != null && data.zombieBases != null)
-                foreach (var b in data.zombieBases) Bases.Place(b.position, b.health);
+                foreach (var b in data.zombieBases) Bases.Place(b.position, b.health, b.breathed);
             if (Ruins != null) Ruins.Load(data.ruins);
             if (Goals != null) Goals.Load(data.goals);
             if (waves != null && data.hasSurvival)

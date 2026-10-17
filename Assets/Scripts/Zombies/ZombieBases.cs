@@ -172,8 +172,11 @@ namespace KingdomGame.Zombies
             return false;
         }
 
-        /// <summary>Puts a base at <paramref name="at"/> with <paramref name="health"/> hit points (a new one, or from a save).</summary>
-        public ZombieBase Place(Vector2 at, float health)
+        /// <summary>
+        /// Puts a base at <paramref name="at"/> with <paramref name="health"/> hit points (a new one, or from a save, with the
+        /// pollution it had <paramref name="breathed"/> in).
+        /// </summary>
+        public ZombieBase Place(Vector2 at, float health, float breathed = 0f)
         {
             var go = new GameObject("Zombie base");
             go.transform.SetParent(transform, false);
@@ -181,6 +184,7 @@ namespace KingdomGame.Zombies
             string key = ArtKeys.Turned(FurnitureArt.ZombieNest, 0);
             b.Setup(at, config.baseHealth, ArtSprites.Get(key), ArtSprites.Get(ArtKeys.Shadow(key)));
             if (health < config.baseHealth) b.Health.SetCurrent(Mathf.Max(1f, health));
+            b.Breathed = Mathf.Max(0f, breathed);
             b.Health.Died += _ => Destroyed(b);
             bases.Add(b);
             director.KeepInView.Add(b.Center);
@@ -268,11 +272,11 @@ namespace KingdomGame.Zombies
 
         // ------------------------------------------------------------ saving --
 
-        /// <summary>Each base's position and hit points, for saving.</summary>
-        public List<(Vector2 At, float Health)> Saved()
+        /// <summary>Each base's position, hit points and the pollution it has breathed in, for saving.</summary>
+        public List<(Vector2 At, float Health, float Breathed)> Saved()
         {
-            var list = new List<(Vector2, float)>();
-            foreach (var b in bases) if (b != null && b.Health != null && !b.Health.Dead) list.Add((b.Center, b.Health.Current));
+            var list = new List<(Vector2, float, float)>();
+            foreach (var b in bases) if (b != null && b.Health != null && !b.Health.Dead) list.Add((b.Center, b.Health.Current, b.Breathed));
             return list;
         }
     }

@@ -172,7 +172,10 @@ namespace KingdomGame.Progression
             return true;
         }
 
-        /// <summary>Takes a tech out of the queue (and anything queued after it that needs it). A started one gives its cost back.</summary>
+        /// <summary>
+        /// Takes a tech out of the queue (and anything queued after it that needs it). A started one gives its cost back
+        /// (what storage has no room for is left in a bag by the throne).
+        /// </summary>
         public void Dequeue(TechConfig t)
         {
             int i = queue.IndexOf(t);
@@ -180,8 +183,15 @@ namespace KingdomGame.Progression
             if (i == 0 && StartedUtc.HasValue && kingdom != null)
             {
                 var at = kingdom.Throne != null ? kingdom.Throne.Center : Vector2.zero;
-                for (int k = 0; k < Economy.Inventory.TypeCount; k++)
-                    kingdom.Store((Economy.ResourceType)k, t.Cost((Economy.ResourceType)k), at);
+                var left = new int[Economy.Inventory.TypeCount];
+                bool any = false;
+                for (int k = 0; k < left.Length; k++)
+                {
+                    int cost = t.Cost((Economy.ResourceType)k);
+                    left[k] = cost - kingdom.Store((Economy.ResourceType)k, cost, at);
+                    any |= left[k] > 0;
+                }
+                if (any) Economy.LootBag.Drop(at, left);
                 StartedUtc = null;
             }
             queue.RemoveAt(i);

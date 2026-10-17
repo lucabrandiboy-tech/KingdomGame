@@ -67,6 +67,8 @@ namespace KingdomGame.World
     {
         public Vector2 position;
         public float health;
+        /// <summary>Pollution it had breathed in and not yet sent zombies for (older saves: none).</summary>
+        public float breathed;
     }
 
     /// <summary>The players who joined a hosted world or a server: their kingdoms' spots, and each player.</summary>
